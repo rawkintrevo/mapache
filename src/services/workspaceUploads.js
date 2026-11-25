@@ -12,22 +12,25 @@ function acknowledgedOffset(response, size) {
 
 function uploadError(response) {
   if (response.status === 412) return new Error("A file with this name already exists. Rename your file and try again.");
+  if (response.status === 507) return new Error("The workspace disk is full. Remove files and retry the upload.");
   if ([404, 410].includes(response.status)) return new Error("Upload expired. Choose the file again to start a new upload.");
   return new Error(`Upload failed (${response.status}). Try again.`);
 }
 
 // The session URL is a bearer credential: keep it in memory, never in logs or storage.
-export async function uploadWorkspaceFile(file, upload, {signal, onProgress = () => {}, fetchImpl = fetch} = {}) {
+export async function uploadWorkspaceFile(file, upload, {signal, onProgress = () => {}, refreshUpload, fetchImpl = fetch} = {}) {
   if (!file.size || file.size > MAX_UPLOAD_BYTES) throw new Error("Choose a file between 1 byte and 1 GiB.");
+  let activeUpload = upload;
   let offset = 0;
   let failures = 0;
+  let refreshes = 0;
   let probe = true;
   while (true) {
     signal?.throwIfAborted();
     const end = Math.min(offset + CHUNK_BYTES, file.size);
     let response;
     try {
-      response = await fetchImpl(upload.uploadUrl, {
+      response = await fetchImpl(activeUpload.uploadUrl, {
         method: "PUT",
         headers: {"Content-Type": "application/octet-stream", "Content-Range": probe ?
           `bytes */${file.size}` : `bytes ${offset}-${end - 1}/${file.size}`},
@@ -42,7 +45,7 @@ export async function uploadWorkspaceFile(file, upload, {signal, onProgress = ()
     }
     if (response.ok) {
       onProgress(100);
-      return {path: upload.path};
+      return {path: activeUpload.path};
     }
     if (response.status === 308) {
       const next = acknowledgedOffset(response, file.size);
@@ -51,6 +54,14 @@ export async function uploadWorkspaceFile(file, upload, {signal, onProgress = ()
       offset = next;
       onProgress(Math.floor(offset / file.size * 100));
       probe = offset === file.size;
+      continue;
+    }
+    if ([404, 410].includes(response.status) && typeof refreshUpload === "function" && refreshes < 2) {
+      activeUpload = await refreshUpload(activeUpload);
+      if (!activeUpload?.uploadUrl) throw new Error("Upload reauthorization failed. Retry the upload.");
+      refreshes++;
+      failures = 0;
+      probe = true;
       continue;
     }
     if ((response.status === 429 || response.status >= 500) && ++failures <= 3) {

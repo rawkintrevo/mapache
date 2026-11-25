@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {cleanName, httpError} = require("./backendUtils.helpers");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 const {
   cleanGithubNumericId,
   cleanGithubValue,
@@ -19,6 +20,7 @@ function createGithubConnectionService(dependencies = {}) {
   return Object.freeze({
     createGithubConnectUrl: (uid, req) => createGithubConnectUrl(uid, req, {admin, db, githubClient, now}),
     disconnectGithub: (uid) => disconnectGithub(uid, {admin, db}),
+    assertGithubConnectionMigrationAdmission: (uid) => assertGithubConnectionMigrationAdmission(uid, {db}),
     getGithubConnection: (uid) => getGithubConnection(uid, {db}),
     handleGithubCallback: (req, res) => handleGithubCallback(req, res, {admin, db, githubClient, now}),
     normalizeGithubConnectionStatus,
@@ -78,6 +80,7 @@ async function handleGithubCallback(req, res, dependencies) {
     return;
   }
 
+  await assertGithubConnectionMigrationAdmission(uid, dependencies);
   const tokenResponse = await dependencies.githubClient.exchangeGithubOAuthCode(code, githubCallbackUrl(req));
   const accessToken = cleanGithubToken(tokenResponse.access_token);
   if (!accessToken) {
@@ -110,22 +113,23 @@ async function getGithubConnection(uid, dependencies) {
 
 async function disconnectGithub(uid, dependencies) {
   const now = dependencies.admin.firestore.FieldValue.serverTimestamp();
-  const installationSnap = await githubInstallationCollection(dependencies.db, uid).get();
-  const batch = dependencies.db.batch();
-  batch.set(githubUserDoc(dependencies.db, uid), {
-    firebaseUid: uid,
-    connectionStatus: "disconnected",
-    installationIds: [],
-    updatedAt: now,
-  }, {merge: true});
-  installationSnap.docs.forEach((doc) => {
-    batch.set(doc.ref, {
-      installationStatus: "removed",
-      removedAt: now,
+  await dependencies.db.runTransaction(async transaction => {
+    await assertGithubConnectionMigrationAdmissionInTransaction(transaction, dependencies.db, uid);
+    const installationSnap = await transaction.get(githubInstallationCollection(dependencies.db, uid));
+    transaction.set(githubUserDoc(dependencies.db, uid), {
+      firebaseUid: uid,
+      connectionStatus: "disconnected",
+      installationIds: [],
       updatedAt: now,
     }, {merge: true});
+    installationSnap.docs.forEach((doc) => {
+      transaction.set(doc.ref, {
+        installationStatus: "removed",
+        removedAt: now,
+        updatedAt: now,
+      }, {merge: true});
+    });
   });
-  await batch.commit();
   return getGithubConnection(uid, dependencies);
 }
 
@@ -152,43 +156,60 @@ async function storeGithubConnection(uid, githubUser, installations, dependencie
   const installationIds = installations
       .map((installation) => cleanGithubNumericId(installation && installation.id))
       .filter(Boolean);
-  const batch = dependencies.db.batch();
-  batch.set(githubUserDoc(dependencies.db, uid), {
-    firebaseUid: uid,
-    githubUserId: cleanGithubNumericId(githubUser && githubUser.id),
-    githubLogin: cleanGithubValue(githubUser && githubUser.login),
-    displayName: cleanGithubValue(githubUser && githubUser.name),
-    avatarUrl: cleanGithubValue(githubUser && githubUser.avatar_url),
-    connectionStatus: "connected",
-    installationIds,
-    updatedAt: now,
-    lastSyncedAt: now,
-    createdAt: now,
-  }, {merge: true});
-
-  installations.forEach((installation) => {
-    const installationId = cleanGithubNumericId(installation && installation.id);
-    if (!installationId) return;
-    const account = installation.account || {};
-    batch.set(githubInstallationCollection(dependencies.db, uid).doc(installationId), {
-      installationId,
-      ownerUid: uid,
-      githubAccountId: cleanGithubNumericId(account.id),
-      githubAccountLogin: cleanGithubValue(account.login),
-      githubAccountType: cleanGithubValue(account.type),
-      repositorySelection: cleanGithubValue(installation.repository_selection),
-      appId: cleanGithubNumericId(installation.app_id),
-      permissionSet: normalizeGithubTokenPermissions(installation.permissions),
-      installationStatus: "active",
-      webhookConfigured: true,
+  await dependencies.db.runTransaction(async transaction => {
+    await assertGithubConnectionMigrationAdmissionInTransaction(transaction, dependencies.db, uid);
+    transaction.set(githubUserDoc(dependencies.db, uid), {
+      firebaseUid: uid,
+      githubUserId: cleanGithubNumericId(githubUser && githubUser.id),
+      githubLogin: cleanGithubValue(githubUser && githubUser.login),
+      displayName: cleanGithubValue(githubUser && githubUser.name),
+      avatarUrl: cleanGithubValue(githubUser && githubUser.avatar_url),
+      connectionStatus: "connected",
+      installationIds,
       updatedAt: now,
       lastSyncedAt: now,
       createdAt: now,
-      removedAt: null,
     }, {merge: true});
-  });
 
-  await batch.commit();
+    installations.forEach((installation) => {
+      const installationId = cleanGithubNumericId(installation && installation.id);
+      if (!installationId) return;
+      const account = installation.account || {};
+      transaction.set(githubInstallationCollection(dependencies.db, uid).doc(installationId), {
+        installationId,
+        ownerUid: uid,
+        githubAccountId: cleanGithubNumericId(account.id),
+        githubAccountLogin: cleanGithubValue(account.login),
+        githubAccountType: cleanGithubValue(account.type),
+        repositorySelection: cleanGithubValue(installation.repository_selection),
+        appId: cleanGithubNumericId(installation.app_id),
+        permissionSet: normalizeGithubTokenPermissions(installation.permissions),
+        installationStatus: "active",
+        webhookConfigured: true,
+        updatedAt: now,
+        lastSyncedAt: now,
+        createdAt: now,
+        removedAt: null,
+      }, {merge: true});
+    });
+
+  });
+}
+
+async function assertGithubConnectionMigrationAdmission(uid, dependencies) {
+  await dependencies.db.runTransaction(async transaction => {
+    await assertGithubConnectionMigrationAdmissionInTransaction(transaction, dependencies.db, uid);
+  });
+}
+
+async function assertGithubConnectionMigrationAdmissionInTransaction(transaction, db, uid) {
+  const workspaceSnap = await transaction.get(db.collection("workspaces").where("ownerUid", "==", uid));
+  for (const workspaceDoc of workspaceSnap.docs) {
+    const source = workspaceDoc.data()?.source || {};
+    if (cleanName(source.type).toLowerCase() === "github" && cleanName(source.mode).toLowerCase() === "connected") {
+      await assertVmMigrationAdmission(transaction, db, workspaceDoc.id);
+    }
+  }
 }
 
 function githubCallbackUrl(req) {

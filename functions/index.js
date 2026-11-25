@@ -1,6 +1,7 @@
 "use strict";
 
 const {createWorkspaceUploadsService} = require("./workspaceUploads.service");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 const {createBrowserEgressManagementService} = require("./browserEgressManagement.service");
 
 const {onRequest} = require("firebase-functions/v2/https");
@@ -15,6 +16,7 @@ const {
 } = require("./backendContext");
 const {
   DEFAULT_BUCKET,
+  DEFAULT_REGION,
   DEFAULT_FUNCTION_REGION,
   AUTOMATION_AGENT_TOKEN_SECRET,
   GITHUB_APP_CLIENT_ID_SECRET,
@@ -61,6 +63,7 @@ const {createAutomationRunsService} = require("./automationRuns.service");
 const {createWorkspaceTicketsService} = require("./workspaceTickets.service");
 const {createWorkspaceRequestGrantsService} = require("./workspaceRequestGrants.service");
 const {createWorkspaceRequestRuntimeService} = require("./workspaceRequestRuntime.service");
+const {createVmWorkspaceRuntimeService} = require("./vmWorkspaceRuntime.service");
 const {createAutomationSchedulerService} = require("./automationScheduler.service");
 const {
   userWithUsage,
@@ -81,6 +84,7 @@ const {
 const {createComputeEngineService} = require("./computeEngine.service");
 const {createRuntimeProviderService} = require("./runtimeProvider.service");
 const {isRuntimeProviderEnabled} = require("./runtimeProvider.helpers");
+const {createVmLifecycleAdapter} = require("./vmLifecycle.adapter");
 const {
   SESSION_RESOURCE_ERROR_CODE,
   normalizeSessionResources,
@@ -109,6 +113,7 @@ const {createSessionLogsService} = require("./sessionLogs.service");
 const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
+  runnerRequestUrl,
 } = require("./runnerProxy.helpers");
 const {createProvisioningWorker} = require("./provisioning.worker");
 const {
@@ -310,6 +315,10 @@ const {
   patchSessionService,
   provisionSessionService,
 } = runtimeProviderService;
+const vmWorkspaceRuntimeService = createVmWorkspaceRuntimeService({
+  db,
+  lifecycle: createVmLifecycleAdapter({db}),
+});
 Object.assign(lifecycleDependencies, {
   deleteSessionService,
   patchSessionService,
@@ -337,6 +346,7 @@ const workspaceRequestRuntimeService = createWorkspaceRequestRuntimeService({
   requireWorkspace,
   restartSession,
   sessionCollection,
+  vmRuntime: vmWorkspaceRuntimeService,
 });
 const automationProvisioningService = createAutomationProvisioningService({
   admin,
@@ -351,6 +361,7 @@ const automationProvisioningService = createAutomationProvisioningService({
   requestRunnerJson,
   sessionCollection,
   storage,
+  vmRuntime: vmWorkspaceRuntimeService,
   workspaceRequestRuntime: workspaceRequestRuntimeService,
 });
 const {
@@ -369,6 +380,8 @@ const automationCleanupService = createAutomationCleanupService({
   scheduleRetry: (...args) => automationRetryService?.scheduleRetry(...args),
   sessionCollection,
   cancelWorkspaceRequest: workspaceRequestRuntimeService.cancel,
+  requestRunnerJson,
+  vmRuntime: vmWorkspaceRuntimeService,
   wakeQueue: wakeAutomationQueue,
 });
 const {
@@ -389,6 +402,7 @@ const automationReconciliationService = createAutomationReconciliationService({
   reconcileWorkspaceRequest: workspaceRequestRuntimeService.reconcile,
   requestRunnerJson,
   sessionCollection,
+  vmRuntime: vmWorkspaceRuntimeService,
 });
 
 const workspaceSharedStorageService = createWorkspaceSharedStorageService({
@@ -508,6 +522,7 @@ function googleMcpTokenRefreshUrl() {
 }
 
 const workspaceUploadsService = createWorkspaceUploadsService({
+  db,
   browserAccessTtlMs: SESSION_BROWSER_ACCESS_TTL_MS,
   requireWorkspace,
   sessionCollection,
@@ -568,6 +583,155 @@ Object.defineProperty(module.exports, "__mapacheMigrationOperations", {
     restartSession,
   }),
   writable: false,
+});
+
+// IAM-private gateway resolver: deploy independently of all legacy handlers.
+const vmLifecycleFunctions = require("./vmLifecycle.functions");
+exports.vmLifecycle_v2 = vmLifecycleFunctions.vmLifecycle_v2;
+exports.vmLifecycleWorker_v2 = vmLifecycleFunctions.vmLifecycleWorker_v2;
+exports.vmLifecycleReconcile_v2 = vmLifecycleFunctions.vmLifecycleReconcile_v2;
+exports.vmBackupReconcile_v2 = require("./vmBackup.functions").vmBackupReconcile_v2;
+
+exports.vmApi_v2 = onRequest({invoker: "public", cors: true, timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com"}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmApiService} = require("./vmApi.service");
+    const {createVmLifecycleAdapter} = require("./vmLifecycle.adapter");
+    const {requestVmBackupRestore} = require("./vmBackup.functions");
+    const result = await createVmApiService({db, requireUser, lifecycle: createVmLifecycleAdapter({db}),
+      requestBackupRestore: requestVmBackupRestore})(req);
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_api_unavailable"});
+  }
+});
+
+exports.vmFixtureAuth_v2 = onRequest({invoker: "private", timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com"}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmFixtureAuthService} = require("./vmFixtureAuth.service");
+    res.json(await createVmFixtureAuthService({db, auth: admin.auth()})(req));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "fixture_auth_unavailable"});
+  }
+});
+
+exports.vmGatewayResolve_v2 = onRequest({
+  invoker: "mapache-vm-gateway-v2@pi-agents-cloud.iam.gserviceaccount.com",
+  timeoutSeconds: 30,
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmGatewayResolveService} = require("./vmGatewayResolve.service");
+    res.json(await createVmGatewayResolveService({db})(req));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "gateway_unavailable"});
+  }
+});
+
+// Session-token authenticated VM coordination, isolated from legacy records.
+exports.vmRuntimeControl_v2 = onRequest({
+  invoker: "public",
+  timeoutSeconds: 60,
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmRuntimeControlService} = require("./vmRuntimeControl.service");
+    res.json(await createVmRuntimeControlService({db, admin})(req));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_control_unavailable"});
+  }
+});
+
+// Isolated lease/control plane for disposable backup-recovery VMs. It never
+// reads or writes the normal workspace runtime collections.
+exports.vmBackupRecoveryControl_v2 = onRequest({
+  invoker: "public",
+  timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com",
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmRuntimeControlService} = require("./vmRuntimeControl.service");
+    res.json(await createVmRuntimeControlService({db, admin, recovery: true})(req));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_backup_recovery_control_unavailable"});
+  }
+});
+
+// Independently deployed, IAM-authenticated diagnostics for the VM rollout.
+// No Hosting rewrite or legacy API/trigger replacement is needed.
+exports.vmMigrationValidationControl_v2 = onRequest({
+  invoker: "public", timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com",
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmRuntimeControlService} = require("./vmRuntimeControl.service");
+    res.json(await createVmRuntimeControlService({db, admin, validation: true})(req));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_control_unavailable"});
+  }
+});
+
+exports.vmRuntimePreflight_v2 = onRequest({
+  invoker: "private",
+  timeoutSeconds: 60,
+}, async (req, res) => {
+  if (req.method !== "GET") {
+    res.set("Allow", "GET").status(405).json({error: "method_not_allowed"});
+    return;
+  }
+  try {
+    const {createVmRuntimePreflight} = require("./vmRuntimePreflight.service");
+    res.json(await createVmRuntimePreflight({auth})());
+  } catch (error) {
+    logger.error("VM preflight failed", {code: error.code || "preflight_failed"});
+    res.status(503).json({error: "vm_preflight_unavailable"});
+  }
+});
+
+exports.vmMigrationPreflight_v2 = onRequest({invoker: "private", timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com"}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (req.method !== "GET") {
+    res.set("Allow", "GET").status(405).json({error: "method_not_allowed"});
+    return;
+  }
+  try {
+    const {createVmMigrationPreflight} = require("./vmMigrationPreflight.service");
+    const {createVmLegacyComputeObserver} = require("./vmLegacyComputeObservation.service");
+    const {createVmMigrationStorageObserver} = require("./vmMigrationStorageObservation.service");
+    const inspectCompute = createVmLegacyComputeObserver({auth, projectNumber: "299764728235",
+      defaultRegion: DEFAULT_REGION, defaultBucket: DEFAULT_BUCKET});
+    const inspectStorage = createVmMigrationStorageObserver({defaultBucket: DEFAULT_BUCKET, listPage: async ({bucketName, ...options}) => {
+      const [, , response] = await storage.bucket(bucketName).getFiles({...options, autoPaginate: false,
+        fields: "nextPageToken,items(name,generation,metageneration,size,crc32c)"});
+      return {objects: response.items || [], nextPageToken: response.nextPageToken};
+    }});
+    res.json(await createVmMigrationPreflight({db, inspectCompute, inspectStorage})({workspaceId: req.query.workspaceId,
+      ownerUid: req.query.ownerUid, checkCompute: req.query.checkCompute === "1", checkStorage: req.query.checkStorage === "1"}));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_migration_preflight_unavailable"});
+  }
+});
+
+exports.vmMigrationStatus_v2 = onRequest({invoker: "private", timeoutSeconds: 60,
+  serviceAccount: "mapache-api@pi-agents-cloud.iam.gserviceaccount.com"}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (req.method !== "GET") {
+    res.set("Allow", "GET").status(405).json({error: "method_not_allowed"});
+    return;
+  }
+  try {
+    const {createVmMigrationCoordinator} = require("./vmMigrationCoordinator.service");
+    const {workspaceId, ownerUid, operationId} = req.query;
+    res.json(await createVmMigrationCoordinator({db}).getStatus({workspaceId, ownerUid, operationId}));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "vm_migration_status_unavailable"});
+  }
 });
 
 exports.api = onRequest({
@@ -889,6 +1053,7 @@ async function reserveWorkspaceSyncSession(workspaceId, sessionRef, session, opt
     const workspaceSnap = await transaction.get(workspaceRef);
     const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    await assertVmMigrationAdmission(transaction, db, workspaceId);
     const lease = resolveSyncWriterLease(
         workspaceSnap.data(),
         sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()})),
@@ -915,6 +1080,7 @@ async function reserveGithubWorkspaceSession(workspaceId, sessionRef, session, o
     const workspaceSnap = await transaction.get(workspaceRef);
     const sessionsSnap = await transaction.get(sessionCollection(workspaceId));
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
+    await assertVmMigrationAdmission(transaction, db, workspaceId);
     const activeSession = sessionsSnap.docs.find((doc) => {
       const active = doc.data();
       return isActiveGithubWorkspaceSession(active);
@@ -970,7 +1136,8 @@ async function requestRunnerJson(session, routePath, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
   try {
-    const response = await fetch(`${session.serviceUrl.replace(/\/+$/, "")}${routePath}`, {
+    const runnerUrl = runnerRequestUrl(session.serviceUrl, routePath, session.runnerAccessToken);
+    const response = await fetch(runnerUrl, {
       method: options.method || "GET",
       headers: {
         "x-shutdown-token": session.shutdownToken,

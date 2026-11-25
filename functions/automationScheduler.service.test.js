@@ -245,6 +245,38 @@ test("timely tick enqueues one deterministic occurrence and advances the pointer
   assert.equal([...db.data.keys()].filter((path) => path.startsWith("automationRuns/")).length, 1);
 });
 
+test("migration fence leaves scheduled occurrence and pointer untouched until release", async () => {
+  const db = setup();
+  const definitionPath = "workspaces/workspace-1/automations/automation-1";
+  const before = db.data.get(definitionPath);
+  db.data.set("vmMigrationFences_v2/workspace-1", {workspaceId: "workspace-1", operationId: "migration-1"});
+  const wakeCalls = [];
+
+  const fenced = await runAutomationSchedulerTick({scheduleTime: tick}, {
+    db,
+    admin,
+    now: () => new Date(tick),
+    featureEnabled: async () => true,
+    wakeQueue: async (workspaceId) => wakeCalls.push(workspaceId),
+  });
+  assert.equal(fenced.queued, 0);
+  assert.equal(fenced.processed, 1);
+  assert.deepEqual(db.data.get(definitionPath), before);
+  assert.equal([...db.data.keys()].filter((path) => path.startsWith("automationRuns/")).length, 0);
+  assert.deepEqual(wakeCalls, []);
+
+  db.data.delete("vmMigrationFences_v2/workspace-1");
+  const released = await runAutomationSchedulerTick({scheduleTime: tick}, {
+    db,
+    admin,
+    now: () => new Date(tick),
+    featureEnabled: async () => true,
+    wakeQueue: async (workspaceId) => wakeCalls.push(workspaceId),
+  });
+  assert.equal(released.queued, 1);
+  assert.deepEqual(wakeCalls, ["workspace-1"]);
+});
+
 test("late delivery is ignored without advancing schedules", async () => {
   const db = setup();
   const before = db.data.get("workspaces/workspace-1/automations/automation-1").nextRunAt;

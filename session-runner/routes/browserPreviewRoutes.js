@@ -8,6 +8,8 @@ function registerBrowserRoutes({
   chromeRuntime,
   chromeProfileSeed,
   config,
+  diskStatus,
+  retainedDiskDigest,
   activity,
   piWebUi,
   expressStatic,
@@ -38,12 +40,26 @@ function registerBrowserRoutes({
       lastCheckpointAt: checkpoint.lastCheckpointAt || null,
       checkpointError: checkpoint.checkpointError || null,
     };
+    if (diskStatus?.status) health.disk = await diskStatus.status();
     if (chromeProfileSeed?.status) health.chromeProfileSeed = chromeProfileSeed.status();
     if (piWebUi) {
       health.agentRuntime = piWebUi.status?.() || null;
       health.agentActivity = await piWebUi.activity?.() || null;
     }
     res.json(health);
+  });
+
+  app.get("/runner/recovery-digest", requireBrowserOrRunnerAccess, async (req, res) => {
+    if (!retainedDiskDigest?.digest) {
+      res.status(404).json({error: "recovery_digest_unavailable"});
+      return;
+    }
+    try {
+      const evidence = await retainedDiskDigest.digest();
+      res.json({ok: true, workspaceId: config.workspaceId, sessionId: config.sessionId, ...evidence});
+    } catch (error) {
+      res.status(503).json({error: error.code || "recovery_digest_failed"});
+    }
   });
 
   app.get("/capabilities", requireBrowserAccess, (req, res) => {

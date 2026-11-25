@@ -1,11 +1,15 @@
 "use strict";
 
-const {hasAutomationAgentAuthority} = require("./automationAgentAdmission.helpers");
+const {
+  hasAutomationAgentAuthority,
+  isLiveAutomationSession,
+  readAutomationAgentContext,
+  sessionBootInstanceId,
+  sessionGeneration,
+} = require("./automationAgentAdmission.helpers");
 
 const {db: defaultDb} = require("./backendContext");
 const {httpError} = require("./backendUtils.helpers");
-
-const LIVE_SESSION_STATUSES = new Set(["running", "ready"]);
 
 function createAutomationAgentApiService(dependencies = {}) {
   if (!dependencies.authService || typeof dependencies.authService.verifyToken !== "function") {
@@ -134,16 +138,14 @@ async function handleRequest(request = {}, route = {}, dependencies = {}) {
 
 async function assertCurrentAdmission(claims, dependencies) {
   const firestore = dependencies.db || defaultDb;
-  const sessionSnap = await dependencies.sessionCollection(claims.workspaceId).doc(claims.sessionId).get();
-  const session = sessionSnap.exists ? sessionSnap.data() || {} : null;
-  const workspaceSnap = await firestore.collection("workspaces").doc(claims.workspaceId).get();
-  const workspace = workspaceSnap.exists ? workspaceSnap.data() || {} : null;
+  const {session, workspace} = await readAutomationAgentContext({db: firestore,
+    sessionCollection: dependencies.sessionCollection, workspaceId: claims.workspaceId, sessionId: claims.sessionId});
   if (!session || !workspace || workspace.ownerUid !== claims.ownerUid || session.ownerUid !== claims.ownerUid ||
       session.workspaceId !== claims.workspaceId || !hasAutomationAgentAuthority(session, workspace, claims.sessionId) ||
-      !LIVE_SESSION_STATUSES.has(String(session.status || "").trim().toLowerCase()) ||
-      session.agentRuntimeAuthorityState !== "admitted" ||
-      String(session.agentRuntimeGeneration || "") !== String(claims.generation) ||
-      session.agentRuntimeBootInstanceId !== claims.bootInstanceId ||
+      !isLiveAutomationSession(session) ||
+      (workspace.backend !== "compute-engine" && session.agentRuntimeAuthorityState !== "admitted") ||
+      String(sessionGeneration(session)) !== String(claims.generation) ||
+      sessionBootInstanceId(session) !== claims.bootInstanceId ||
       workspace.deleted === true || isDeletedLifecycle(workspace.lifecycle || workspace.status)) {
     throw httpError(401, "automation_agent_unauthorized");
   }

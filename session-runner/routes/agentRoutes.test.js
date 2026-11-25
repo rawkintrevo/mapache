@@ -82,3 +82,37 @@ test("workspace request status maps missing requests to 404", async () => {
   assert.equal(response.statusCode, 404);
   assert.deepEqual(response.body, {error: "workspace_request_not_found"});
 });
+
+test("VM automation control routes require runner access and preserve bounded results", async () => {
+  const app = createFakeApp();
+  const calls = [];
+  registerAgentRoutes({
+    app,
+    automationExecution: {
+      startRun: async (runId) => { calls.push(["start", runId]); return {started: true, runId}; },
+      statusFor: async (runId) => { calls.push(["status", runId]); return {ok: true, runId, status: "running"}; },
+      cancelRun: async (runId) => { calls.push(["cancel", runId]); return {ok: true, runId, status: "canceled"}; },
+    },
+    hasRunnerAccess: (req) => req.authorized === true,
+    piWebUi: {},
+    workspace: {materializeAuthNow: async () => ({})},
+  });
+  const start = app.routes.find((route) => route.method === "POST" && route.path === "/automation/runs");
+  const status = app.routes.find((route) => route.method === "GET" && route.path === "/automation/runs/:runId");
+  const cancel = app.routes.find((route) => route.method === "POST" && route.path === "/automation/runs/:runId/cancel");
+
+  const denied = createResponse();
+  await start.handler({body: {runId: "run-1"}, authorized: false}, denied);
+  assert.equal(denied.statusCode, 404);
+
+  const started = createResponse();
+  await start.handler({body: {runId: "run-1"}, authorized: true}, started);
+  const current = createResponse();
+  await status.handler({params: {runId: "run-1"}, authorized: true}, current);
+  const canceled = createResponse();
+  await cancel.handler({params: {runId: "run-1"}, authorized: true}, canceled);
+  assert.deepEqual(started.body, {started: true, runId: "run-1"});
+  assert.deepEqual(current.body, {ok: true, runId: "run-1", status: "running"});
+  assert.deepEqual(canceled.body, {ok: true, runId: "run-1", status: "canceled"});
+  assert.deepEqual(calls, [["start", "run-1"], ["status", "run-1"], ["cancel", "run-1"]]);
+});

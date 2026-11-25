@@ -26,10 +26,13 @@ function createAutomationExecutionService({
   logger = console,
   now = () => Date.now(),
   piWebUi,
+  createNativeRuntime,
   setTimeoutImpl = setTimeout,
   workspaceAuthority,
 } = {}) {
-  const enabled = String(config.runtimeKind || "").trim().toLowerCase() === "automation" &&
+  const native = config.runtimeProvider === "compute-engine" &&
+    String(config.runtimeKind || "").trim().toLowerCase() === "main";
+  const enabled = (String(config.runtimeKind || "").trim().toLowerCase() === "automation" || native) &&
     (config.agentRuntimeEnabled === true || config.agentUiVersion === "pi-web-ui-v1");
   const pollIntervalMs = positiveNumber(config.automationExecutionPollIntervalMs, DEFAULT_POLL_INTERVAL_MS);
   const statusTimeoutMs = positiveNumber(config.automationExecutionStatusTimeoutMs, DEFAULT_STATUS_TIMEOUT_MS);
@@ -37,20 +40,43 @@ function createAutomationExecutionService({
   let pollTimer = null;
   let stopped = false;
   let execution = null;
+  let assignment = null;
 
   return {
     enabled: () => enabled,
     handleProcessExit,
     pollOnce,
     start,
+    startRun,
     status,
+    statusFor,
     stop,
+    cancelRun,
   };
 
   async function start() {
     if (!enabled) return {enabled: false, skipped: true};
+    if (native) return {enabled: true, skipped: "awaiting_assignment"};
     if (startPromise) return startPromise;
     if (execution) return status();
+    assignment = {native: false, runId: config.automationRunId, sessionId: config.sessionId};
+    stopped = false;
+    startPromise = startInternal();
+    try {
+      return await startPromise;
+    } finally {
+      startPromise = null;
+    }
+  }
+
+  async function startRun(runId) {
+    if (!native) return {enabled: false, skipped: "not_vm_runtime"};
+    const normalizedRunId = cleanId(runId);
+    if (!normalizedRunId) throw automationError("automation_run_id_required");
+    if (execution && execution.runId !== normalizedRunId) throw automationError("automation_run_busy");
+    if (startPromise) return startPromise;
+    if (execution) return status();
+    assignment = {native: true, runId: normalizedRunId, sessionId: config.sessionId};
     stopped = false;
     startPromise = startInternal();
     try {
@@ -84,13 +110,31 @@ function createAutomationExecutionService({
       runId: claim.assignment.runId,
       terminal: null,
       submitted: false,
+      adapter: null,
+      runtime: null,
     };
     try {
-      const response = await piWebUi.startAutomation({
+      if (claim.assignment.native) {
+        if (typeof createNativeRuntime !== "function") throw automationError("vm_automation_runtime_unavailable");
+        execution.runtime = await createNativeRuntime({
+          onExit: ({error} = {}) => handleProcessExit({error}),
+          runId: claim.assignment.runId,
+        });
+        execution.adapter = execution.runtime.process;
+        await execution.adapter.start();
+      } else {
+        execution.adapter = piWebUi;
+      }
+      // Startup can race with a runner shutdown, cancellation, or a native
+      // child exit. Once the durable claim has become terminal, never submit
+      // the prompt to a child that is already being torn down.
+      if (executionStartAborted()) return executionStartResult();
+      const response = await execution.adapter.startAutomation({
         modelRef: claim.assignment.modelRef || undefined,
-        prompt: automationPrompt(claim.assignment.prompt, config),
+        prompt: claim.assignment.native ? nativeAutomationPrompt(claim.assignment.prompt) : automationPrompt(claim.assignment.prompt, config),
         runId: claim.assignment.runId,
       });
+      if (executionStartAborted()) return executionStartResult();
       if (!response || response.ok !== true) {
         throw automationError(normalizeFailureCode(response?.error, "automation_submit_failed"));
       }
@@ -100,6 +144,7 @@ function createAutomationExecutionService({
       const outcome = normalizeOutcome(response);
       if (outcome) {
         await finish(outcome.status, outcome.errorCode, outcome.response);
+        await disposeNativeRuntime();
       } else {
         schedulePoll();
       }
@@ -110,10 +155,20 @@ function createAutomationExecutionService({
         conversationId: execution.conversationId,
       };
     } catch (error) {
+      if (executionStartAborted()) {
+        if (!execution?.terminal && stopped) {
+          await writeOutcome("interrupted", "automation_execution_stopped").catch((writeError) => {
+            logger.warn?.("automation stopped-state write failed", safeError(writeError));
+          });
+        }
+        await disposeNativeRuntime();
+        return executionStartResult();
+      }
       const code = normalizeFailureCode(error?.code || error?.message, "automation_submit_failed");
       await writeOutcome("interrupted", code).catch((writeError) => {
         logger.warn?.("automation interruption write failed", safeError(writeError));
       });
+      await disposeNativeRuntime();
       throw error;
     }
   }
@@ -123,7 +178,7 @@ function createAutomationExecutionService({
     try {
       assertAuthority();
       const response = await bounded(
-          Promise.resolve(piWebUi.automationStatus(execution.runId)),
+          Promise.resolve((execution.adapter || piWebUi).automationStatus(execution.runId)),
           statusTimeoutMs,
           "automation_status_timeout",
       );
@@ -134,6 +189,7 @@ function createAutomationExecutionService({
       const outcome = normalizeOutcome(response);
       if (outcome) {
         await finish(outcome.status, outcome.errorCode, response);
+        await disposeNativeRuntime();
       } else {
         await writeHeartbeat(response, "running");
         schedulePoll();
@@ -143,6 +199,7 @@ function createAutomationExecutionService({
       await writeOutcome("interrupted", code).catch((writeError) => {
         logger.warn?.("automation interruption write failed", safeError(writeError));
       });
+      await disposeNativeRuntime();
     }
     return status();
   }
@@ -154,6 +211,7 @@ function createAutomationExecutionService({
     await writeOutcome("interrupted", code).catch((writeError) => {
       logger.warn?.("automation process-loss write failed", safeError(writeError));
     });
+    await disposeNativeRuntime();
     return status();
   }
 
@@ -162,20 +220,101 @@ function createAutomationExecutionService({
     clearPollTimer();
     if (cancel && execution && !execution.terminal) {
       try {
-        if (execution.submitted && typeof piWebUi?.cancelAutomation === "function") {
+        if (execution.submitted && typeof (execution.adapter || piWebUi)?.cancelAutomation === "function") {
           await bounded(
-              Promise.resolve(piWebUi.cancelAutomation(execution.runId)),
+              Promise.resolve((execution.adapter || piWebUi).cancelAutomation(execution.runId)),
               statusTimeoutMs,
               "automation_cancel_timeout",
           );
         }
         await writeOutcome("canceled", "automation_canceled");
+        await disposeNativeRuntime();
       } catch (error) {
         await writeOutcome("canceled", normalizeFailureCode(error?.code, "automation_cancel_failed"))
             .catch((writeError) => logger.warn?.("automation cancellation write failed", safeError(writeError)));
+        await disposeNativeRuntime();
       }
     }
     return status();
+  }
+
+  async function cancelRun(runId) {
+    const normalizedRunId = cleanId(runId);
+    if (!native || !normalizedRunId) {
+      return {ok: false, error: "automation_run_not_found"};
+    }
+    if (execution && execution.runId !== normalizedRunId) throw automationError("automation_run_busy");
+    if (execution && !execution.terminal) return stop({cancel: true});
+    if (execution?.terminal) {
+      const terminal = execution.terminal;
+      await disposeNativeRuntime();
+      return {ok: true, runId: normalizedRunId, status: terminal, durable: true};
+    }
+    assignment = {native: true, runId: normalizedRunId, sessionId: config.sessionId};
+    return cancelDurableRun(normalizedRunId);
+  }
+
+  async function cancelDurableRun(runId) {
+    const refs = assignmentRefs();
+    const authority = currentAuthority();
+    let result = null;
+    await db.runTransaction(async (transaction) => {
+      const [workspaceSnap, sessionSnap, runSnap] = await Promise.all([
+        transaction.get(refs.workspaceRef),
+        transaction.get(refs.sessionRef),
+        transaction.get(refs.runRef),
+      ]);
+      if (!workspaceSnap?.exists || !sessionSnap?.exists || !runSnap?.exists) {
+        result = {ok: false, error: "automation_run_not_found"};
+        return;
+      }
+      const workspace = workspaceSnap.data() || {};
+      const session = sessionSnap.data() || {};
+      const run = {runId, ...runSnap.data()};
+      if (run.workspaceId !== config.workspaceId || run.sessionId !== refs.sessionRef.id ||
+          run.ownerUid !== config.ownerUid || session.ownerUid !== run.ownerUid ||
+          workspace.ownerUid !== run.ownerUid || workspace.backend !== "compute-engine" ||
+          workspace.currentSessionId !== refs.sessionRef.id || workspace.generation !== authority.generation ||
+          session.generation !== authority.generation || session.state !== "active" ||
+          run.executionRoute !== "vm-native-v1") {
+        result = {ok: false, error: "automation_run_not_found"};
+        return;
+      }
+      const currentStatus = cleanId(run.status).toLowerCase();
+      if (AUTOMATION_TERMINAL_STATUSES.has(currentStatus)) {
+        result = {ok: true, runId, status: currentStatus, durable: true};
+        return;
+      }
+      if (!AUTOMATION_ACTIVE_RUN_STATUSES.has(currentStatus)) {
+        result = {ok: false, error: "automation_run_not_cancelable"};
+        return;
+      }
+      const effectiveStatus = run.desiredOutcome === "interrupted" ? "interrupted" : "canceled";
+      const timestamp = serverTimestamp();
+      transaction.update(refs.runRef, {
+        desiredOutcome: effectiveStatus,
+        endedAt: timestamp,
+        executionEndedAt: timestamp,
+        executionHeartbeatAt: timestamp,
+        executionOutcome: effectiveStatus,
+        executionState: effectiveStatus,
+        ...(effectiveStatus === "interrupted" ? {
+          executionErrorCode: normalizeFailureCode(run.interruptionReason, "automation_interrupted"),
+        } : {}),
+        cleanupState: "pending",
+        status: effectiveStatus,
+        updatedAt: timestamp,
+      });
+      transaction.update(refs.sessionRef, {
+        automationExecutionEndedAt: timestamp,
+        automationExecutionHeartbeatAt: timestamp,
+        automationExecutionOutcome: effectiveStatus,
+        automationExecutionState: effectiveStatus,
+        updatedAt: timestamp,
+      });
+      result = {ok: true, runId, status: effectiveStatus, durable: true};
+    });
+    return result || {ok: false, error: "automation_run_not_found"};
   }
 
   async function claimAssignment() {
@@ -256,6 +395,7 @@ function createAutomationExecutionService({
     clearPollTimer();
     const refs = assignmentRefs();
     const timestamp = serverTimestamp();
+    let committedStatus = null;
     const written = await db.runTransaction(async (transaction) => {
       const [sessionSnap, runSnap] = await Promise.all([
         transaction.get(refs.sessionRef),
@@ -301,9 +441,10 @@ function createAutomationExecutionService({
         ...(normalizedError ? {automationExecutionErrorCode: normalizedError} : {}),
         updatedAt: timestamp,
       });
+      committedStatus = effectiveStatus;
       return true;
     });
-    if (written) execution.terminal = status;
+    if (written) execution.terminal = committedStatus || status;
     return written;
   }
 
@@ -320,6 +461,21 @@ function createAutomationExecutionService({
     pollTimer?.unref?.();
   }
 
+  function executionStartAborted() {
+    return stopped || Boolean(execution?.terminal);
+  }
+
+  function executionStartResult() {
+    const terminal = execution?.terminal;
+    return {
+      enabled: true,
+      runId: execution?.runId || currentAssignment()?.runId || null,
+      ...(terminal === "canceled" ? {canceled: true} : {}),
+      ...(terminal === "interrupted" ? {interrupted: true} : {}),
+      ...(terminal ? {status: terminal} : {stopped: true}),
+    };
+  }
+
   function clearPollTimer() {
     if (pollTimer === null) return;
     clearTimeoutImpl(pollTimer);
@@ -327,13 +483,15 @@ function createAutomationExecutionService({
   }
 
   function assignmentRefs() {
-    if (!db || typeof db.collection !== "function" || !config.workspaceId || !config.sessionId || !config.automationRunId) {
+    const current = currentAssignment();
+    if (!db || typeof db.collection !== "function" || !config.workspaceId || !current.sessionId || !current.runId) {
       throw automationError("automation_assignment_unavailable");
     }
-    const workspaceRef = db.collection("workspaces").doc(config.workspaceId);
+    const workspaceRef = (current.native ? db.collection("vmRuntimes_v2") : db.collection("workspaces"))
+        .doc(config.workspaceId);
     return {
-      runRef: db.collection("automationRuns").doc(config.automationRunId),
-      sessionRef: workspaceRef.collection("sessions").doc(config.sessionId),
+      runRef: db.collection("automationRuns").doc(current.runId),
+      sessionRef: workspaceRef.collection("sessions").doc(current.sessionId),
       workspaceRef,
     };
   }
@@ -361,8 +519,19 @@ function createAutomationExecutionService({
     const authority = currentAuthority();
     const executionBootMatches = String(run.executionBootInstanceId || "") === authority.bootInstanceId &&
       positiveGeneration(run.executionGeneration) === authority.generation;
-    return (run.runId || config.automationRunId) === config.automationRunId &&
-      run.sessionId === config.sessionId &&
+    const current = currentAssignment();
+    if (current.native) {
+      return (run.runId || current.runId) === current.runId &&
+        run.sessionId === current.sessionId &&
+        run.workspaceId === config.workspaceId &&
+        (executionBootMatches || (allowStaleClaim && Boolean(run.executionStartedAt))) &&
+        session.ownerUid === run.ownerUid &&
+        session.generation === authority.generation &&
+        session.state === "active" &&
+        run.executionRoute === "vm-native-v1";
+    }
+    return (run.runId || current.runId) === current.runId &&
+      run.sessionId === current.sessionId &&
       run.workspaceId === config.workspaceId &&
       (executionBootMatches || (allowStaleClaim && Boolean(run.executionStartedAt))) &&
       String(session.runtimeKind || "").trim().toLowerCase() === "automation" &&
@@ -390,11 +559,40 @@ function createAutomationExecutionService({
     return {
       enabled,
       pollScheduled: pollTimer !== null,
-      runId: execution?.runId || config.automationRunId || null,
+      runId: execution?.runId || currentAssignment()?.runId || null,
       state: execution?.terminal || (execution?.submitted ? "running" : execution ? "claimed" : "idle"),
       submitted: Boolean(execution?.submitted),
       terminal: execution?.terminal || null,
     };
+  }
+
+  async function statusFor(runId) {
+    const normalizedRunId = cleanId(runId);
+    if (execution?.runId === normalizedRunId) {
+      const current = status();
+      return {ok: true, ...current, status: current.terminal || (current.submitted ? "running" : "submitted")};
+    }
+    if (!native || !normalizedRunId || !db) return {ok: false, error: "automation_run_not_found"};
+    const runSnap = await db.collection("automationRuns").doc(normalizedRunId).get();
+    if (!runSnap.exists || runSnap.data()?.sessionId !== config.sessionId ||
+        runSnap.data()?.workspaceId !== config.workspaceId || runSnap.data()?.executionRoute !== "vm-native-v1") {
+      return {ok: false, error: "automation_run_not_found"};
+    }
+    const run = runSnap.data() || {};
+    const status = cleanId(run.status).toLowerCase() || (run.executionStartedAt ? "running" : "submitted");
+    const terminal = AUTOMATION_TERMINAL_STATUSES.has(status) ? status : null;
+    return {ok: true, runId: normalizedRunId, status, state: terminal ? {terminal, finalResult: run.finalResult || null, finalAnswer: run.finalAnswer || null} : {}};
+  }
+
+  function currentAssignment() {
+    return assignment || (config.automationRunId ? {native: false, runId: config.automationRunId, sessionId: config.sessionId} : null);
+  }
+
+  async function disposeNativeRuntime() {
+    if (!execution?.runtime) return;
+    const runtime = execution.runtime;
+    execution.runtime = null;
+    await Promise.resolve(runtime.cleanup?.()).catch((error) => logger.warn?.("VM automation runtime cleanup failed", safeError(error)));
   }
 
   function serverTimestamp() {
@@ -414,10 +612,31 @@ function createAutomationExecutionService({
       throw automationError("automation_workspace_deleted");
     }
     const runStatus = String(run.status || "").trim().toLowerCase();
-    if (run.runId !== config.automationRunId || run.workspaceId !== config.workspaceId || run.sessionId !== refs.sessionRef.id ||
-        session.workspaceId !== config.workspaceId || session.ownerUid !== run.ownerUid || run.ownerUid !== config.ownerUid ||
+    const current = currentAssignment();
+    if (run.runId !== current.runId || run.workspaceId !== config.workspaceId || run.sessionId !== refs.sessionRef.id ||
+        (!current.native && session.workspaceId !== config.workspaceId) || session.ownerUid !== run.ownerUid || run.ownerUid !== config.ownerUid ||
         workspace.ownerUid !== run.ownerUid) {
       throw automationError("automation_assignment_identity_mismatch");
+    }
+    if (current.native) {
+      if (workspace.backend !== "compute-engine" || workspace.currentSessionId !== refs.sessionRef.id ||
+          workspace.generation !== authority.generation || session.generation !== authority.generation ||
+          session.state !== "active" || run.executionRoute !== "vm-native-v1") {
+        throw automationError("automation_assignment_session_not_admitted");
+      }
+      const prompt = typeof run.snapshot?.prompt === "string" ? run.snapshot.prompt : "";
+      if (!prompt.trim()) throw automationError("automation_assignment_prompt_missing");
+      return {
+        bootInstanceId: authority.bootInstanceId,
+        generation: authority.generation,
+        modelRef: modelReference(run.snapshot?.modelSelection),
+        native: true,
+        prompt,
+        runId: run.runId,
+        runStatus,
+        desiredOutcome: run.desiredOutcome || null,
+        executionStartedAt: run.executionStartedAt || null,
+      };
     }
     if (String(session.runtimeKind || "").trim().toLowerCase() !== "automation" ||
         String(session.automationRunId || "").trim() !== run.runId ||
@@ -435,6 +654,7 @@ function createAutomationExecutionService({
       bootInstanceId: authority.bootInstanceId,
       generation: authority.generation,
       modelRef: modelReference(run.snapshot?.modelSelection),
+      native: false,
       prompt,
       runId: run.runId,
       runStatus,
@@ -442,6 +662,12 @@ function createAutomationExecutionService({
       executionStartedAt: run.executionStartedAt || null,
     };
   }
+}
+
+function nativeAutomationPrompt(prompt) {
+  return "The live workspace is not your working directory. Read input files only from " +
+    "/workspace-input, which is a read-only snapshot. Write every result and generated file " +
+    "under /workspace. Do not attempt to modify or access the live workspace mount.\n\n" + prompt;
 }
 
 function normalizeOutcome(response = {}) {

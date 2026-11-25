@@ -1,0 +1,16 @@
+{
+  "id": "vm-client-routing",
+  "title": "VM client routes power actions and generation changes without legacy fallback",
+  "baseUrl": "http://127.0.0.1:5173/e2e/qa/fixtures/vm-client.html",
+  "artifactsDir": "artifacts/qa/vm-client-routing",
+  "scope": "Local synthetic integration fixture using the production power control and VM adapter; not live authenticated full-shell acceptance.",
+  "steps": [
+    {"assert": "Initial session is s1 running; open power controls and choose Stop workspace"},
+    {"assert": "Session becomes s1 stopped; open power controls and choose Start workspace"},
+    {"assert": "Session becomes s2 running; click Get current access"},
+    {"assert": "Recorded actions are pause generation 1, start generation 1, access generation 2; no legacy calls or unexpected console/network errors"},
+    {"capture": "screenshot"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}

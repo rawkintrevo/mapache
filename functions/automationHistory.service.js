@@ -256,8 +256,10 @@ function toHistoryDto(doc) {
       id: run.workspaceOutput.id,
       path: run.workspaceOutput.agentPath ||
         `/automations/${run.workspaceOutput.folderName || run.workspaceOutput.id}`,
-      runtimePath: run.workspaceOutput.path,
-      storageUri: `gs://${run.workspaceOutput.bucketName}/${run.workspaceOutput.prefix}/`,
+      runtimePath: run.workspaceOutput.storageMode === "retained-disk" ? null : run.workspaceOutput.path,
+      storageMode: run.workspaceOutput.storageMode || "gcs",
+      storageUri: run.workspaceOutput.storageMode === "retained-disk" ? null :
+        `gs://${run.workspaceOutput.bucketName}/${run.workspaceOutput.prefix}/`,
     } : null,
     archiveAvailable: Boolean(artifactPointer),
     artifactAvailable: Boolean(artifactPointer),

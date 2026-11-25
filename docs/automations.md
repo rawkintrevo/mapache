@@ -103,7 +103,10 @@ run records.
   enqueue tests use its real serializer without committing database writes.
 - The minute scheduler validates the feature flag and schedule occurrence,
   records missed ranges as skipped history, and never creates a second pending
-  occurrence for one definition.
+  occurrence for one definition. It rechecks the VM migration fence in the
+  same transaction as the definition and run writes; a fenced tick leaves both
+  the occurrence and `nextRunAt` pointer untouched so an abort/release can
+  resume it without replaying or losing the schedule.
 - Definitions default to `missedRunPolicy=skip`. The opt-in `latest` policy
   accepts one newest missed occurrence inside `catchUpWindowMinutes` (1 to
   10080, default 1440), preserves the current due occurrence when present,
@@ -111,7 +114,10 @@ run records.
 - Admission is transactional. `automationMaxConcurrency` defaults to one;
   lowering it never evicts active runs. `allowParallelWithMain: false` holds an
   explicit main-session exclusion, queues while main is active, rejects main
-  Play/Restart/Resize during the exclusion, and wakes when main is paused.
+  Play/Restart/Resize during the exclusion, and wakes when main is paused. For
+  a migrated Compute Engine workspace the same transaction also reads the
+  canonical `vmRuntimes_v2/{workspaceId}` record; a stopped legacy session does
+  not make an active or transitioning VM eligible for an exclusive run.
 - Provisioning creates only the labeled run service after admission. The
   automation session is not the workspace canonical session, does not claim the
   main sync-writer lease, and is excluded from the user session list and idle
@@ -119,6 +125,32 @@ run records.
   deadline because creating the first SDK conversation and selecting its model
   can exceed the five-second shutdown/quiesce deadline. The upstream socket
   allows 75 seconds so the runner remains the earlier timeout authority.
+- Compute Engine workspaces use the `vm-native-v1` automation route. Provisioning
+  wakes or reuses the owner-matched canonical VM, records its current generation
+  and session, then dispatches only the run ID to the authenticated runner
+  control route. The runner's `vmAutomationRuntime.service.js` creates one
+  run-scoped child Pi process inside a bubblewrap user/mount namespace. It
+  copies the workspace while excluding `.mapache-internal` and unsafe links,
+  exposes that copy read-only at `/workspace-input`, hides the complete retained
+  disk before rebinding only this run's input/output/state trees, and exposes
+  only the run's retained-disk output directory as writable `/workspace`. Child
+  home, Pi state, sessions, and control files are private to the run and are
+  removed after terminal cleanup; durable output is retained and published
+  through `workspaceOutput`.
+- The VM-native path never creates a dedicated Cloud Run session and generic
+  cleanup never sends a Compute-backed run through the Cloud Run deletion
+  provider. Durable runner routes support start, status, and cancellation after
+  a runner restart, while reconciliation rechecks `/runner/health` and the
+  run-specific status before deciding interruption. If VM admission, generation
+  identity, retained-disk layout, bubblewrap, or the runner contract is not
+  available, provisioning/cleanup fails closed. Focused tests cover the
+  boundary, including startup cancellation and child-exit races: a native child
+  that exits or is canceled before prompt submission is finalized durably and
+  never receives a late `startAutomation` call. VM usage accounting is now
+  generation- and operation-fenced: active VM seconds, retained-disk
+  GiB-seconds, and VM-native background seconds are separate counters, with
+  background time excluded from allocated runtime totals. Live stopped-target
+  execution, cross-machine tools, and release acceptance remain open.
 - Stop, child crash, lost completion, duplicate delivery, and restart paths are
   idempotent. Cleanup confirms Cloud Run absence before releasing the admission
   slot. A completion callback cannot cause prompt replay.

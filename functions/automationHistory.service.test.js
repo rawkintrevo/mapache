@@ -179,6 +179,20 @@ test("run details expose the main Agent path while retaining the runtime path", 
   assert.equal(historical.workspaceOutput.path, "/automations/123e4567-e89b-12d3-a456-426614174000");
 });
 
+test("VM-native output is exposed as retained storage without a fake GCS URI", async () => {
+  const {db, service} = setup();
+  db.data.set("automationRuns/run-vm", {
+    runId: "run-vm", ownerUid: "user-1", workspaceId: "workspace-1",
+    status: "succeeded", cleanupState: "complete", createdAt: "2026-09-20T12:00:00.000Z",
+    workspaceOutput: {id: "run-vm", folderName: "report", path: "/automations/report", storageMode: "retained-disk"},
+  });
+  const run = await service.getRun("user-1", "run-vm");
+  assert.equal(run.workspaceOutput.path, "/automations/report");
+  assert.equal(run.workspaceOutput.storageMode, "retained-disk");
+  assert.equal(run.workspaceOutput.runtimePath, null);
+  assert.equal(run.workspaceOutput.storageUri, null);
+});
+
 test("history cursors preserve identical timestamps and reject tampering", async () => {
   const {db, service} = setup();
   db.data.set("automationRuns/run-3", {

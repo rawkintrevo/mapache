@@ -40,6 +40,8 @@ const {
 const {createShellSession} = require("./lib/shell");
 const {createWorkspaceService} = require("./lib/workspace");
 const {createDiskUploadService} = require("./lib/diskUpload.service");
+const {createDiskStatusService} = require("./lib/diskStatus");
+const {createRetainedDiskDigestService} = require("./lib/retainedDiskDigest");
 const {createWorkspaceSyncCoordinator} = require("./lib/workspaceSyncCoordinator");
 const {createWebSocketUpgradeRouter} = require("./lib/webSocketUpgrade");
 const {createRunnerLifecycleCoordinator} = require("./lib/runnerLifecycle");
@@ -55,13 +57,16 @@ const {createAgentCheckpointService} = require("./lib/agentCheckpoint.service");
 const {createAgentSnapshotService} = require("./lib/agentSnapshot.service");
 const {createAutomationArtifactsService} = require("./lib/automationArtifacts.service");
 const {createAutomationExecutionService} = require("./lib/automationExecution.service");
+const {createVmAutomationRuntimeFactory} = require("./lib/vmAutomationRuntime.service");
 const {createAutomationAgentApiService} = require("./lib/automationAgentApi.service");
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
+const {createVmRuntimeControlClient, createVmWorkspaceAuthority} = require("./lib/vmRuntimeControl");
 const {createQaFaultHarness} = require("./lib/qaFaultHarness");
 const {isAutomationRuntime} = require("./lib/runtimePaths");
 
 const config = createConfig(runnerEnvironment);
+if (config.retainedDiskMode) config.vmControl = createVmRuntimeControlClient({config});
 applyMapacheToolPath(config);
 config.browserEgressEnabled = Boolean(browserEgressConfig);
 const browserAccess = createBrowserAccessVerifier({
@@ -90,7 +95,11 @@ const vncBridge = createVncBridge({host: config.chromeVncHost, port: config.chro
 const preview = createPreviewService(config, {browserQa});
 let piWebUi = null;
 let automationExecution = null;
-const workspaceAuthority = createWorkspaceAuthority({
+const workspaceAuthority = config.vmControl ? createVmWorkspaceAuthority({
+  client: config.vmControl,
+  config,
+  onLost: () => piWebUi?.stop?.(),
+}) : createWorkspaceAuthority({
   admin,
   config,
   db,
@@ -123,6 +132,13 @@ const workspace = createWorkspaceService({
   storage,
 });
 const diskUpload = config.retainedDiskMode ? createDiskUploadService({config}) : null;
+const diskStatus = createDiskStatusService({
+  root: config.retainedDiskRoot || config.workspaceDir,
+  storageMode: config.workspaceStorageMode,
+});
+const retainedDiskDigest = config.retainedDiskMode ? createRetainedDiskDigestService({
+  root: config.retainedDiskRoot,
+}) : null;
 const workspaceSync = createWorkspaceSyncCoordinator({
   syncDown: workspace.syncDown,
   syncUp: workspace.syncUp,
@@ -171,14 +187,16 @@ piWebUi = createPiWebUiProcess(config, {
 });
 const agentSnapshot = createAgentSnapshotService({config});
 const automationArtifacts = createAutomationArtifactsService({admin, config, db, storage});
+const createNativeRuntime = config.retainedDiskMode ? createVmAutomationRuntimeFactory({config}) : null;
 automationExecution = createAutomationExecutionService({
   admin,
   config,
   db,
+  createNativeRuntime,
   piWebUi,
   workspaceAuthority,
 });
-const checkpointScheduler = createAgentCheckpointScheduler({
+const checkpointScheduler = config.retainedDiskMode ? null : createAgentCheckpointScheduler({
   activity,
   automationArtifacts,
   agentSnapshot,
@@ -208,7 +226,8 @@ const agentWebSocket = createAgentWebSocketGateway({
   upstreamPort: config.piWebUiPort,
   isCurrentWriter: workspaceAuthority.isCurrentWriter,
 });
-const resourceMetrics = createResourceMetricsService({intervalMs: config.resourceMetricsIntervalMs});
+const resourceMetrics = createResourceMetricsService({intervalMs: config.resourceMetricsIntervalMs,
+  allowHostMemoryFallback: config.runtimeProvider === "compute-engine"});
 const resourceMetricsSocket = createResourceMetricsWebSocket({
   hasBrowserAccess,
   metricsService: resourceMetrics,
@@ -258,6 +277,8 @@ registerBrowserRoutes({
   checkpointPublisher,
   config,
   chromeProfileSeed,
+  diskStatus,
+  retainedDiskDigest,
   expressStatic: express.static,
   piWebUi,
   preview,
@@ -276,7 +297,7 @@ registerWorkspaceRoutes({
   workspaceSync,
 });
 registerQaFaultRoutes({app, faultHarness: qaFaultHarness, hasRunnerAccess});
-registerAgentRoutes({app, hasRunnerAccess, piWebUi, workspace});
+registerAgentRoutes({app, automationExecution, hasRunnerAccess, piWebUi, workspace});
 registerGoogleMcpRoutes({app, googleMcpStatus: googleMcpStatus.status, hasRunnerAccess});
 
 wss.on("connection", (socket, request) => {

@@ -28,6 +28,8 @@ function createActivityService({admin, db, config, getRuntimeIdentity, isCurrent
     if (!workspaceId || !sessionId) return;
     const body = String(data || "");
     if (!body) return;
+    if (config.vmControl) return config.vmControl.call("history", {stream, data: body.slice(0, 4096)})
+        .catch((error) => logger.warn("VM terminal history write failed", {code: error.code || "vm_control_unavailable"}));
     await db.collection("workspaces")
         .doc(workspaceId)
         .collection("sessions")
@@ -44,6 +46,12 @@ function createActivityService({admin, db, config, getRuntimeIdentity, isCurrent
   async function updateSessionActivity(updates) {
     if (!workspaceId || !sessionId) return;
     if (typeof isCurrentRuntime === "function" && !isCurrentRuntime()) return;
+    if (config.vmControl) {
+      const payload = Object.fromEntries(Object.entries(updates || {}).map(([key, value]) =>
+        [key, key.endsWith("At") ? true : value]));
+      return config.vmControl.call("activity", payload)
+          .catch((error) => logger.warn("VM activity write failed", {code: error.code || "vm_control_unavailable"}));
+    }
     await sessionRef()
         .update(updates)
         .catch((error) => console.error("session activity write failed", error));
@@ -63,6 +71,7 @@ function createActivityService({admin, db, config, getRuntimeIdentity, isCurrent
 
   async function markRuntimeStartupFailure(error, {allowUnadmitted = false} = {}) {
     if (!workspaceId || !sessionId) return;
+    if (config.vmControl) return config.vmControl.call("failure", {message: compactErrorMessage(error?.message || error)});
     const runtimeError = compactErrorMessage(error && error.message ? error.message : error);
     const ref = sessionRef();
     const workspaceRef = db.collection("workspaces").doc(workspaceId);

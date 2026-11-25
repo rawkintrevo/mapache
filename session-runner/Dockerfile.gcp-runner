@@ -1,7 +1,7 @@
 FROM node:24-bookworm-slim AS mapache-base
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates chromium curl fd-find fonts-liberation gh git gzip novnc openbox openssh-client python3 make g++ ripgrep tar tint2 websockify wmctrl x11-utils x11vnc xvfb \
+  && apt-get install -y --no-install-recommends bash bubblewrap ca-certificates chromium chromium-sandbox curl fd-find fonts-liberation gh git gzip novnc openbox openssh-client python3 make g++ ripgrep tar tint2 websockify wmctrl x11-utils x11vnc xvfb \
   && ln -s /usr/bin/fdfind /usr/local/bin/fd \
   && ln -s /usr/bin/python3 /usr/local/bin/python \
   && python --version \
@@ -20,11 +20,19 @@ RUN npm install -g chrome-devtools-mcp@1.6.0
 WORKDIR /app
 
 FROM mapache-base AS pi-web-ui-builder
+ARG MAPACHE_UPSTREAM_TEST_MODE=full
 COPY upstream ./upstream
 COPY pi-web-ui-build-inputs.json /app/pi-web-ui-build-inputs.json
 COPY pi-web-ui-cache.tar.gz /app/pi-web-ui-cache.tar.gz
-RUN echo "Mapache pi-web-ui resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
+RUN case "${MAPACHE_UPSTREAM_TEST_MODE}" in \
+      full) test_args="" ;; \
+      fast) test_args="--skip-tests" ;; \
+      *) echo "unsupported MAPACHE_UPSTREAM_TEST_MODE: ${MAPACHE_UPSTREAM_TEST_MODE}" >&2; exit 2 ;; \
+    esac \
+  && echo "Mapache pi-web-ui resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
+  && echo "Mapache pi-web-ui upstream test mode: ${MAPACHE_UPSTREAM_TEST_MODE}" \
   && MAPACHE_REQUIRE_ADAPTER_INSPECTION=1 node /app/upstream/pi-web-ui/build.mjs \
+    ${test_args} \
     --output-dir /opt/mapache/pi-web-ui \
     --build-inputs /app/pi-web-ui-build-inputs.json \
     --cache-archive /app/pi-web-ui-cache.tar.gz
@@ -45,6 +53,11 @@ COPY reference ./reference
 COPY chromium-policies.json /etc/chromium/policies/managed/mapache.json
 RUN node /app/lib/patchPiMcpAdapter.js \
   && node /app/lib/patchPiModelCatalog.js /opt/mapache/pi-web-ui
+
+RUN sandbox_path="$(dpkg-query -L chromium-sandbox | grep '/chrome-sandbox$' | head -n 1)" \
+  && test -n "$sandbox_path" \
+  && test -u "$sandbox_path" \
+  && test "$(stat -c '%a' "$sandbox_path")" = 4755
 
 RUN chmod +x /app/bin/mapache.js /app/bin/mapache-preview-qa.js /app/bin/check-chrome-runtime.js /app/bin/mapache-chrome-status.js /app/bin/chrome-smoke.js /app/bin/pi-web-ui-smoke.js /app/bin/mapache-gh /app/bin/mapache-git-credential.js \
   && ln -sf /app/bin/mapache.js /usr/local/bin/mapache \

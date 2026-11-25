@@ -129,6 +129,7 @@ test("health route exposes checkpoint status without runner error details", asyn
       bucketName: "bucket",
       prefix: "prefix",
     },
+    diskStatus: {status: async () => ({known: true, storageMode: "retained-disk", availableBytes: 1024})},
     expressStatic: () => () => {},
     preview: {capabilityStatus: () => ({enabled: false})},
     requireBrowserAccess: (req, res, next) => next(),
@@ -148,6 +149,7 @@ test("health route exposes checkpoint status without runner error details", asyn
     prefix: "prefix",
     lastCheckpointAt: "2026-09-11T12:00:00.000Z",
     checkpointError: "checkpoint_upload_failed",
+    disk: {known: true, storageMode: "retained-disk", availableBytes: 1024},
   });
 });
 
@@ -191,6 +193,38 @@ test("health route exposes safe managed-agent activity without browser sockets",
     pendingMessages: 0,
   });
   assert.deepEqual(response.body.agentRuntime, {state: "ready", ready: true, pid: 42});
+});
+
+test("recovery digest route requires runner access and returns only bounded evidence", async () => {
+  const app = createFakeApp();
+  registerBrowserRoutes({
+    activity: {updateSessionActivity: async () => {}},
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "timestamp"}}},
+    app,
+    browserVncWebSocketPath: () => "/browser/vnc",
+    chromeRuntime: {status: () => ({enabled: false})},
+    config: {chromeEnabled: false, previewEnabled: false, workspaceId: "workspace-1", sessionId: "session-1"},
+    retainedDiskDigest: {digest: async () => ({version: 1, fileDigest: "sha256:digest", entryCount: 3, byteCount: 4, bounded: true})},
+    expressStatic: () => () => {},
+    preview: {capabilityStatus: () => ({enabled: false})},
+    requireBrowserAccess: (req, res, next) => next(),
+    requireBrowserOrRunnerAccess: (req, res, next) => {
+      if (req.allowed) next();
+      else res.status(404).json({error: "not_found"});
+    },
+    renderTerminalPage: () => "",
+  });
+  const route = app.routes.find(({method, path}) => method === "GET" && path === "/runner/recovery-digest");
+  const denied = createResponse();
+  await route.handlers[0]({}, denied, () => {});
+  assert.equal(denied.statusCode, 404);
+  const allowed = createResponse();
+  await route.handlers[0]({allowed: true}, allowed, () => {});
+  await route.handlers[1]({allowed: true}, allowed);
+  assert.deepEqual(allowed.body, {
+    ok: true, workspaceId: "workspace-1", sessionId: "session-1",
+    version: 1, fileDigest: "sha256:digest", entryCount: 3, byteCount: 4, bounded: true,
+  });
 });
 
 test("workspace routes keep runner-only sync-down protection and response code", async () => {

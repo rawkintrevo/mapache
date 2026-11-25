@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {lstatSync, mkdtempSync, mkdirSync, readlinkSync, symlinkSync, writeFileSync} from "node:fs";
+import {lstatSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
@@ -31,6 +31,14 @@ test("the manifest is a release policy rather than a manually pinned source", ()
 	assert.equal(manifest.piSdk.releaseChannel, "latest");
 });
 
+test("fast builds may restore a verified full cache but mark cache misses unpublished", () => {
+	// The build path restores the cache before deciding whether to run the
+	// reduced build. A fast cache miss must not be packaged as the shared cache.
+	const source = readFileSync(new URL("./build.mjs", import.meta.url), "utf8");
+	assert.match(source, /if \(cacheKey && options\.cacheArchivePath\)/);
+	assert.match(source, /options\.skipTests \? \{status: "disabled", reason: "tests-skipped"\}/);
+});
+
 test("the build rejects a source directory with the wrong revision", async () => {
 	const sourceDir = fixture();
 	await assert.rejects(
@@ -57,6 +65,25 @@ test("the patch stage rejects a mismatched baseline", async () => {
 		() => applyPatches(sourceDir, {patches: ["patches/fixture.patch"]}, join(patchRoot, "patches")),
 		/patch baseline rejected/,
 	);
+});
+
+test("the patch stage accepts an exact zero-context hunk", async () => {
+	const sourceDir = mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-zero-context-test-"));
+	const patchRoot = mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-zero-context-patches-"));
+	mkdirSync(join(patchRoot, "patches"));
+	writeFileSync(join(sourceDir, "baseline.txt"), "expected\n");
+	writeFileSync(join(patchRoot, "patches", "fixture.patch"), [
+		"diff --git a/baseline.txt b/baseline.txt",
+		"--- a/baseline.txt",
+		"+++ b/baseline.txt",
+		"@@ -1 +1 @@",
+		"-expected",
+		"+patched",
+		"",
+	].join("\n"));
+
+	await applyPatches(sourceDir, {patches: ["patches/fixture.patch"]}, join(patchRoot, "patches"));
+	assert.equal(readFileSync(join(sourceDir, "baseline.txt"), "utf8"), "patched\n");
 });
 
 test("runtime copy rewrites absolute npm links to portable relative links", () => {

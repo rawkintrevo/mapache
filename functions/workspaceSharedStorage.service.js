@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const {auth: defaultAuth, db: defaultDb, storage: defaultStorage} = require("./backendContext");
 const {httpError, isGoogleAlreadyExists, isGoogleNotFound} = require("./backendUtils.helpers");
+const {assertVmMigrationAdmission, legacySharedStorageClaims} = require("./vmMigrationFence.helpers");
 const {
   assertBucketMetadata,
   createWorkspaceBucketAccessService,
@@ -288,11 +289,26 @@ function createWorkspaceSharedStorageService(dependencies = {}) {
         ownerUid: uid,
       };
       await ensureBucket(binding);
+      const claim = legacySharedStorageClaims(db, workspaceId).doc(crypto.randomUUID());
+      await db.runTransaction(async transaction => {
+        const current = (await transaction.get(workspaceRef(workspaceId))).data();
+        if (!current || current.ownerUid !== uid || isWorkspaceDeleted(current)) {
+          throw storageError("workspace_unavailable", 409);
+        }
+        await assertVmMigrationAdmission(transaction, db, workspaceId);
+        const descriptor = existingReadyDescriptor(current, workspaceId, project);
+        if (descriptor.bucketName !== identity.bucketName || descriptor.storageGeneration !== identity.storageGeneration ||
+            descriptor.operationId !== identity.operationId) throw storageError("workspace_storage_descriptor_changed", 409);
+        transaction.create(claim, {ownerUid: uid, bucketName: identity.bucketName, startedAtMs: now().getTime()});
+      });
       try {
         await bucketAccess.ensureRunnerObjectAccess(binding);
       } catch (error) {
+        // An ambiguous provider response can outlive the request. Keep the
+        // claim for operator reconciliation instead of assuming IAM is settled.
         throw storageError("workspace_bucket_iam_failed", 502, {cause: error});
       }
+      await claim.delete();
       return identity;
     } catch (error) {
       throw normalizeStorageFailure(error);

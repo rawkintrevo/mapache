@@ -239,3 +239,31 @@ test("agent definition mutations retain the controlling session in the audit tra
   assert.equal(settingsAudit?.[1].actorType, "agent");
   assert.equal(settingsAudit?.[1].sessionId, "automation-session-1");
 });
+
+test("automation definition and settings writers stop at the migration fence", async () => {
+  const {db, service} = createHarness();
+  const created = await service.createAutomation("user-1", "workspace-1", {
+    name: "Before migration", prompt: "Run once", cron: "0 10 * * *",
+  });
+  const before = new Map([...db.data.entries()].map(([path, value]) => [path, structuredClone(value)]));
+  db.data.set("vmMigrationFences_v2/workspace-1", {phase: "reserved"});
+
+  await assert.rejects(
+      service.createAutomation("user-1", "workspace-1", {name: "Blocked", prompt: "Nope", cron: "0 11 * * *"}),
+      (error) => error.status === 409 && error.publicMessage === "workspace_vm_migration_active",
+  );
+  await assert.rejects(
+      service.updateAutomation("user-1", "workspace-1", created.id, {expectedRevision: 1, name: "Blocked"}),
+      (error) => error.status === 409 && error.publicMessage === "workspace_vm_migration_active",
+  );
+  await assert.rejects(
+      service.deleteAutomation("user-1", "workspace-1", created.id, {expectedRevision: 1}),
+      (error) => error.status === 409 && error.publicMessage === "workspace_vm_migration_active",
+  );
+  await assert.rejects(
+      service.updateAutomationSettings("user-1", "workspace-1", {automationMaxConcurrency: 3}),
+      (error) => error.status === 409 && error.publicMessage === "workspace_vm_migration_active",
+  );
+
+  assert.deepEqual([...db.data.entries()], [...before, ["vmMigrationFences_v2/workspace-1", {phase: "reserved"}]]);
+});

@@ -1,4 +1,5 @@
 import {APP_ACTIONS} from "../state/appStore.js";
+import {pollVmSessions} from "../services/vmWorkspaceApi.js";
 
 export function createSessionSubscriptionController({
   state,
@@ -35,7 +36,9 @@ export function createSessionSubscriptionController({
         resolved = true;
         resolve();
       };
-      unsubscribeSessions = listenToWorkspaceSessions(
+      const listen = state.api?.isVmWorkspace?.(workspaceId) ?
+        (_db, id, onSessions, onError) => pollVmSessions(state.api, id, onSessions, onError) : listenToWorkspaceSessions;
+      unsubscribeSessions = listen(
           db,
           workspaceId,
           (sessions) => {

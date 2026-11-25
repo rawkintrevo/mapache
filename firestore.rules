@@ -35,40 +35,90 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    function workspaceServerFields() {
+      return [
+        "automationMaxConcurrency",
+        "runtimePolicy",
+        "runtimePolicyRevision",
+        "runtimeScheduleStatus",
+        "runtimeScheduleNextEvent",
+        "runtimeScheduleError",
+        "runtimeScheduleManualPauseWindowKey",
+        "runtimeScheduleLease",
+        "runtimeScheduleLastAction",
+        "runtimeScheduleReconciledAt",
+        "runtimeProvider",
+        "runtimeProviderDescriptor",
+        "source",
+        "imageKey",
+        "status",
+        "lifecycle",
+        "deleted",
+        "bucket",
+        "storagePrefix",
+        "workspaceStorageBucket",
+        "workspaceStoragePrefix",
+        "homePolicy",
+        "agentRuntimeGeneration",
+        "agentRuntimeSessionId",
+        "agentRuntimeOperationId",
+        "agentRuntimeState",
+        "agentRuntimeBootInstanceId",
+        "agentRuntimeBootHeartbeatAt",
+        "agentRuntimeAuthorityState",
+        "agentRuntimeCheckpoint",
+        "agentRuntimeWorkspaceFiles",
+        "migrationAuthority",
+        "migrationOperationId",
+        "migrationSourceGeneration",
+        "migrationDestinationGeneration",
+        "migrationCutoverAtMs",
+        "migrationRollbackOperationId",
+        "migrationRollbackAtMs",
+        "syncWriterSessionId",
+        "syncWriterLeaseId",
+        "syncWriterLeaseUpdatedAt",
+        "activeChromeSessionId",
+        "activeChromeSessionState",
+        "automationMainAdmissionSessionId",
+        "automationMainAdmissionState",
+        "sharedStorage",
+        "sharedStorageState",
+        "sharedStorageMigration",
+        "sharedStorageRecovery"
+      ];
+    }
+
+    // Presence is the fence, even if the record is incomplete. Only the
+    // backend can write the fence collection.
+    function workspaceMigrationFenced(workspaceId) {
+      return exists(/databases/$(database)/documents/vmMigrationFences_v2/$(workspaceId));
+    }
+
+    match /vmMigrationFences_v2/{workspaceId} {
+      allow read, write: if false;
+    }
+
+    match /vmMigrationStorageFences_v2/{path=**} {
+      allow read, write: if false;
+    }
+
     match /workspaces/{workspaceId} {
       allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow create: if signedIn() &&
         request.resource.data.ownerUid == request.auth.uid &&
         request.resource.data.userPath == "users/" + request.auth.uid &&
-        !request.resource.data.keys().hasAny([
-          "automationMaxConcurrency",
-          "runtimePolicy",
-          "runtimePolicyRevision",
-          "runtimeScheduleStatus",
-          "runtimeScheduleNextEvent",
-          "runtimeScheduleError",
-          "runtimeScheduleManualPauseWindowKey",
-          "runtimeScheduleLease",
-          "runtimeScheduleLastAction",
-          "runtimeScheduleReconciledAt"
-        ]);
+        !request.resource.data.keys().hasAny(workspaceServerFields()) &&
+        !workspaceMigrationFenced(workspaceId);
       allow update: if signedIn() &&
         resource.data.ownerUid == request.auth.uid &&
         request.resource.data.ownerUid == request.auth.uid &&
         request.resource.data.userPath == "users/" + request.auth.uid &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          "automationMaxConcurrency",
-          "runtimePolicy",
-          "runtimePolicyRevision",
-          "runtimeScheduleStatus",
-          "runtimeScheduleNextEvent",
-          "runtimeScheduleError",
-          "runtimeScheduleManualPauseWindowKey",
-          "runtimeScheduleLease",
-          "runtimeScheduleLastAction",
-          "runtimeScheduleReconciledAt"
-        ]);
-      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(workspaceServerFields()) &&
+        !workspaceMigrationFenced(workspaceId);
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid &&
+        !resource.data.keys().hasAny(["runtimeProvider", "runtimeProviderDescriptor"]) &&
+        !workspaceMigrationFenced(workspaceId);
 
       match /automations/{automationId} {
         allow read: if ownsWorkspace(workspaceId);

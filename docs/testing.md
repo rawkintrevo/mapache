@@ -13,6 +13,10 @@ Locations:
 - `functions/*.helpers.test.js` for backend helper modules.
 - Frontend helper tests should live next to the tested helper under `src/` using `*.test.js` or in `src/__tests__/` when a shared fixture is needed.
 - Runner helper tests live under `session-runner/lib/` as `*.test.js` when the helper can be isolated from Express, PTY, Cloud Storage, and GitHub. Native upstream persistence and managed-agent boundary helpers follow this pattern.
+- Isolated VM gateway tests run with `npm --prefix vm-gateway ci` and
+  `npm --prefix vm-gateway test`: real HTTP streaming and WebSocket relay,
+  generation changes, hung authorization, and private-target validation.
+  Resolver authorization tests live in `functions/vmGatewayResolve.service.test.js`.
 
 Default commands:
 
@@ -83,6 +87,19 @@ The default root command is:
 npm run check
 ```
 
+For rapid VM-automation iteration, use the focused command:
+
+```bash
+npm run check:fast
+```
+
+It validates developer-doc links, Functions and runner syntax, and the focused
+VM lifecycle, admission, request, automation, isolation, and runner-startup
+tests. It intentionally skips the Firestore emulator, unrelated unit tests,
+frontend tests, production builds, and the full upstream runner suite. Run the
+full `npm run check` before handoff or after a small batch of focused
+iterations; `check:fast` is a feedback loop, not a release gate.
+
 It runs:
 
 1. Developer docs relative-link validation.
@@ -121,6 +138,14 @@ Run slower checks when a change touches the related subsystem:
   produce a different key and a miss. Save the Cloud Build URLs and the `cache decision`,
   `reason`, and `elapsedMs` lines in the release evidence. The image build also fails unless
   its started container serves `/agent/` and every referenced JavaScript bundle.
+- Runner image iteration may use the explicit `fast` upstream test mode described in
+  [Deployment](./deployment.md). Pull-request image builds select this mode
+  automatically; it is a development feedback loop only. The fast image runs
+  typecheck, production build, Docker construction, and runner smoke checks, but
+  skips upstream `npm test`. It can reuse a verified full-mode runtime cache;
+  cache misses do not publish the shared runtime cache and require a subsequent
+  default full-mode build before release or VM rollout. Main pushes and default
+  manual image runs remain full-mode checks.
 - One-off HubSpot export changes: `node --test scripts/hubspotPiWebExport.test.mjs`.
   These fixtures stay local and verify restricted inventory matching, dry-run defaults,
   quiescence/stop gating, source/output collision rejection, hidden files, `.git`, binary

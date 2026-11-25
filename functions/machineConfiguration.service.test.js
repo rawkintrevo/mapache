@@ -57,3 +57,29 @@ test("stale configuration writes are rejected", async () => {
   await service.updateConfiguration("owner-1", "workspace-1", {description: "first"});
   await assert.rejects(service.updateConfiguration("owner-1", "workspace-1", {expectedVersion: 0}), /machine_configuration_conflict/);
 });
+
+test("Compute VM resource changes remain versioned for lifecycle application", async () => {
+  const {db, service} = setup();
+  db.data.set("workspaces/workspace-1", {
+    ownerUid: "owner-1", backend: "compute-engine", resources: {cpu: "1", memory: "2Gi"},
+  });
+  const result = await service.updateConfiguration("owner-1", "workspace-1", {resources: {cpu: "2", memory: "4Gi"}});
+  assert.deepEqual(result.desired.resources, {cpu: "2", memory: "4Gi"});
+  assert.equal(result.state, "pending");
+  assert.equal(db.data.get("workspaces/workspace-1").machineConfig.desiredVersion, 1);
+});
+
+test("a migration fence blocks desired changes and applied callbacks", async () => {
+  const {db, service} = setup();
+  const workspace = "workspaces/workspace-1";
+  const fence = "vmMigrationFences_v2/workspace-1";
+  const config = await service.updateConfiguration("owner-1", "workspace-1", {description: "pending"});
+  db.data.set(fence, {});
+  await assert.rejects(service.updateConfiguration("owner-1", "workspace-1", {description: "blocked"}),
+      {publicMessage: "workspace_vm_migration_active"});
+  assert.deepEqual(await service.markApplied("workspace-1", 1), config);
+  assert.equal(db.data.get(workspace).machineConfig.appliedVersion, 0);
+  db.data.delete(fence);
+  assert.equal((await service.markApplied("workspace-1", 1)).appliedVersion, 1);
+  assert.equal((await service.markApplied("workspace-1", 0)).appliedVersion, 1);
+});

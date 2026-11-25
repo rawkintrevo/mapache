@@ -28,6 +28,22 @@ function fsWithRenameFailures(failures) {
   };
 }
 
+test("retained Chrome profile keeps user files and only removes stale process locks", async (t) => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "mapache-retained-chrome-"));
+  t.after(() => fs.promises.rm(root, {recursive: true, force: true}));
+  await fs.promises.mkdir(path.join(root, "Default", "Downloads"), {recursive: true});
+  await fs.promises.writeFile(path.join(root, "Default", "Downloads", "keep"), "download");
+  await fs.promises.writeFile(path.join(root, "History"), "history");
+  await fs.promises.symlink("/tmp/old-process", path.join(root, "SingletonLock"));
+  const service = createChromeProfileService({config: {retainedDiskMode: true, chromeEnabled: true, chromeProfileDir: root},
+    archives: new Proxy({}, {get: () => { throw new Error("archive access forbidden"); }})});
+  assert.equal((await service.restore()).retained, true);
+  assert.equal(await fs.promises.readFile(path.join(root, "History"), "utf8"), "history");
+  assert.equal(await fs.promises.readFile(path.join(root, "Default", "Downloads", "keep"), "utf8"), "download");
+  await assert.rejects(fs.promises.lstat(path.join(root, "SingletonLock")), {code: "ENOENT"});
+  await assert.rejects(service.restoreArchive({}), /retained_profile_archive_restore_forbidden/);
+});
+
 test("restores Chrome profile into a staged directory and removes transient state", async () => {
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "mapache-chrome-profile-test-"));
   const profileDir = path.join(root, "profile");

@@ -2,6 +2,7 @@
 
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {assertMainAdmissionAllowed} = require("./automationAdmission.service");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 const {cleanName, httpError} = require("./backendUtils.helpers");
 const {findActiveChromeSession, isChromeSession} = require("./chromeReservation.helpers");
 const {isActiveGithubWorkspaceSession} = require("./sessionLifecycle.helpers");
@@ -61,6 +62,7 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
       throw httpError(409, "workspace_unavailable");
     }
     assertWorkspaceStorageMigrationAllowed(workspace);
+    await assertVmMigrationAdmission(transaction, firestore, workspaceId);
     const sessions = sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()}));
     const existing = sessions.find((candidate) => candidate.id === sessionRef.id) || null;
     if (existing && existing.ownerUid && session.ownerUid && existing.ownerUid !== session.ownerUid) {
@@ -119,7 +121,9 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
           now: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
         },
     );
-    const workspaceUpdates = automationRuntime ? {} : {
+    const workspaceReservationUpdates = typeof options.workspaceReservationUpdates === "function" ?
+      options.workspaceReservationUpdates(workspace, {at: new Date()}) || {} : {};
+    const workspaceUpdates = automationRuntime ? workspaceReservationUpdates : {
       activeChromeSessionId: sessionRef.id,
       activeChromeSessionState: session.status || "provisioning",
       activeChromeSessionUpdatedAt: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
@@ -127,6 +131,7 @@ async function reserveChromeWorkspaceSession(workspaceId, sessionRef, session, o
       automationMainAdmissionState: session.status || "provisioning",
       automationMainAdmissionUpdatedAt: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
       updatedAt: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
+      ...workspaceReservationUpdates,
       ...lease.workspaceUpdates,
       ...runtime.workspaceUpdates,
     };

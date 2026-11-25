@@ -143,6 +143,29 @@ function setup({run = baseRun(), existingSession, pending = false} = {}) {
   return {calls, db, service};
 }
 
+function vmSetup() {
+  const fixture = setup();
+  const runnerCalls = [];
+  const service = createAutomationProvisioningService({
+    admin,
+    createSession: async () => { throw new Error("must_not_create_vm_automation_session"); },
+    db: fixture.db,
+    featureEnabled: async () => true,
+    provisionSessionService: async () => { throw new Error("must_not_provision_vm_automation_session"); },
+    requireWorkspace: async () => ({id: "workspace-1", ownerUid: "user-1"}),
+    requestRunnerJson: async (session, route, options) => {
+      runnerCalls.push({session, route, options});
+      return {ok: true, runId: options.body.runId, status: "running"};
+    },
+    sessionCollection: (workspaceId) => fixture.db.collection("workspaces").doc(workspaceId).collection("sessions"),
+    vmRuntime: {
+      ensureReady: async () => ({id: "vm-session-1", serviceUrl: "https://vm.example", shutdownToken: "shutdown"}),
+      isVmWorkspace: async () => true,
+    },
+  });
+  return {...fixture, runnerCalls, service};
+}
+
 test("claims and provisions an admitted run without changing the canonical main session", async () => {
   const {calls, db, service} = setup();
   const result = await service.provisionAutomationRun("run-1");
@@ -188,6 +211,18 @@ test("routes an identity mismatch to failed cleanup while retaining the run slot
 test("uses stable failure codes and does not serialize arbitrary provider errors", () => {
   assert.equal(stableAutomationFailureCode({message: "quota exhausted for secret token"}), "cloud_run_quota_exceeded");
   assert.equal(stableAutomationFailureCode({message: "provider returned a bearer token"}), "automation_provisioning_failed");
+});
+
+test("dispatches VM automation to the canonical runner without creating a sibling session", async () => {
+  const {calls, db, runnerCalls, service} = vmSetup();
+  const result = await service.provisionAutomationRun("run-1");
+  assert.equal(result.provisioned, true);
+  assert.equal(result.executionRoute, "vm-native-v1");
+  assert.equal(db.data.get("automationRuns/run-1").status, "running");
+  assert.equal(db.data.get("automationRuns/run-1").sessionId, "vm-session-1");
+  assert.equal(db.data.get("automationRuns/run-1").executionRoute, "vm-native-v1");
+  assert.equal(calls.length, 0);
+  assert.deepEqual(runnerCalls.map((call) => call.route), ["/automation/runs"]);
 });
 
 test("pending provisioning does not generate a recursive Firestore event loop", async () => {

@@ -22,6 +22,25 @@ describe("resumable workspace uploads", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(fetchImpl.mock.calls[0][1].headers["Content-Range"]).toBe("bytes */1");
   });
+  it("reauthorizes a retained-disk operation after its gateway generation changes", async () => {
+    const refreshed = {uploadUrl: "https://example.test/new-upload", path: upload.path, operationId: "resume_123", mode: "retained-disk"};
+    const refreshUpload = vi.fn().mockResolvedValue(refreshed);
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(response(404))
+      .mockResolvedValueOnce(response(308, "bytes=0-0"))
+      .mockResolvedValueOnce(response(200));
+    await expect(uploadWorkspaceFile(new File(["ab"], "data.bin"), {...upload, mode: "retained-disk", operationId: "resume_123"}, {
+      fetchImpl, refreshUpload,
+    })).resolves.toEqual({path: upload.path});
+    expect(refreshUpload).toHaveBeenCalledWith(expect.objectContaining({operationId: "resume_123"}));
+    expect(fetchImpl.mock.calls[1][0]).toBe(refreshed.uploadUrl);
+    expect(fetchImpl.mock.calls[1][1].headers["Content-Range"]).toBe("bytes */2");
+  });
+  it("explains retained-disk exhaustion", async () => {
+    await expect(uploadWorkspaceFile(new File(["a"], "a"), upload, {
+      fetchImpl: vi.fn().mockResolvedValue(response(507)),
+    })).rejects.toThrow("disk is full");
+  });
   it("stops on conflicts and bounds network retries", async () => {
     const file = new File(["a"], "a");
     await expect(uploadWorkspaceFile(file, upload, {fetchImpl: vi.fn().mockResolvedValue(response(412))})).rejects.toThrow("already exists");

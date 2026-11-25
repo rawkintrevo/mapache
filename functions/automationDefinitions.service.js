@@ -9,6 +9,7 @@ const {
   normalizeModelSelection,
   validateDefinitionRevision,
 } = require("./automationValidation.helpers");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 
 const AUTOMATION_PUBLIC_FIELDS = Object.freeze([
   "name", "prompt", "enabled", "cron", "timezone", "allowParallelWithMain",
@@ -92,6 +93,7 @@ async function createAutomation(uid, workspaceId, payload = {}, dependencies = {
     revision: 1,
   });
   await dependencies.firestore.runTransaction(async (transaction) => {
+    await assertVmMigrationAdmission(transaction, dependencies.firestore, workspaceId);
     transaction.set(ref, definition);
     writeAudit(transaction, ref, {
       actorUid: uid,
@@ -115,6 +117,7 @@ async function updateAutomation(uid, workspaceId, automationId, payload = {}, de
   const retryRuns = retryIntentQuery(dependencies.firestore, workspaceId);
   let disabling = false;
   await dependencies.firestore.runTransaction(async (transaction) => {
+    await assertVmMigrationAdmission(transaction, dependencies.firestore, workspaceId);
     const [snap, queuedRuns, retryRunDocs] = await Promise.all([
       transaction.get(ref),
       pendingRuns ? transaction.get(pendingRuns) : Promise.resolve({docs: []}),
@@ -155,6 +158,7 @@ async function deleteAutomation(uid, workspaceId, automationId, payload = {}, de
   const pendingRuns = queuedRunQuery(dependencies.firestore, workspaceId);
   const retryRuns = retryIntentQuery(dependencies.firestore, workspaceId);
   await dependencies.firestore.runTransaction(async (transaction) => {
+    await assertVmMigrationAdmission(transaction, dependencies.firestore, workspaceId);
     const [snap, queuedRuns, retryRunDocs] = await Promise.all([
       transaction.get(ref),
       pendingRuns ? transaction.get(pendingRuns) : Promise.resolve({docs: []}),
@@ -199,6 +203,7 @@ async function updateAutomationSettings(uid, workspaceId, payload = {}, dependen
   const normalized = normalizeAutomationSettings(payload);
   const now = serverTimestamp(dependencies.firestoreAdmin);
   await dependencies.firestore.runTransaction(async (transaction) => {
+    await assertVmMigrationAdmission(transaction, dependencies.firestore, workspaceId);
     transaction.update(workspaceRef, {
       ...normalized,
       updatedAt: now,

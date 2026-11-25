@@ -278,3 +278,22 @@ test("secretFileInventory exposes classifications without credential values", ()
   assert.equal(inventory.some((entry) => entry.id === "pi-model-config" && entry.kind === "secret-bearing-config"), true);
   assert.equal(JSON.stringify(inventory).includes("canonical-secret"), false);
 });
+
+test("VM auth materialization never reads Firestore directly", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mapache-vm-auth-"));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const service = createWorkspaceAuthService({
+    config: {ownerUid: "owner", harnessId: "pi", agentRuntimeEnabled: true,
+      workspaceId: "workspace", sessionId: "session", workspaceDir: root,
+      homeDir: root, piAgentDir: path.join(root, "pi"),
+      vmControl: {call: async (action) => {
+        assert.equal(action, "auth.get");
+        return {selection: {harness: "pi", providers: {openai: "selected"}},
+          data: {providers: {}, entries: {selected: {providerKey: "openai", credential: {type: "api_key", key: "fixture-key"}}}}};
+      }},
+    },
+    db: new Proxy({}, {get: () => { throw new Error("direct Firestore forbidden"); }}),
+  });
+  await service.synchronizeAuth({materialize: true});
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "pi", "auth.json"))), {openai: {type: "api_key", key: "fixture-key"}});
+});

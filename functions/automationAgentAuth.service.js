@@ -1,6 +1,12 @@
 "use strict";
 
-const {hasAutomationAgentAuthority} = require("./automationAgentAdmission.helpers");
+const {
+  hasAutomationAgentAuthority,
+  isLiveAutomationSession,
+  readAutomationAgentContext,
+  sessionBootInstanceId,
+  sessionGeneration,
+} = require("./automationAgentAdmission.helpers");
 
 const crypto = require("node:crypto");
 
@@ -30,20 +36,20 @@ async function mintToken(request = {}, dependencies = {}) {
   const workspaceId = cleanId(request.body?.workspaceId);
   const sessionId = cleanId(request.body?.sessionId);
   const presentedToken = request.get?.("x-shutdown-token") || request.headers?.["x-shutdown-token"];
-  const sessionSnap = await dependencies.sessionCollection(workspaceId).doc(sessionId).get();
-  const session = sessionSnap.exists ? sessionSnap.data() || {} : null;
+  const context = await readAutomationAgentContext({db: dependencies.db || defaultDb,
+    sessionCollection: dependencies.sessionCollection, workspaceId, sessionId});
+  const session = context.session;
   if (!session || !safeTokenEqual(presentedToken, session.shutdownToken)) {
     throw unauthorized();
   }
 
-  const workspaceSnap = await (dependencies.db || defaultDb).collection("workspaces").doc(workspaceId).get();
-  const workspace = workspaceSnap.exists ? workspaceSnap.data() || {} : null;
-  const generation = cleanGeneration(session.agentRuntimeGeneration);
-  const bootInstanceId = cleanId(session.agentRuntimeBootInstanceId);
+  const workspace = context.workspace;
+  const generation = cleanGeneration(sessionGeneration(session));
+  const bootInstanceId = cleanId(sessionBootInstanceId(session));
   if (!workspace || workspace.ownerUid !== session.ownerUid ||
       !session.ownerUid || session.workspaceId !== workspaceId ||
-      !hasAutomationAgentAuthority(session, workspace, sessionId) || !isLiveSession(session) ||
-      session.agentRuntimeAuthorityState !== "admitted" ||
+      !hasAutomationAgentAuthority(session, workspace, sessionId) || !isLiveAutomationSession(session) ||
+      (workspace.backend !== "compute-engine" && session.agentRuntimeAuthorityState !== "admitted") ||
       !generation || !bootInstanceId ||
       workspace.deleted === true || isDeletedLifecycle(workspace.lifecycle || workspace.status)) {
     throw unauthorized();
@@ -144,10 +150,6 @@ function cleanId(value) {
 function cleanGeneration(value) {
   const generation = String(value ?? "").trim();
   return /^\d+$/.test(generation) && Number(generation) > 0 ? generation : "";
-}
-
-function isLiveSession(session) {
-  return ["running", "ready"].includes(String(session.status || "").trim().toLowerCase());
 }
 
 function isDeletedLifecycle(value) {

@@ -96,6 +96,7 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
     assert.equal(spawnCalls[0].options.env.PI_WEB_MCP_ADAPTER_PATH, config.piMcpAdapterPath);
     assert.equal(spawnCalls[0].options.env.PI_WEB_ENGINE, "pi");
     assert.equal(spawnCalls[0].options.env.PI_WEB_TOKEN.length > 20, true);
+    assert.equal(spawnCalls[0].options.env.PI_WEB_ALLOW_MULTI_INSTANCE, undefined);
     assert.equal(spawnCalls[0].options.env.GOOGLE_APPLICATION_CREDENTIALS, undefined);
     assert.equal(spawnCalls[0].options.env.SESSION_SHUTDOWN_TOKEN, undefined);
     assert.equal(spawnCalls[0].options.env.MAPACHE_AUTOMATION_AGENT_SOCKET, config.automationAgentSocketPath);
@@ -106,6 +107,27 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
     assert.equal(process.status().state, "stopped");
     assert.equal(child.killed, true);
     assert.equal(spawnCalls.length, 1);
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
+test("allows a recovery-only child to replace a stale snapshot kernel lock", async () => {
+  const {root, config} = await fixture();
+  const child = fakeChild(4344);
+  let childEnvironment;
+  try {
+    const managed = createPiWebUiProcess(config, {
+      env: {PATH: "/usr/bin", MAPACHE_RECOVERY_ONLY: "true"},
+      fetch: healthyFetch(),
+      spawn: (_command, _args, options) => {
+        childEnvironment = options.env;
+        return child;
+      },
+    });
+    await managed.start();
+    assert.equal(childEnvironment.PI_WEB_ALLOW_MULTI_INSTANCE, "1");
+    await managed.stop();
   } finally {
     await fs.rm(root, {recursive: true, force: true});
   }

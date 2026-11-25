@@ -31,6 +31,13 @@ function createChromeProfileService({config, archives, fsImpl = fs, osImpl = os}
 
   async function restore() {
     if (!enabled) return {enabled: false, restored: false, sanitized: false};
+    if (config.retainedDiskMode) {
+      await fsImpl.promises.mkdir(config.chromeProfileDir, {recursive: true, mode: 0o700});
+      for (const name of ["SingletonCookie", "SingletonLock", "SingletonSocket", "DevToolsActivePort"]) {
+        await removePath(path.join(config.chromeProfileDir, name), {fsImpl});
+      }
+      return {enabled: true, restored: false, sanitized: true, retained: true};
+    }
     const target = (archives.archiveSyncTargets || []).find((entry) => entry.mode === "chromeProfile");
     if (!target || !target.localPath) {
       throw new Error("Chrome profile archive target is not configured");
@@ -49,6 +56,7 @@ function createChromeProfileService({config, archives, fsImpl = fs, osImpl = os}
   }
 
   async function restoreArchive(archive) {
+    if (config.retainedDiskMode) throw new Error("retained_profile_archive_restore_forbidden");
     const target = (archives.archiveSyncTargets || []).find((entry) => entry.mode === "chromeProfile");
     if (!target || !target.localPath) throw new Error("Chrome profile archive target is not configured");
     const stagingDir = await fsImpl.promises.mkdtemp(path.join(

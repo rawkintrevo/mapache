@@ -3,6 +3,7 @@
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError} = require("./backendUtils.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
+const {assertVmMigrationAdmission, hasVmMigrationFence} = require("./vmMigrationFence.helpers");
 
 const CONFIG_VERSION = 1;
 const MAX_DESCRIPTION_LENGTH = 1000;
@@ -31,6 +32,7 @@ function createMachineConfigurationService(dependencies = {}) {
       const workspace = snapshot.data() || {};
       if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
       if (workspace.deleted === true || workspace.lifecycle === "deleting") throw httpError(409, "workspace_deleted");
+      await assertVmMigrationAdmission(transaction, database, workspaceId);
       const current = normalizeStoredConfiguration(workspace.machineConfig);
       if (payload.expectedVersion !== undefined && Number(payload.expectedVersion) !== current.desiredVersion) {
         throw httpError(409, "machine_configuration_conflict");
@@ -57,14 +59,18 @@ function createMachineConfigurationService(dependencies = {}) {
 
   async function markApplied(workspaceId, appliedVersion) {
     const ref = database.collection("workspaces").doc(workspaceId);
-    const snapshot = await ref.get();
-    if (!snapshot.exists) return null;
-    const current = normalizeStoredConfiguration(snapshot.data()?.machineConfig);
-    const version = Number(appliedVersion);
-    if (!Number.isSafeInteger(version) || version < 0 || version > current.desiredVersion) return safeConfiguration(current);
-    const state = version === current.desiredVersion ? "applied" : "pending";
-    await ref.update({machineConfig: {...current, appliedVersion: version, state, updatedAt: admin.firestore.FieldValue.serverTimestamp()}});
-    return safeConfiguration({...current, appliedVersion: version, state});
+    return database.runTransaction(async transaction => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) return null;
+      const current = normalizeStoredConfiguration(snapshot.data()?.machineConfig);
+      const version = Number(appliedVersion);
+      if (!Number.isSafeInteger(version) || version < current.appliedVersion || version > current.desiredVersion ||
+          await hasVmMigrationFence(transaction, database, workspaceId)) return safeConfiguration(current);
+      const state = version === current.desiredVersion ? "applied" : "pending";
+      const configuration = {...current, appliedVersion: version, state};
+      transaction.update(ref, {machineConfig: {...configuration, updatedAt: admin.firestore.FieldValue.serverTimestamp()}});
+      return safeConfiguration(configuration);
+    });
   }
 
   async function loadWorkspace(uid, workspaceId) {

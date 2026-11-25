@@ -88,6 +88,23 @@ test("stops sampling after the final subscriber leaves and reports unavailable m
   service.close();
 });
 
+test("dedicated VM memory uses physical capacity only for an explicit unlimited cgroup", async () => {
+  for (const [allowHostMemoryFallback, memoryMax, expected] of [[true, "max", 8000], [false, "max", null], [true, "invalid", null], [true, "4000", 4000]]) {
+    let tick; let time = 1000; const events = [];
+    const service = createResourceMetricsService({allowHostMemoryFallback, totalMemory: () => 8000,
+      cgroupDirectory: "/sys/fs/cgroup", monotonicNow: () => time, logger: {warn() {}},
+      readFileFn: createReader({[CGROUP_FILES.cpuStat]: "usage_usec 1000", [CGROUP_FILES.cpuMax]: "200000 100000",
+        [CGROUP_FILES.memoryCurrent]: "1000", [CGROUP_FILES.memoryMax]: memoryMax}),
+      setIntervalFn: fn => { tick = fn; return "timer"; }, clearIntervalFn() {},
+    });
+    service.subscribe(event => events.push(event)); await flush();
+    time += 1000; await tick(); await flush();
+    if (expected) assert.equal(events.find(event => event.type === "metrics")?.memory.limitBytes, expected);
+    else assert.equal(events[0]?.type, "metrics_unavailable");
+    service.close();
+  }
+});
+
 test("falls back to Cloud Run cgroup v1 CPU and memory counters", async () => {
   let usageNsec = 0;
   let monotonicMs = 1000;

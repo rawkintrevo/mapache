@@ -92,6 +92,8 @@ assert.deepStrictEqual(transactionCalls, [{
 function createFakeDependencies() {
   const documents = new Map();
   const sessions = new Map();
+  let fenced = false;
+  const fenceRef = {get: async () => ({exists: fenced})};
   const refFor = (path) => ({
     path,
     async get() {
@@ -104,6 +106,7 @@ function createFakeDependencies() {
   });
   const db = {
     collection(name) {
+      if (name === "vmMigrationFences_v2") return {doc: () => fenceRef};
       assert.strictEqual(name, "users");
       return {doc: (uid) => ({
         collection(name) {
@@ -115,7 +118,10 @@ function createFakeDependencies() {
     async runTransaction(callback) {
       const transaction = {
         get: (ref) => ref.get(),
-        set: (ref, data) => documents.set(ref.path, {...data}),
+        set: (ref, data, options = {}) => {
+          if (ref.path && ref.path.startsWith("sessions/") && typeof ref.set === "function") return ref.set(data, options);
+          documents.set(ref.path, {...data});
+        },
         update: (ref, data) => documents.set(ref.path, {...(documents.get(ref.path) || {}), ...data}),
       };
       return callback(transaction);
@@ -126,6 +132,7 @@ function createFakeDependencies() {
     db,
     documents,
     sessions,
+    setFence: value => { fenced = value; },
   };
 }
 
@@ -197,12 +204,19 @@ function createFakeDependencies() {
   let sessionData = {terminalKind: "pi", serviceUrl: "https://runner", shutdownToken: "token", environmentEntryIds: ["env-existing"]};
   const sessionSnap = {
     data: () => sessionData,
-    ref: {set: async (data, options) => {
+    ref: {path: "sessions/uid-1/workspace-1/session-1", get: async () => ({exists: true, data: () => sessionData}), set: (data, options) => {
       assert.deepStrictEqual(options, {merge: true});
       sessionData = {...sessionData, ...data};
     }},
   };
   fake.sessions.set("uid-1/workspace-1/session-1", sessionSnap);
+  fake.setFence(true);
+  await assert.rejects(
+      service.saveSessionPiAuthSelection("uid-1", "workspace-1", "session-1", {environmentEntryIds: ["env-fenced"]}),
+      (error) => publicMessage(error) === "workspace_vm_migration_active",
+  );
+  assert.deepStrictEqual(sessionData.environmentEntryIds, ["env-existing"]);
+  fake.setFence(false);
   const savedAuthBefore = JSON.stringify([...fake.documents]);
   for (const selection of [undefined, {harness: "pi", providers: {}}, {harness: "pi", providers: {google: "entry-1"}}]) {
     sessionData = {terminalKind: "pi", serviceUrl: "https://runner", shutdownToken: "token",
@@ -303,8 +317,20 @@ function createFakeDependencies() {
   let githubSessionData = {harnessId: "pi", serviceUrl: "https://runner", shutdownToken: "token"};
   githubFake.sessions.set("uid-2/workspace-2/session-2", {
     data: () => githubSessionData,
-    ref: {set: async (data) => { githubSessionData = {...githubSessionData, ...data}; }},
+    ref: {path: "sessions/uid-2/workspace-2/session-2", get: async () => ({exists: true, data: () => githubSessionData}),
+      set: async (data) => { githubSessionData = {...githubSessionData, ...data}; }},
   });
+  const githubAuthBeforeFence = JSON.stringify([...githubFake.documents]);
+  githubFake.setFence(true);
+  await assert.rejects(
+      githubService.saveSessionPiAuthSelection("uid-2", "workspace-2", "session-2", {
+        selection: {"github-cli": "github-old"},
+      }),
+      (error) => publicMessage(error) === "workspace_vm_migration_active",
+  );
+  assert.strictEqual(JSON.stringify([...githubFake.documents]), githubAuthBeforeFence);
+  assert.strictEqual(githubMaterializations.length, 0);
+  githubFake.setFence(false);
   const migratedSelection = await githubService.saveSessionPiAuthSelection("uid-2", "workspace-2", "session-2", {
     selection: {"github-cli": "github-old"},
   });

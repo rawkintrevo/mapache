@@ -156,8 +156,8 @@ export async function applyPatches(sourceDir, manifest, patchRoot = PATCH_ROOT) 
 		const patchPath = join(patchRoot, relativePatch.replace(/^patches\//, ""));
 		if (!existsSync(patchPath)) fail("patch is missing: " + relativePatch);
 		try {
-			await run("git", ["apply", "--check", "--recount", "--whitespace=nowarn", patchPath], {cwd: sourceDir, stdio: "pipe"});
-			await run("git", ["apply", "--recount", "--whitespace=nowarn", patchPath], {cwd: sourceDir, stdio: "pipe"});
+			await run("git", ["apply", "--check", "--unidiff-zero", "--recount", "--whitespace=nowarn", patchPath], {cwd: sourceDir, stdio: "pipe"});
+			await run("git", ["apply", "--unidiff-zero", "--recount", "--whitespace=nowarn", patchPath], {cwd: sourceDir, stdio: "pipe"});
 		} catch (error) {
 			fail("patch baseline rejected for " + relativePatch + ": " + error.message);
 		}
@@ -251,6 +251,7 @@ function writeBuildInfo(sourceDir, manifest, release, sourceFiles, sdk, piAi, ad
 		piAi,
 		piMcpAdapter: adapter,
 		patches: manifest.patches,
+		testMode: cache.testMode || "full",
 	};
 	writeFileSync(join(sourceDir, "build-info.json"), JSON.stringify(info, null, 2) + "\n", "utf8");
 }
@@ -424,7 +425,11 @@ export async function buildUpstream(options = {}) {
 		if (typeof webBasePath !== "string" || !/^\/[A-Za-z0-9._~-]+\/$/.test(webBasePath)) {
 			fail("manifest build.webBasePath must be a single slash-delimited path");
 		}
-		if (!options.skipTests && cacheKey && options.cacheArchivePath) {
+		// A verified full-mode artifact is safe to reuse for a fast iteration build:
+		// the cache identity covers the resolved upstream inputs and managed patches,
+		// while the fast mode only changes whether a cache miss runs npm test. Fast
+		// misses remain unpublished below so they can never become the shared cache.
+		if (cacheKey && options.cacheArchivePath) {
 			const cached = await restoreCacheArtifact({
 				archivePath: options.cacheArchivePath,
 				outputDir: options.outputDir,
@@ -444,7 +449,8 @@ export async function buildUpstream(options = {}) {
 					expectedBuildInfo.packageVersion !== resolvedSource.version ||
 					expectedBuildInfo.piSdkVersion !== sdk.version ||
 					expectedBuildInfo.piAi?.version !== installedPiAi.version ||
-					expectedBuildInfo.piMcpAdapterVersion !== adapter.version) {
+					expectedBuildInfo.piMcpAdapterVersion !== adapter.version ||
+					expectedBuildInfo.testMode !== "full") {
 					rmSync(resolve(options.outputDir), {recursive: true, force: true});
 					cacheDecision = {
 						status: "miss",
@@ -483,7 +489,9 @@ export async function buildUpstream(options = {}) {
 		}
 		cacheDecision = {
 			...cacheDecision,
+			...(options.skipTests ? {status: "disabled", reason: "tests-skipped"} : {}),
 			buildElapsedMs: Date.now() - buildStartedAt,
+			testMode: options.skipTests ? "fast" : "full",
 		};
 		writeBuildInfo(sourceDir, manifest, resolvedSource, sourceFiles, {
 			package: sdk.package,

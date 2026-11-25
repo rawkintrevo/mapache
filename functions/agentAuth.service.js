@@ -5,6 +5,7 @@ const {isCustomPiProvider, customPiCredential} = require("./customPiProviders.he
 const {normalizeEnvironmentEntryIds} = require("./environmentKeys.service");
 const {cleanName, httpError} = require("./backendUtils.helpers");
 const {isAgentImageKey} = require("./agentRuntime.helpers");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 
 const PI_AUTH_API_KEY_PROVIDERS = new Set([
   "anthropic",
@@ -175,7 +176,7 @@ async function updatePiAuthCredential(uid, entryId, providerKey, credential, lab
 async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, dependencies = {}) {
   await requireWorkspaceDependency(dependencies, uid, workspaceId);
   const {sessionSnap} = await requireSessionDependency(dependencies, uid, workspaceId, sessionId);
-  const session = {id: sessionId, ...sessionSnap.data()};
+  let session = {id: sessionId, ...sessionSnap.data()};
   const harnessId = sessionHarnessId(session);
   const hasEnvironmentSelection = Array.isArray(payload?.environmentEntryIds);
   const environmentEntryIds = hasEnvironmentSelection ?
@@ -184,12 +185,13 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
   // Environment changes take effect at restart and must not rewrite or
   // rematerialize provider auth, including an absent (inherited) selection.
   if (hasEnvironmentSelection && !Object.prototype.hasOwnProperty.call(payload, "selection")) {
-    await sessionSnap.ref.set({environmentEntryIds}, {merge: true});
+    session = await writeSessionPiAuthSelection(uid, workspaceId, sessionId, sessionSnap.ref, {environmentEntryIds}, dependencies);
     return {ok: true, materialized: {ok: true, appliedToRunner: false, environmentCount: environmentEntryIds.length}};
   }
   if (harnessId !== "pi" && !hasEnvironmentSelection) {
     throw httpError(400, "auth_selection_unsupported");
   }
+  await assertSessionPiAuthAdmission(uid, workspaceId, sessionSnap.ref, dependencies);
   let piAuth = harnessId === "pi" ? await getPiAuth(uid, dependencies) : {entries: {}};
   let selectedProviders = normalizePiAuthSelection(
       payload && payload.selection && payload.selection.providers ? payload.selection.providers : payload && payload.selection,
@@ -204,11 +206,11 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
     harness: harnessId,
     providers: normalizePiAuthSelection(selectedProviders, piAuth.entries),
   };
-  await sessionSnap.ref.set({
+  session = await writeSessionPiAuthSelection(uid, workspaceId, sessionId, sessionSnap.ref, {
     authSelection: selection,
     environmentEntryIds,
     authSelectionUpdatedAt: dependencies.admin.firestore.FieldValue.serverTimestamp(),
-  }, {merge: true});
+  }, dependencies);
 
   let materialized = {
     ok: true,
@@ -220,6 +222,30 @@ async function saveSessionPiAuthSelection(uid, workspaceId, sessionId, payload, 
     materialized = await requestRunnerAuthMaterialize(session, {selection, environmentEntryIds}, dependencies);
   }
   return {ok: true, selection, materialized};
+}
+
+async function assertSessionPiAuthAdmission(uid, workspaceId, sessionRef, dependencies = {}) {
+  await dependencies.db.runTransaction(async transaction => {
+    await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
+    const snapshot = await transaction.get(sessionRef);
+    if (!snapshot.exists) throw httpError(404, "session_not_found");
+    const current = snapshot.data() || {};
+    if (current.ownerUid && current.ownerUid !== uid) throw httpError(403, "session_forbidden");
+  });
+}
+
+async function writeSessionPiAuthSelection(uid, workspaceId, sessionId, sessionRef, patch, dependencies = {}) {
+  let session;
+  await dependencies.db.runTransaction(async transaction => {
+    await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
+    const snapshot = await transaction.get(sessionRef);
+    if (!snapshot.exists) throw httpError(404, "session_not_found");
+    const current = snapshot.data() || {};
+    if (current.ownerUid && current.ownerUid !== uid) throw httpError(403, "session_forbidden");
+    transaction.set(sessionRef, patch, {merge: true});
+    session = {id: sessionId, ...current, ...patch};
+  });
+  return session;
 }
 
 async function enrichSelectedGithubCliCredential(uid, selectedProviders, piAuth, dependencies = {}) {

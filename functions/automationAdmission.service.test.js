@@ -181,6 +181,14 @@ function harness({limit = 1, mainStatus = "stopped", runs = []} = {}) {
   return db;
 }
 
+test("leaves queued work pending under a migration fence", async () => {
+  const db = harness({runs: [{runId: "run-a", pendingRunId: true}]});
+  db.data.set("vmMigrationFences_v2/workspace-1", {});
+  assert.equal((await admitNextEligibleRun("workspace-1", {db, admin})).reason, "workspace_vm_migration_active");
+  assert.equal(db.read("automationRuns/run-a").status, "queued");
+  assert.equal(db.read("workspaces/workspace-1/automations/automation-1").pendingRunId, "run-a");
+});
+
 test("admits only one concurrent run at the limit and clears its pending pointer", async () => {
   const db = harness({limit: 1, runs: [
     {runId: "run-a", pendingRunId: true},
@@ -221,6 +229,30 @@ test("holds a main exclusion until the main is stopped and then admits the oldes
   assert.equal(admitted.runId, "run-exclusive");
   assert.equal(db.read("workspaces/workspace-1").automationMainExclusionRunId, "run-exclusive");
   assert.throws(() => assertMainAdmissionAllowed(db.read("workspaces/workspace-1")), /automation_requires_main_paused/);
+});
+
+test("holds a main exclusion while the canonical VM is active even if the legacy session is stopped", async () => {
+  const db = harness({mainStatus: "stopped", runs: [
+    {runId: "run-exclusive", allowParallelWithMain: false},
+  ]});
+  db.data.set("vmRuntimes_v2/workspace-1", {
+    ownerUid: "user-1",
+    backend: "compute-engine",
+    state: "active",
+    activeOperationId: null,
+  });
+
+  const blocked = await admitNextEligibleRun("workspace-1", {db, admin});
+  assert.equal(blocked.admitted, false);
+  assert.equal(blocked.reason, "main_requires_pause");
+  assert.equal(db.read("automationRuns/run-exclusive").status, "queued");
+
+  db.data.set("vmRuntimes_v2/workspace-1", {
+    ...db.read("vmRuntimes_v2/workspace-1"),
+    state: "stopped",
+  });
+  const admitted = await admitNextEligibleRun("workspace-1", {db, admin});
+  assert.equal(admitted.runId, "run-exclusive");
 });
 
 test("lowering the limit never evicts active runs and failed cleanup retains the slot", async () => {

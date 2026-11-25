@@ -15,6 +15,14 @@ on:
       - "functions/runnerCatalog.helpers.js"
   workflow_dispatch:
     inputs:
+      upstream_test_mode:
+        description: Upstream pi-web-ui validation mode for this image build
+        required: true
+        default: full
+        type: choice
+        options:
+          - full
+          - fast
       publish:
         description: Publish the gcp-runner compatibility tag as well as its immutable revision tag
         required: true
@@ -81,7 +89,14 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PUBLISH: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true) }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          UPSTREAM_TEST_MODE: ${{ github.event_name == 'pull_request' && 'fast' || (github.event_name == 'workflow_dispatch' && inputs.upstream_test_mode || 'full') }}
         run: |
+          wall_start_epoch=$(date +%s)
+          wall_start_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [ "$PUBLISH" = "true" ] && [ "$UPSTREAM_TEST_MODE" != "full" ]; then
+            echo "::error::Published runner images require UPSTREAM_TEST_MODE=full"
+            exit 1
+          fi
           if [ "$EVENT_NAME" = "pull_request" ]; then
             source_tag=$(node scripts/runner-image-release.mjs --variant=gcp-runner --pr="$PR_NUMBER" --sha="$GITHUB_SHA")
           else
@@ -93,7 +108,7 @@ jobs:
             --config session-runner/cloudbuild.gcp-runner.yaml \
             --format='value(id)' \
             --project pi-agents-cloud \
-            --substitutions="_IMAGE=$image")
+            --substitutions="_IMAGE=$image,_UPSTREAM_TEST_MODE=$UPSTREAM_TEST_MODE")
           if [ -z "$build_id" ]; then
             echo "::error::Cloud Build submission did not return a build ID"
             exit 1
@@ -130,13 +145,35 @@ jobs:
             echo "::error::No digest found for successfully built image $image"
             exit 1
           fi
-          echo "image=$image digest=$digest source=$GITHUB_SHA build=$build_url"
+          wall_finish_epoch=$(date +%s)
+          workflow_elapsed_seconds=$((wall_finish_epoch - wall_start_epoch))
+          timing_json=$(gcloud builds describe "$build_id" --project pi-agents-cloud --format='json(createTime,finishTime,steps)')
+          timing_values=$(node -e '
+            const build = JSON.parse(process.argv[1]);
+            const millis = (value) => value ? Date.parse(value) : NaN;
+            const seconds = (start, end) => Number.isFinite(millis(start)) && Number.isFinite(millis(end)) ?
+              Math.max(0, Math.round((millis(end) - millis(start)) / 1000)) : null;
+            const docker = (build.steps || []).find((step) => step.id === "build-gcp-runner");
+            // Keep each duration as one shell word so read does not split minutes
+            // and seconds into separate fields.
+            const format = (value) => value === null ? "unknown" : `${Math.floor(value / 60)}m${value % 60}s`;
+            const cloudBuildSeconds = seconds(build.createTime, build.finishTime);
+            const dockerSeconds = seconds(docker?.timing?.startTime || docker?.startTime, docker?.timing?.endTime || docker?.endTime);
+            process.stdout.write([format(cloudBuildSeconds), format(dockerSeconds)].join("\t"));
+          ' "$timing_json")
+          read -r cloud_build_elapsed docker_elapsed <<< "$timing_values"
+          echo "image=$image digest=$digest source=$GITHUB_SHA build=$build_url upstream_test_mode=$UPSTREAM_TEST_MODE"
+          echo "build wall clock: Cloud Build=$cloud_build_elapsed, Docker step=$docker_elapsed, GitHub step=${workflow_elapsed_seconds}s (started $wall_start_iso) upstream_test_mode=$UPSTREAM_TEST_MODE"
           {
             echo "### Runner image: gcp-runner"
             echo "- Cloud Build: $build_url"
             echo "- Image: \`$image\`"
             echo "- Digest: \`$digest\`"
             echo "- Source: \`$GITHUB_SHA\`"
+            echo "- Upstream test mode: \`$UPSTREAM_TEST_MODE\`"
+            echo "- Cloud Build wall clock: \`$cloud_build_elapsed\`"
+            echo "- Docker build step wall clock: \`$docker_elapsed\`"
+            echo "- GitHub Actions build-step wall clock: \`${workflow_elapsed_seconds}s\`"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$PUBLISH" = "true" ]; then
             compatibility="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:$(node scripts/runner-image-release.mjs --variant=gcp-runner --compatibility=true)"

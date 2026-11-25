@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const {Transform} = require("node:stream");
 const {pipeline} = require("node:stream/promises");
 
 const MAX_UPLOAD_BYTES = 1024 ** 3;
@@ -10,6 +11,7 @@ const MAX_UPLOAD_BYTES = 1024 ** 3;
 function createDiskUploadService({config, fsImpl = fs, maxBytes = MAX_UPLOAD_BYTES, now = () => new Date().toISOString()} = {}) {
   const root = path.resolve(config?.retainedDiskPaths?.uploads || path.join(config?.workspaceDir || "/workspace", "uploads"));
   const stateRoot = path.resolve(config?.retainedDiskPaths?.caches || path.join(config?.workspaceDir || "/workspace", ".mapache-internal", "uploads"));
+  const operationLocks = new Map();
 
   return {begin, append, cancel, handle};
 
@@ -26,6 +28,10 @@ function createDiskUploadService({config, fsImpl = fs, maxBytes = MAX_UPLOAD_BYT
       const range = parseContentRange(req.get("content-range"));
       const operation = await begin({operationId, name, size, expectedSha256: req.get("x-upload-sha256") || ""});
       if (range.probe) {
+        if (operation.state === "committed") {
+          res.json({ok: true, path: `/uploads/${operation.name}`});
+          return;
+        }
         const offset = await currentOffset(operation);
         res.status(308).set("Range", offset ? `bytes=0-${offset - 1}` : "").send();
         return;
@@ -41,83 +47,167 @@ function createDiskUploadService({config, fsImpl = fs, maxBytes = MAX_UPLOAD_BYT
         res.status(308).set("Range", `bytes=0-${result.offset - 1}`).send();
       }
     } catch (error) {
-      res.status(error.status || 400).json({error: error.publicMessage || error.code || "upload_failed"});
+      const normalized = normalizeUploadError(error);
+      res.status(normalized.status || 400).json({error: normalized.publicMessage || normalized.code || "upload_failed"});
     }
   }
 
   async function begin({operationId, name, size, expectedSha256 = ""} = {}) {
     const id = safeId(operationId || crypto.randomUUID());
-    const normalizedName = validateName(name);
-    const total = validateSize(size, maxBytes);
-    await fsImpl.promises.mkdir(root, {recursive: true, mode: 0o700});
-    await fsImpl.promises.mkdir(stateRoot, {recursive: true, mode: 0o700});
-    const statePath = path.join(stateRoot, `${id}.json`);
-    const temporaryPath = path.join(root, `.${id}.part`);
-    const destinationPath = path.join(root, normalizedName);
-    const existing = await readJson(statePath);
-    if (existing) {
-      if (existing.name !== normalizedName || Number(existing.size) !== total) throw uploadError("upload_operation_conflict");
-      return existing;
-    }
-    const operation = {
-      operationId: id,
-      name: normalizedName,
-      size: total,
-      expectedSha256: normalizeHash(expectedSha256),
-      temporaryPath,
-      destinationPath,
-      state: "receiving",
-      createdAt: now(),
-      updatedAt: now(),
-    };
-    await writeJson(statePath, operation);
-    return operation;
+    return withOperationLock(id, async () => {
+      const normalizedName = validateName(name);
+      const total = validateSize(size, maxBytes);
+      await fsImpl.promises.mkdir(root, {recursive: true, mode: 0o700});
+      await fsImpl.promises.mkdir(stateRoot, {recursive: true, mode: 0o700});
+      const statePath = path.join(stateRoot, `${id}.json`);
+      const temporaryPath = path.join(root, `.${id}.part`);
+      const destinationPath = path.join(root, normalizedName);
+      const existing = await readJson(statePath);
+      if (existing) {
+        if (existing.name !== normalizedName || Number(existing.size) !== total) throw uploadError("upload_operation_conflict");
+        return recoverOperation(existing);
+      }
+      const operation = {
+        operationId: id,
+        name: normalizedName,
+        size: total,
+        expectedSha256: normalizeHash(expectedSha256),
+        temporaryPath,
+        destinationPath,
+        state: "receiving",
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      await writeJson(statePath, operation);
+      return operation;
+    });
   }
 
   async function append(operationId, source, range) {
-    const operation = await requireOperation(operationId);
-    if (operation.state !== "receiving") throw uploadError("upload_not_receiving");
-    const offset = await currentOffset(operation);
-    if (offset !== range.start) throw uploadError("upload_offset_conflict");
-    await pipeline(source, fsImpl.createWriteStream(operation.temporaryPath, {flags: "a", mode: 0o600}));
-    const nextOffset = await currentOffset(operation);
-    if (nextOffset > operation.size || nextOffset !== range.end + 1) {
-      throw uploadError("upload_size_mismatch");
-    }
-    if (nextOffset < operation.size) {
-      await writeJson(statePathFor(operation), {...operation, updatedAt: now()});
-      return {complete: false, offset: nextOffset};
-    }
-    const digest = await sha256(operation.temporaryPath);
-    if (operation.expectedSha256 && digest !== operation.expectedSha256) throw uploadError("upload_checksum_mismatch");
-    try {
-      await fsImpl.promises.access(operation.destinationPath);
-      throw uploadError("upload_filename_already_exists_rename_file", 412);
-    } catch (error) {
-      if (error.publicMessage) throw error;
-      if (error.code !== "ENOENT") throw error;
-    }
-    await fsImpl.promises.rename(operation.temporaryPath, operation.destinationPath);
-    await writeJson(statePathFor(operation), {...operation, state: "committed", digest, committedAt: now(), updatedAt: now()});
-    return {complete: true, offset: nextOffset};
+    return withOperationLock(operationId, async () => {
+      const operation = await requireOperation(operationId);
+      if (operation.state !== "receiving") throw uploadError("upload_not_receiving");
+      const offset = await currentOffset(operation);
+      if (offset !== range.start) throw uploadError("upload_offset_conflict");
+      let received = 0;
+      try {
+        await pipeline(source, new Transform({
+          transform(chunk, encoding, callback) {
+            received += chunk.length;
+            callback(null, chunk);
+          },
+        }), fsImpl.createWriteStream(operation.temporaryPath, {
+          flags: appendFlags(fsImpl), mode: 0o600,
+        }));
+      } catch (error) {
+        const partialOffset = await currentOffset(operation);
+        if (error.code === "ELOOP") {
+          // Never truncate a path that failed O_NOFOLLOW: truncate follows a
+          // symlink, while rm removes only the directory entry.
+          await fsImpl.promises.rm(operation.temporaryPath, {force: true});
+        } else if (partialOffset < offset || partialOffset > operation.size) {
+          await truncate(operation.temporaryPath, offset);
+        } else if (partialOffset !== offset) {
+          await writeJson(statePathFor(operation), {...operation, updatedAt: now()});
+        }
+        throw normalizeUploadError(error);
+      }
+      const expectedBytes = range.end - range.start + 1;
+      const nextOffset = await currentOffset(operation);
+      if (received !== expectedBytes || nextOffset > operation.size || nextOffset !== range.end + 1) {
+        await truncate(operation.temporaryPath, offset);
+        throw uploadError("upload_size_mismatch");
+      }
+      if (nextOffset < operation.size) {
+        await writeJson(statePathFor(operation), {...operation, updatedAt: now()});
+        return {complete: false, offset: nextOffset};
+      }
+      const digest = await sha256(operation.temporaryPath);
+      if (operation.expectedSha256 && digest !== operation.expectedSha256) throw uploadError("upload_checksum_mismatch");
+      return withOperationLock(`destination:${operation.destinationPath}`, async () => {
+        await assertDestinationAbsent(operation.destinationPath);
+        // Mark the transaction before the rename so a process loss between the
+        // publish and the final state write can be recovered on the next probe.
+        await writeJson(statePathFor(operation), {...operation, state: "publishing", digest, updatedAt: now()});
+        await fsImpl.promises.rename(operation.temporaryPath, operation.destinationPath);
+        await writeJson(statePathFor(operation), {...operation, state: "committed", digest, committedAt: now(), updatedAt: now()});
+        return {complete: true, offset: nextOffset};
+      });
+    });
   }
 
   async function cancel(operationId) {
-    const operation = await readJson(statePathForId(operationId));
-    if (!operation) return;
-    await fsImpl.promises.rm(operation.temporaryPath, {force: true});
-    await fsImpl.promises.rm(statePathFor(operation), {force: true});
+    return withOperationLock(operationId, async () => {
+      const operation = await readJson(statePathForId(operationId));
+      if (!operation) return;
+      await fsImpl.promises.rm(operation.temporaryPath, {force: true});
+      await fsImpl.promises.rm(statePathFor(operation), {force: true});
+    });
   }
 
   async function requireOperation(operationId) {
     const operation = await readJson(statePathForId(operationId));
     if (!operation) throw uploadError("upload_expired", 404);
-    return operation;
+    return recoverOperation(operation);
+  }
+
+  async function recoverOperation(operation) {
+    if (operation.state !== "publishing") return operation;
+    return withOperationLock(`destination:${operation.destinationPath}`, async () => {
+      const destination = await pathInfo(operation.destinationPath);
+      const temporary = await pathInfo(operation.temporaryPath);
+      if (destination && temporary) {
+        throw uploadError("upload_filename_already_exists_rename_file", 412);
+      }
+      if (destination) {
+        if (!destination.isFile() || destination.size !== operation.size) {
+          throw uploadError("upload_filename_already_exists_rename_file", 412);
+        }
+        const digest = await sha256(operation.destinationPath);
+        if ((operation.expectedSha256 && digest !== operation.expectedSha256) || (operation.digest && digest !== operation.digest)) {
+          throw uploadError("upload_filename_already_exists_rename_file", 412);
+        }
+        const committed = {...operation, state: "committed", digest, committedAt: operation.committedAt || now(), updatedAt: now()};
+        await writeJson(statePathFor(operation), committed);
+        return committed;
+      }
+      if (temporary && !temporary.isFile()) {
+        await fsImpl.promises.rm(operation.temporaryPath, {force: true});
+      } else if (temporary && temporary.size === operation.size) {
+        const digest = await sha256(operation.temporaryPath);
+        if ((!operation.expectedSha256 || digest === operation.expectedSha256) && (!operation.digest || digest === operation.digest)) {
+          await fsImpl.promises.rename(operation.temporaryPath, operation.destinationPath);
+          const committed = {...operation, state: "committed", digest, committedAt: now(), updatedAt: now()};
+          await writeJson(statePathFor(operation), committed);
+          return committed;
+        }
+        await fsImpl.promises.rm(operation.temporaryPath, {force: true});
+      }
+      const receiving = {...operation, state: "receiving", updatedAt: now()};
+      await writeJson(statePathFor(operation), receiving);
+      return receiving;
+    });
+  }
+
+  async function assertDestinationAbsent(target) {
+    if (await pathInfo(target)) throw uploadError("upload_filename_already_exists_rename_file", 412);
+  }
+
+  async function pathInfo(target) {
+    try { return await fsImpl.promises.lstat(target); } catch (error) {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    }
   }
 
   async function currentOffset(operation) {
     try {
-      return (await fsImpl.promises.stat(operation.temporaryPath)).size;
+      const stat = await fsImpl.promises.lstat(operation.temporaryPath);
+      if (stat.isSymbolicLink() || !stat.isFile()) {
+        await fsImpl.promises.rm(operation.temporaryPath, {force: true});
+        throw uploadError("upload_temporary_path_invalid", 409);
+      }
+      return stat.size;
     } catch (error) {
       if (error.code === "ENOENT") return 0;
       throw error;
@@ -130,6 +220,24 @@ function createDiskUploadService({config, fsImpl = fs, maxBytes = MAX_UPLOAD_BYT
     return hash.digest("hex");
   }
 
+  async function truncate(target, size) {
+    try { await fsImpl.promises.truncate(target, size); } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+
+  async function withOperationLock(operationId, work) {
+    const previous = operationLocks.get(operationId) || Promise.resolve();
+    let release;
+    const current = new Promise(resolve => { release = resolve; });
+    operationLocks.set(operationId, current);
+    await previous;
+    try { return await work(); } finally {
+      release();
+      if (operationLocks.get(operationId) === current) operationLocks.delete(operationId);
+    }
+  }
+
   function statePathFor(operation) { return path.join(stateRoot, `${operation.operationId}.json`); }
   function statePathForId(operationId) { return path.join(stateRoot, `${safeId(operationId)}.json`); }
   async function readJson(target) {
@@ -140,6 +248,19 @@ function createDiskUploadService({config, fsImpl = fs, maxBytes = MAX_UPLOAD_BYT
     await fsImpl.promises.writeFile(temporary, `${JSON.stringify(value)}\n`, {mode: 0o600});
     await fsImpl.promises.rename(temporary, target);
   }
+}
+
+function appendFlags(fsImpl) {
+  const constants = fsImpl.constants || fs.constants;
+  if (typeof constants.O_NOFOLLOW !== "number") return "a";
+  return constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW;
+}
+
+function normalizeUploadError(error) {
+  if (error?.publicMessage) return error;
+  if (error?.code === "ENOSPC") return uploadError("upload_storage_full", 507);
+  if (error?.code === "ELOOP") return uploadError("upload_temporary_path_invalid", 409);
+  return error;
 }
 
 function parseContentRange(value) {
@@ -192,4 +313,5 @@ module.exports = {
   parseContentRange,
   validateName,
   validateSize,
+  normalizeUploadError,
 };

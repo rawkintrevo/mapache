@@ -71,18 +71,20 @@ function run(overrides = {}) {
   };
 }
 
-function harness({runData = run(), deleteResult = {serviceAbsent: true}} = {}) {
+function harness({runData = run(), deleteResult = {serviceAbsent: true}, omitSession = false, vmRuntime, requestRunnerJson} = {}) {
   const db = new Db();
   db.data.set("workspaces/workspace-1", {ownerUid: "user-1"});
   db.data.set("workspaces/workspace-1/automations/automation-1", {pendingRunId: "run-1"});
   db.data.set("automationRuns/run-1", runData);
-  db.data.set("workspaces/workspace-1/sessions/auto-run-1", {
-    ownerUid: "user-1",
-    workspaceId: "workspace-1",
-    runtimeKind: "automation",
-    automationRunId: "run-1",
-    status: "running",
-  });
+  if (!omitSession) {
+    db.data.set("workspaces/workspace-1/sessions/auto-run-1", {
+      ownerUid: "user-1",
+      workspaceId: "workspace-1",
+      runtimeKind: "automation",
+      automationRunId: "run-1",
+      status: "running",
+    });
+  }
   const calls = [];
   const service = createAutomationCleanupService({
     admin,
@@ -96,6 +98,8 @@ function harness({runData = run(), deleteResult = {serviceAbsent: true}} = {}) {
       return {released: true, workspaceId: "workspace-1"};
     },
     sessionCollection: (workspaceId) => db.collection(`workspaces/${workspaceId}/sessions`),
+    requestRunnerJson,
+    vmRuntime,
     wakeQueue: async () => {},
   });
   return {calls, db, service};
@@ -156,6 +160,73 @@ test("cleanup errors do not recursively delete services and reconciliation can r
   await service.cleanupAutomationRun("run-1");
   assert.equal(db.data.get("automationRuns/run-1").cleanupState, "complete");
   assert.equal(calls.length, 3); // two deletion attempts and one slot release
+});
+
+test("VM automation cleanup finalizes a failed run without deleting a missing dedicated session", async () => {
+  const {calls, db, service} = harness({
+    omitSession: true,
+    runData: run({status: "failed", sessionId: undefined}),
+    vmRuntime: {isVmWorkspace: async () => true},
+  });
+
+  const result = await service.cleanupAutomationRun("run-1");
+  const saved = db.data.get("automationRuns/run-1");
+  assert.equal(result.cleaned, true);
+  assert.equal(saved.cleanupState, "complete");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.serviceAbsent, true);
+});
+
+test("VM automation cleanup retains a Compute-backed session instead of pausing the canonical VM", async () => {
+  const {calls, db, service} = harness({
+    runData: run({status: "failed"}),
+    vmRuntime: {isVmWorkspace: async () => true},
+  });
+  db.data.set("workspaces/workspace-1/sessions/auto-run-1", {
+    ownerUid: "user-1",
+    workspaceId: "workspace-1",
+    runtimeKind: "automation",
+    automationRunId: "run-1",
+    status: "running",
+    runtimeProvider: {version: 1, backend: "compute-engine", workspaceId: "workspace-1", ownerUid: "user-1"},
+  });
+
+  const result = await service.cleanupAutomationRun("run-1");
+  const saved = db.data.get("automationRuns/run-1");
+  assert.deepEqual(result, {runId: "run-1", cleaned: false, error: "vm_automation_cleanup_not_admitted"});
+  assert.equal(saved.cleanupState, "error");
+  assert.equal(saved.cleanupErrorCode, "vm_automation_cleanup_not_admitted");
+  assert.equal(calls.length, 0);
+});
+
+test("VM-native cleanup cancels on the canonical runner and retains durable output", async () => {
+  const runnerCalls = [];
+  const {calls, db, service} = harness({
+    runData: run({
+      status: "stopping",
+      executionRoute: "vm-native-v1",
+      sessionId: "vm-session-1",
+      workspaceOutput: {id: "run-1", folderName: "report", path: "/automations/report", storageMode: "retained-disk"},
+      workspaceRunRequest: {sinks: [{kind: "workspace_output"}]},
+      sinkDelivery: {"workspace_output:0": {state: "pending", attempts: 0}},
+    }),
+    requestRunnerJson: async (session, route, options) => {
+      runnerCalls.push({session, route, options});
+      db.data.set("automationRuns/run-1", {...db.data.get("automationRuns/run-1"), status: "canceled"});
+      return {ok: true, runId: "run-1", status: "canceled"};
+    },
+    vmRuntime: {
+      ensureReady: async () => ({id: "vm-session-1", serviceUrl: "https://vm.example", shutdownToken: "shutdown"}),
+    },
+  });
+
+  const result = await service.cleanupAutomationRun("run-1");
+  assert.equal(result.cleaned, true);
+  assert.equal(result.vmNative, true);
+  assert.equal(db.data.get("automationRuns/run-1").cleanupState, "complete");
+  assert.equal(db.data.get("automationRuns/run-1").sinkDelivery["workspace_output:0"].state, "delivered");
+  assert.equal(runnerCalls[0].route, "/automation/runs/run-1/cancel");
+  assert.equal(calls.some((call) => call.options?.reason === "automation_cleanup"), false);
 });
 
 test("ticket results include only a bounded answer from successful agent completion", async () => {

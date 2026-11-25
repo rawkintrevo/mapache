@@ -73,9 +73,18 @@ function setup(overrides = {}) {
     modelHttpTimeoutMs: overrides.modelHttpTimeoutMs,
     runtimeStartupTimeoutMs: overrides.runtimeStartupTimeoutMs,
     runtimeStartupPollIntervalMs: overrides.runtimeStartupPollIntervalMs,
+    vmRuntime: overrides.vmRuntime,
   });
   return {calls, db, service};
 }
+
+test("fenced workspace gets no new runner dispatch even with a running session", async () => {
+  const {calls, db, service} = setup();
+  db.values.set("vmMigrationFences_v2/target", {});
+  assert.deepEqual(await service.provision("run-1"), {skipped: "workspace_vm_migration_active", runId: "run-1"});
+  assert.equal(calls.length, 0);
+  assert.equal(db.values.get("automationRuns/run-1").dispatchClaim, undefined);
+});
 
 test("dispatches an incoming request into the existing normal runtime exactly once", async () => {
   const {calls, db, service} = setup();
@@ -88,6 +97,29 @@ test("dispatches an incoming request into the existing normal runtime exactly on
   assert.equal(calls[0].options.body.modelRef, "openai/gpt-5");
   assert.equal(db.values.get("automationRuns/run-1").status, "running");
   assert.equal(db.values.get("automationRuns/run-1").sessionId, "main");
+});
+
+test("wakes a VM target and dispatches through its current runner without creating a Cloud Run session", async () => {
+  const vmSession = {
+    id: "vm-session-4", ownerUid: "owner", workspaceId: "target", status: "running",
+    serviceUrl: "https://vm.example", shutdownToken: "vm-shutdown", runnerAccessToken: "short-lived-agent-token",
+    agentRuntimeGeneration: 4,
+    runtimeProvider: {backend: "compute-engine"},
+  };
+  const {calls, service} = setup({
+    vmRuntime: {
+      ensureReady: async (ownerUid, workspaceId, options) => {
+        assert.equal(ownerUid, "owner");
+        assert.equal(workspaceId, "target");
+        assert.equal(options.requestId, "workspace-request-run-1");
+        return vmSession;
+      },
+    },
+  });
+  const result = await service.provision("run-1");
+  assert.deepEqual(result, {dispatched: true, runId: "run-1", sessionId: "vm-session-4", conversationId: "conversation-1"});
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].session, vmSession);
 });
 
 test("waits through cold runtime startup and retries a slow first model catalog read", async () => {

@@ -62,6 +62,7 @@ function createWorkspaceAuthService({admin, config, db}) {
   }
 
   async function readSessionAuthSelection() {
+    if (config.vmControl) return (await config.vmControl.call("auth.get")).selection;
     if (!config.workspaceId || !config.sessionId) return null;
     try {
       const snap = await db.collection("workspaces").doc(config.workspaceId).collection("sessions").doc(config.sessionId).get();
@@ -97,11 +98,13 @@ function createWorkspaceAuthService({admin, config, db}) {
   }
 
   async function readRemoteAuthData() {
+    if (config.vmControl) return (await config.vmControl.call("auth.get")).data;
     const snap = await agentAuthDoc(config.ownerUid, db).get();
     return mergeRemoteAuthData(snap.exists ? snap.data() : {});
   }
 
   async function writeRemoteAuthProviders(providers) {
+    if (config.vmControl) throw new Error("vm_canonical_auth_write_forbidden");
     const payload = {
       providers: normalizeAuthProviders(providers),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),

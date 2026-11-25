@@ -69,6 +69,25 @@ test("shared worktree child environment exposes private Git metadata consistentl
   assert.equal(childEnv.GIT_WORK_TREE, "/workspace");
 });
 
+test("VM terminal and tool children use retained HOME and caches", () => {
+  const env = createWorkspaceProcessEnvironment({
+    retainedDiskMode: true,
+    homeDir: "/data/home",
+    retainedDiskPaths: {caches: "/data/caches"},
+    workspaceDir: "/data/workspace",
+    piAgentDir: "/data/agent/pi",
+    userLocalBinDir: "/data/home/.local/bin",
+  }, {HOME: "/root", XDG_CONFIG_HOME: "/root/.config", TMPDIR: "/old/tmp"});
+  assert.equal(env.HOME, "/data/home");
+  assert.equal(env.XDG_CONFIG_HOME, "/data/home/.config");
+  assert.equal(env.XDG_STATE_HOME, "/data/home/.local/state");
+  assert.equal(env.XDG_CACHE_HOME, "/data/caches");
+  assert.equal(env.TMPDIR, "/tmp");
+  assert.equal(env.WORKSPACE_DIR, "/data/workspace");
+  assert.equal(env.PI_CODING_AGENT_DIR, "/data/agent/pi");
+  assert.ok(env.PATH.split(":").includes("/data/home/.local/bin"));
+});
+
 test("tool PATH is deterministic, idempotent, and preserves existing system entries", () => {
   assert.equal(
       prependPathEntries("/usr/bin:/workspace/.local/bin:/usr/local/bin", ["/workspace/.local/bin", "/root/.local/bin"]),

@@ -46,6 +46,11 @@ export function WorkspaceUploadModal({workspace, api, onClose}) {
       }
       const result = await uploadWorkspaceFile(selectedFile, upload.current, {
         signal: abort.signal, onProgress: (value) => mounted.current && setProgress(value),
+        refreshUpload: upload.current.mode === "retained-disk" ? async (current) => {
+          const refreshed = await api.createWorkspaceUpload(workspace.id, selectedFile, current.operationId);
+          upload.current = refreshed;
+          return refreshed;
+        } : undefined,
       });
       upload.current = null;
       if (mounted.current) setPath(result.path);

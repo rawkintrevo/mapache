@@ -35,6 +35,10 @@ class Ref {
     this.db.data.set(this.path, {...(this.db.data.get(this.path) || {}), ...value});
   }
 
+  async delete() {
+    this.db.data.delete(this.path);
+  }
+
   collection(name) {
     return new Collection(this.db, `${this.path}/${name}`);
   }
@@ -48,6 +52,10 @@ class Collection {
 
   doc(id) {
     return new Ref(this.db, `${this.path}/${id}`, id);
+  }
+
+  limit() {
+    return this;
   }
 
   async get() {
@@ -85,6 +93,7 @@ class Db {
       get: (ref) => ref.get(),
       set: (ref, value) => writes.push({ref, value}),
       update: (ref, value) => writes.push({ref, value}),
+      create: (ref, value) => writes.push({ref, value}),
     };
     const result = await callback(transaction);
     for (const {ref, value} of writes) this.data.set(ref.path, {...(this.data.get(ref.path) || {}), ...value});
@@ -323,6 +332,50 @@ test("partial tree recovery never publishes a pointer, while a verified tree pub
   assert.equal(result.pointer.totalBytes, 5);
   assert.equal(harness.db.data.get(`workspaces/${workspaceId}`)[RECOVERY_POINTER_FIELD].state, "ready");
   assert.equal(harness.db.data.get(`workspaces/${workspaceId}`)[RECOVERY_POINTER_FIELD].treePrefix, result.pointer.treePrefix);
+});
+
+test("a migration fence blocks fresh recovery writes while a failed provider call keeps its claim", async () => {
+  const objectPath = "source/a.txt";
+  const {bucket, db, service} = createHarness({objects: [object(objectPath, 11, "alpha")]});
+  const reservation = await service.acquireMaintenanceReservation(ownerUid, workspaceId);
+  const reservationPath = `workspaceStorageRecoveryReservations/${workspaceId}`;
+  const fencePath = `vmMigrationFences_v2/${workspaceId}`;
+  const claims = () => [...db.data.keys()].filter(path => path.startsWith(reservationPath + "/pending/"));
+  const restore = () => service.restoreGeneration(ownerUid, workspaceId, reservation.reservationId, {objectPath, generation: "11"});
+  db.data.set(fencePath, {});
+  await assert.rejects(service.acquireMaintenanceReservation(ownerUid, workspaceId), {publicMessage: "workspace_vm_migration_active"});
+  await assert.rejects(restore(), {publicMessage: "workspace_vm_migration_active"});
+  await assert.rejects(service.publishRecoveryPointer(ownerUid, workspaceId, reservation.reservationId, {}),
+      {publicMessage: "workspace_vm_migration_active"});
+  assert.equal(bucket.current.size, 0);
+  assert.deepEqual(claims(), []);
+  db.data.delete(fencePath);
+
+  const providerStarted = Promise.withResolvers();
+  const timeout = Promise.withResolvers();
+  bucket.softDeleted[0].restore = async () => {
+    providerStarted.resolve();
+    await timeout.promise;
+    throw new Error("provider response unavailable");
+  };
+  const inFlight = restore();
+  const failure = assert.rejects(inFlight, {publicMessage: "workspace_storage_restore_failed"});
+  try {
+    await Promise.race([providerStarted.promise, inFlight]);
+    assert.equal(claims().length, 1);
+    await assert.rejects(service.releaseMaintenanceReservation(ownerUid, workspaceId, reservation.reservationId),
+        {publicMessage: "workspace_recovery_write_unresolved"});
+  } finally {
+    timeout.resolve();
+    await failure;
+  }
+  db.data.set(fencePath, {});
+  db.data.get(reservationPath).expiresAt = "2026-09-20T11:00:00.000Z";
+  assert.equal(claims().length, 1);
+  await assert.rejects(service.releaseMaintenanceReservation(ownerUid, workspaceId, reservation.reservationId),
+      {publicMessage: "workspace_recovery_write_unresolved"});
+  db.data.delete(claims()[0]); // Simulate operator reconciliation.
+  assert.equal((await service.releaseMaintenanceReservation(ownerUid, workspaceId, reservation.reservationId)).state, "released");
 });
 
 console.log("workspace storage backup service tests passed");

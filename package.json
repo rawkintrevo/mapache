@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "docs:check": "node scripts/check-doc-links.js",
+    "check:fast": "node scripts/check-fast.mjs",
     "generate:runner-catalog": "node scripts/generate-runner-catalog.mjs",
     "generate:automation-models": "node scripts/generate-automation-model-catalog.mjs",
     "test:frontend": "vitest run --maxWorkers=1",
@@ -35,6 +36,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "firebase-tools": "15.5.1",
     "jsdom": "^29.1.1",
+    "tar-stream": "3.2.1",
     "vitest": "^4.1.9"
   }
 }

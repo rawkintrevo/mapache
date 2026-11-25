@@ -4,6 +4,7 @@ const assert = require("assert");
 const {
   classifyRunnerResponseError,
   parseRunnerResponseBody,
+  runnerRequestUrl,
 } = require("./runnerProxy.helpers");
 
 assert.deepStrictEqual(parseRunnerResponseBody(""), {});
@@ -29,5 +30,9 @@ assert.strictEqual(classifyRunnerResponseError({
   data: {error: "git_push_failed"},
   rawBody: "{\"error\":\"git_push_failed\"}",
 }), "git_push_failed");
+
+assert.equal(runnerRequestUrl("https://vm.example", "/workspace/requests", "agent.token"),
+    "https://vm.example/workspace/requests?mapache_access=agent.token");
+assert.equal(runnerRequestUrl("https://runner.example", "/runner/health"), "https://runner.example/runner/health");
 
 console.log("runner proxy helper tests passed");

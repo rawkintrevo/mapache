@@ -40,6 +40,40 @@ create a ticket or dispatch a prompt. The overall model-discovery budget is
 120 seconds, which leaves room for catalog initialization after Cloud Run is
 ready.
 
+For a workspace whose backend-owned `vmRuntimes_v2/{workspaceId}` record uses
+`backend: compute-engine`, `functions/vmWorkspaceRuntime.service.js` takes the
+VM path instead. Only a VM with explicit API admission (`apiEnabled: true`) is
+eligible for background wake-up. A stopped admitted VM receives one idempotent durable
+`start` lifecycle request, the adapter waits for the current generation's
+`active` state, boot, lease, gateway route and authenticated runner readiness,
+then mints a short-lived `aud: agent` access token. The broker sends that token
+as the gateway query credential and keeps the runner shutdown credential in the
+server-side request header; neither credential is stored in the ticket, run
+contract, or caller projection. A ready VM is reused, so requests never create
+a second writer or a sibling Cloud Run session against the retained disk.
+Generation changes are re-read before dispatch and ambiguous outcomes retain
+the existing no-blind-replay behavior. If the VM is fenced, not lifecycle
+admitted, missing its current session/credentials, or cannot become ready in
+the bounded startup window, the request fails closed.
+
+Scheduled automation continues to use the dedicated Cloud Run automation
+contract for legacy workspaces. For an admitted Compute Engine workspace, the
+provisioner instead wakes or reuses the canonical VM and dispatches the run to
+its authenticated `/automation/runs` control route. The runner starts one
+private VM-native child runtime for that run: it copies a filtered workspace
+snapshot to retained-disk input, mounts that snapshot read-only at
+`/workspace-input`, hides the live workspace mount, and binds a durable
+run-specific output directory at `/workspace`. The child is stopped and its
+ephemeral state is removed after completion; the output directory remains on
+the retained disk and is referenced by the run's `workspaceOutput` record.
+
+The native path never creates a sibling Cloud Run session or pauses/deletes the
+canonical VM. It fails closed when VM admission, the current generation, the
+runner control contract, the retained-disk layout, or the sandbox runtime is
+not available. The implementation is covered by focused emulator/unit tests,
+but a live stopped-target scheduled/Run-now execution and the complete
+cross-machine/release acceptance matrix remain unproven.
+
 The runner catalog request has separate deadlines: the Functions-to-runner HTTP
 call allows 45 seconds, while the pi-web-ui control socket allows 30 seconds
 for first-client initialization and catalog work instead of the 5-second
@@ -76,8 +110,11 @@ discover, choose a currently available exact pair, and submit a new request
 with a new idempotency key.
 
 The request is admitted into the target workspace's normal `runtimeKind: main`
-session. If that session does not exist it is created through the normal session
-lifecycle; if it is stopped, the existing restart path is used. An explicit
+session. For legacy Cloud Run workspaces, if that session does not exist it is
+created through the normal session lifecycle; if it is stopped, the existing
+restart path is used. For Compute Engine workspaces, the canonical VM session
+is the only target and a stopped machine is woken through the durable VM
+lifecycle described above. An explicit
 request model wins; if omitted, the target runner inherits
 the model and provider-key choice most recently saved for `/workspace`. This
 selection is restored from the target's pinned UI checkpoint. Only
@@ -149,8 +186,10 @@ guarded repair path restores the existing run and re-delivers its result; it
 does not reopen canceled runs, replace a newer ticket pointer, or replay the
 prompt. Acknowledgment, cancellation, and outcome writes are transactional, so
 stale workers cannot overwrite a newer outcome. Cancellation is recorded before
-the runner interrupt and is safe to repeat. Scheduled automations retain their
-separate private-runner lifecycle and are not routed through these endpoints.
+the runner interrupt and is safe to repeat. Legacy Cloud Run scheduled
+automations retain their separate private-runner lifecycle. VM-native scheduled
+automations use the canonical VM only to start, monitor, and cancel their
+run-scoped private child runtime through the bounded runner routes above.
 GitHub request context remains read-only, while the normal workspace sync and
 credential boundaries remain authoritative.
 

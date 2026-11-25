@@ -40,7 +40,7 @@ function createChromeProfileSeedService({
   maxAttempts = MAX_CAPTURE_ATTEMPTS,
   retentionCount = 8,
 } = {}) {
-  const enabled = Boolean(config.chromeEnabled || config.runnerCapabilities?.chrome);
+  const enabled = !config.retainedDiskMode && Boolean(config.chromeEnabled || config.runnerCapabilities?.chrome);
   const publisherEnabled = enabled && !isAutomationRuntime(config);
   let lastPublished = null;
   let lastError = null;

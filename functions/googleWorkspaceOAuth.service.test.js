@@ -75,7 +75,14 @@ function createFakeDb() {
 
   const connections = new Map();
   const bindings = new Map();
+  const admissionChecks = [];
   const connectionService = {
+    async assertWorkspaceMigrationAdmission(uid, workspaceId) {
+      admissionChecks.push(`${uid}:${workspaceId}`);
+    },
+    async assertConnectionMigrationAdmission(uid, connectionId) {
+      admissionChecks.push(`${uid}:${connectionId}`);
+    },
     async getGoogleConnection(uid, id, options = {}) {
       const record = connections.get(`${uid}:${id}`);
       if (!record) {
@@ -135,6 +142,7 @@ function createFakeDb() {
   assert.strictEqual(start.authorizationUrl.includes("client-secret"), false);
   const completed = await oauth.completeGoogleConnection({state: params.get("state"), code: "code-fake"});
   assert.strictEqual(completed.status, 200);
+  assert.deepStrictEqual(admissionChecks, ["user-a:workspace-a", "user-a:workspace-a"]);
   assert.strictEqual(completed.html.includes("refresh-fake"), false);
   assert.strictEqual(bindings.get("user-a:workspace-a").enabledServices[0], "gmail");
   assert.strictEqual(calls[0].options.body.toString().includes("code-fake"), true);
@@ -162,6 +170,7 @@ function createFakeDb() {
   const refreshed = await oauth.refreshGoogleConnection("user-a", stored.metadata.connectionId);
   assert.strictEqual(refreshed.accessToken, "access-fake");
   assert.strictEqual(calls.length, 1);
+  assert.strictEqual(admissionChecks.at(-1), `user-a:${stored.metadata.connectionId}`);
   const encrypted = encryptSecret("another-secret", "encryption-secret");
   assert.strictEqual(decryptSecret(encrypted, "encryption-secret"), "another-secret");
   await assert.rejects(oauth.completeGoogleConnection({state: params.get("state"), code: "code-fake"}), /replayed_google_oauth_state/);

@@ -1,6 +1,7 @@
 "use strict";
 
 const {httpError} = require("./backendUtils.helpers");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 const {
   normalizeGoogleConnectionMetadata,
   normalizeGoogleConnectionSummary,
@@ -19,9 +20,13 @@ function createGoogleWorkspaceConnectionsService(dependencies = {}) {
     listGoogleConnections: (uid) => listGoogleConnections(uid, dependencies),
     updateGoogleConnection: (uid, connectionId, metadata, encryptedCredentials) =>
       updateGoogleConnection(uid, connectionId, metadata, encryptedCredentials, dependencies),
+    assertConnectionMigrationAdmission: (uid, connectionId) =>
+      assertConnectionMigrationAdmission(uid, connectionId, dependencies),
     deleteGoogleConnection: (uid, connectionId) => deleteGoogleConnection(uid, connectionId, dependencies),
     bindGoogleWorkspaceConnection: (uid, workspaceId, payload) =>
       bindGoogleWorkspaceConnection(uid, workspaceId, payload, dependencies),
+    assertWorkspaceMigrationAdmission: (uid, workspaceId) =>
+      assertWorkspaceMigrationAdmission(uid, workspaceId, dependencies),
     getGoogleWorkspaceBinding: (uid, workspaceId) =>
       getGoogleWorkspaceBinding(uid, workspaceId, dependencies),
     unbindGoogleWorkspaceConnection: (uid, workspaceId) =>
@@ -75,47 +80,84 @@ async function listGoogleConnections(uid, dependencies = {}) {
 
 async function updateGoogleConnection(uid, connectionId, metadata, encryptedCredentials, dependencies = {}) {
   const ref = connectionRef(uid, cleanConnectionId(connectionId), dependencies);
-  const existing = await ref.get();
-  if (!existing.exists) throw httpError(404, "google_connection_not_found");
-  const current = existing.data() || {};
-  const normalized = normalizeStoredMetadata({...current, ...metadata, connectionId: ref.id}, dependencies, current);
-  const patch = {...normalized};
-  if (encryptedCredentials !== undefined) patch.encryptedCredentials = normalizeEncryptedCredentials(encryptedCredentials);
-  await ref.set(patch, {merge: true});
+  await dependencies.db.runTransaction(async transaction => {
+    const existing = await transaction.get(ref);
+    if (!existing.exists) throw httpError(404, "google_connection_not_found");
+    await assertConnectionMigrationAdmissionInTransaction(transaction, dependencies.db, uid, ref.id);
+    const current = existing.data() || {};
+    const normalized = normalizeStoredMetadata({...current, ...metadata, connectionId: ref.id}, dependencies, current);
+    const patch = {...normalized};
+    if (encryptedCredentials !== undefined) patch.encryptedCredentials = normalizeEncryptedCredentials(encryptedCredentials);
+    transaction.set(ref, patch, {merge: true});
+  });
   return publicConnectionSummary(await ref.get());
+}
+
+async function assertConnectionMigrationAdmission(uid, connectionId, dependencies = {}) {
+  const cleanId = cleanConnectionId(connectionId);
+  await dependencies.db.runTransaction(async transaction => {
+    const existing = await transaction.get(connectionRef(uid, cleanId, dependencies));
+    if (!existing.exists) throw httpError(404, "google_connection_not_found");
+    await assertConnectionMigrationAdmissionInTransaction(transaction, dependencies.db, uid, cleanId);
+  });
+}
+
+async function assertConnectionMigrationAdmissionInTransaction(transaction, db, uid, connectionId) {
+  const workspaceSnap = await transaction.get(db.collection("workspaces").where("ownerUid", "==", uid));
+  for (const workspaceDoc of workspaceSnap.docs) {
+    const workspace = workspaceDoc.data() || {};
+    if (workspace[BINDING_FIELD] && workspace[BINDING_FIELD].connectionId === connectionId) {
+      await assertVmMigrationAdmission(transaction, db, workspaceDoc.id);
+    }
+  }
 }
 
 async function deleteGoogleConnection(uid, connectionId, dependencies = {}) {
   const cleanId = cleanConnectionId(connectionId);
   const ref = connectionRef(uid, cleanId, dependencies);
-  const existing = await ref.get();
-  if (!existing.exists) throw httpError(404, "google_connection_not_found");
-  const workspaceSnap = await dependencies.db.collection("workspaces").where("ownerUid", "==", uid).get();
-  for (const workspaceDoc of workspaceSnap.docs) {
-    const workspace = workspaceDoc.data() || {};
-    if (workspace[BINDING_FIELD] && workspace[BINDING_FIELD].connectionId === cleanId) {
-      await workspaceDoc.ref.update({[BINDING_FIELD]: null});
+  await dependencies.db.runTransaction(async transaction => {
+    const existing = await transaction.get(ref);
+    if (!existing.exists) throw httpError(404, "google_connection_not_found");
+    const workspaceSnap = await transaction.get(dependencies.db.collection("workspaces").where("ownerUid", "==", uid));
+    for (const workspaceDoc of workspaceSnap.docs) {
+      const workspace = workspaceDoc.data() || {};
+      if (workspace[BINDING_FIELD] && workspace[BINDING_FIELD].connectionId === cleanId) {
+        await assertVmMigrationAdmission(transaction, dependencies.db, workspaceDoc.id);
+        transaction.update(workspaceDoc.ref, {[BINDING_FIELD]: null});
+      }
     }
-  }
-  await ref.delete();
+    transaction.delete(ref);
+  });
   return {ok: true, connectionId: cleanId};
 }
 
 async function bindGoogleWorkspaceConnection(uid, workspaceId, payload, dependencies = {}) {
   const workspaceRef = workspaceRefFor(workspaceId, dependencies);
-  const workspaceSnap = await workspaceRef.get();
-  assertWorkspaceOwner(workspaceSnap, uid);
   const binding = normalizeGoogleWorkspaceBinding(payload);
-  const connectionSnap = await connectionRef(uid, binding.connectionId, dependencies).get();
-  if (!connectionSnap.exists) throw httpError(404, "google_connection_not_found");
-  const connection = connectionSnap.data() || {};
-  if (connection.status !== "connected") throw httpError(409, "google_connection_reconnect_required");
-  const allowed = new Set(connection.enabledServices || []);
-  if (binding.enabledServices.some((key) => !allowed.has(key))) {
-    throw httpError(400, "google_service_not_enabled");
-  }
-  await workspaceRef.update({[BINDING_FIELD]: binding});
+  await dependencies.db.runTransaction(async transaction => {
+    const workspaceSnap = await transaction.get(workspaceRef);
+    assertWorkspaceOwner(workspaceSnap, uid);
+    await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
+    const connectionSnap = await transaction.get(connectionRef(uid, binding.connectionId, dependencies));
+    if (!connectionSnap.exists) throw httpError(404, "google_connection_not_found");
+    const connection = connectionSnap.data() || {};
+    if (connection.status !== "connected") throw httpError(409, "google_connection_reconnect_required");
+    const allowed = new Set(connection.enabledServices || []);
+    if (binding.enabledServices.some((key) => !allowed.has(key))) {
+      throw httpError(400, "google_service_not_enabled");
+    }
+    transaction.update(workspaceRef, {[BINDING_FIELD]: binding});
+  });
   return binding;
+}
+
+async function assertWorkspaceMigrationAdmission(uid, workspaceId, dependencies = {}) {
+  const workspaceRef = workspaceRefFor(workspaceId, dependencies);
+  await dependencies.db.runTransaction(async transaction => {
+    const workspaceSnap = await transaction.get(workspaceRef);
+    assertWorkspaceOwner(workspaceSnap, uid);
+    await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
+  });
 }
 
 async function getGoogleWorkspaceBinding(uid, workspaceId, dependencies = {}) {
@@ -127,9 +169,12 @@ async function getGoogleWorkspaceBinding(uid, workspaceId, dependencies = {}) {
 
 async function unbindGoogleWorkspaceConnection(uid, workspaceId, dependencies = {}) {
   const workspaceRef = workspaceRefFor(workspaceId, dependencies);
-  const workspaceSnap = await workspaceRef.get();
-  assertWorkspaceOwner(workspaceSnap, uid);
-  await workspaceRef.update({[BINDING_FIELD]: null});
+  await dependencies.db.runTransaction(async transaction => {
+    const workspaceSnap = await transaction.get(workspaceRef);
+    assertWorkspaceOwner(workspaceSnap, uid);
+    await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
+    transaction.update(workspaceRef, {[BINDING_FIELD]: null});
+  });
   return {ok: true, workspaceId};
 }
 

@@ -2,12 +2,14 @@
 
 const assert = require("node:assert/strict");
 const {createWorkspaceRuntimeScheduleService} = require("./workspaceRuntimeSchedule.service");
+const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
 
 const DELETE = Symbol("delete");
 const FIXED_NOW = new Date("2026-10-19T18:00:00.000Z");
 const SCHEDULE = {days: [1, 2, 3, 4, 5], startTime: "08:00", endTime: "18:00", timezone: "America/Chicago"};
 
 function makeHarness({workspace: initialWorkspace, sessions: initialSessions = [], now = FIXED_NOW, onStart, onRestart, onStop} = {}) {
+  let fenced = false;
   const workspace = {...initialWorkspace};
   const sessions = new Map(initialSessions.map((session) => [session.id, {...session}]));
   const workspaceRef = makeRef("workspace-1", () => workspace, (updates) => applyUpdates(workspace, updates));
@@ -43,6 +45,7 @@ function makeHarness({workspace: initialWorkspace, sessions: initialSessions = [
   });
   const db = {
     collection: (name) => {
+      if (name === "vmMigrationFences_v2") return {doc: () => ({get: async () => ({exists: fenced})})};
       if (name === "appConfig") return {doc: (id) => {
         assert.equal(id, "runtimeScheduleCursor");
         return cursorRef;
@@ -67,7 +70,10 @@ function makeHarness({workspace: initialWorkspace, sessions: initialSessions = [
     db,
     now: () => now,
     sessionCollection,
-    requireSession: async () => {},
+    requireSession: async (uid, workspaceId, sessionId) => {
+      const sessionRef = sessionCollection(workspaceId).doc(sessionId);
+      return {sessionRef, sessionSnap: await sessionRef.get()};
+    },
     createSession: async (uid, workspaceId, payload) => {
       started.push({uid, workspaceId, payload});
       if (onStart) await onStart({sessions, workspace, uid, workspaceId, payload});
@@ -90,7 +96,7 @@ function makeHarness({workspace: initialWorkspace, sessions: initialSessions = [
       if (onStop) await onStop({sessions, workspace, args: [uid, workspaceId, sessionId]});
     },
   });
-  return {service, workspace, sessions, started, restarted, stopped, cursor};
+  return {service, workspace, sessions, started, restarted, stopped, cursor, setFence: value => { fenced = value; }};
 }
 
 function makeRef(id, read, write) {
@@ -307,6 +313,27 @@ function workspace(overrides = {}) {
     assert.equal(harness.workspace.runtimePolicy.mode, "idle");
     assert.equal(harness.sessions.get("session-1").status, "running", "disabling scheduling does not stop the runtime");
     assert.equal(harness.stopped.length, 0);
+  }
+
+  {
+    const harness = makeHarness({
+      workspace: workspace(),
+      sessions: [{id: "session-1", status: "stopped", ownerUid: "user-1", agentUiVersion: AGENT_UI_VERSION}],
+    });
+    harness.setFence(true);
+    const before = {...harness.workspace};
+    const skipped = await harness.service.reconcileWorkspace("workspace-1", FIXED_NOW);
+    assert.equal(skipped.reason, "workspace_vm_migration_active");
+    await assert.rejects(harness.service.updatePolicy("user-1", "workspace-1", {mode: "idle"}),
+        {publicMessage: "workspace_vm_migration_active"});
+    await assert.rejects(harness.service.setSessionLongRunning("user-1", "workspace-1", "session-1", {enabled: true}),
+        {publicMessage: "workspace_vm_migration_active"});
+    assert.deepEqual(harness.workspace, before);
+    assert.equal(harness.restarted.length, 0);
+    harness.setFence(false);
+    const updated = await harness.service.setSessionLongRunning("user-1", "workspace-1", "session-1", {enabled: true});
+    assert.equal(updated.longRunning, true);
+    assert.equal(harness.workspace.runtimePolicy.mode, "keep-running");
   }
 
   console.log("workspace runtime schedule service tests passed");

@@ -45,6 +45,75 @@ React. The subscription resolves the workspace's canonical runtime; access URLs
 are loaded by that runtime surface. Workspace lifecycle actions are
 server-authoritative and use the shared pending-operation boundary.
 
+The VM crossover client is opt-in at build time with
+`VITE_VM_WORKSPACES_ENABLED=true`. The Firebase PR preview workflow sets this
+flag so hosted previews exercise the crossover adapter; production keeps its
+own rollout setting. `src/services/vmWorkspaceApi.js` wraps the
+existing API client, merges owner-admitted VM listings, and routes current
+session reads, rename, runtime-policy reads/saves, pause/start/replacement, and signed access to
+`vmApi_v2`.
+Legacy workspace calls retain their existing endpoints. VM identity is retained
+for the lifetime of the authenticated client even if later listing omits it,
+so stale callbacks cannot fall through to a Cloud Run mutation. Conflicting
+provider IDs, repeated pagination cursors and stale session actions fail
+explicitly; endpoint errors never trigger a provider fallback.
+
+The session subscription controller polls VM session views every three seconds
+after each completed request; it does not attach a legacy Firestore listener.
+Detaching suppresses late responses, and read errors clear stale session state.
+Lifecycle refresh selects the current generation after replacement. Initial
+workspace selection skips the legacy workspace MCP/Google config reads for VM
+records. Global account credential management remains available; unsupported
+VM-scoped actions return an explicit unavailable error. This is temporary
+crossover coverage, not removal of the central configuration requirements.
+Creation UI, remaining configuration/automation/request routing and
+full-shell creation/lifecycle acceptance remain unfinished. VM
+scheduled-policy reconciliation is server-authoritative: the one-minute VM
+lifecycle reconciler starts stopped admitted machines inside a configured
+window and pauses active machines at the strict closing boundary. Builds
+without the flag keep the old behavior.
+
+VM workspace editing selects `VmWorkspaceEditModal` from `ModalStack`, while
+legacy workspaces retain `WorkspaceEditModal`. The VM editor loads versioned
+configuration and the existing account credential/environment catalogs, displays
+labels rather than secret values, and saves explicit provider/environment
+selections through the VM adapter. It retains the version and generation loaded
+by the editor; the adapter never substitutes a newer version before saving.
+Conflicts preserve the draft and offer an explicit reload. Saves display pending
+restart status without triggering lifecycle operations; reloading shows the
+backend's applied status. Unknown/deleted selections remain visible until the
+user clears them. Late responses are ignored after close or workspace changes.
+Resources, metadata, defaults and other VM configuration controls remain pending.
+
+`e2e/qa/cases/vm-configuration.json` and
+`node scripts/vm-client-browser-proof.mjs vm-configuration` exercise the real
+modal stack/editor/adapter with synthetic backend responses. Pending, conflict,
+reload and applied-state screenshots are in `artifacts/qa/vm-configuration/`.
+This complements the live owner-API revision proof in [VM Workspaces](./vm-workspaces.md);
+it does not claim live full-shell configuration editing or a Hosting rollout.
+
+`e2e/qa/cases/vm-client-routing.json` exercises the production power control
+and VM adapter with synthetic responses via the local Vite fixture. CDP QA
+passed Stop -> Start -> fresh-generation access, with no legacy calls or
+unexpected console/network errors. Evidence is in
+`artifacts/qa/vm-client-routing/`; this fixture is not live Firebase full-shell
+acceptance. The browser harness is `scripts/vm-client-browser-proof.mjs`.
+
+`scripts/vm-owner-api-proof.mjs shell` adds live full-shell QA on an owned Vite
+server at `127.0.0.1:5174` with the VM flag and explicit public Firebase
+configuration enabled. It signs the fixed synthetic owner into the actual app,
+checks admitted listing/current-session/access requests, waits for the embedded
+Agent connection, and requires live CPU/RAM samples. It rejects legacy scoped
+workspace calls and Firestore listeners. The harness temporarily admits the
+fixture and parent metrics origin, restores them and Auth/allowlist state, and
+does not mutate the machine lifecycle. The case is
+`e2e/qa/cases/vm-live-shell.json`; artifacts are under
+`artifacts/qa/vm-live-shell/`. No model-authenticated turn is implied by this QA.
+This live read/access/metrics case passed on synthetic generation 9 on
+2026-11-23. The screenshot shows the actual signed-in shell and connected Agent
+with live CPU/RAM samples. Creation and lifecycle actions through the full
+browser shell, central configuration, and migration still need acceptance.
+
 On the first authenticated refresh, `src/utils/userTimezone.js` initializes a
 missing profile timezone from the browser's IANA timezone (falling back to
 `UTC`) through `PATCH /api/me`. Existing saved timezones are never overwritten;
@@ -300,10 +369,12 @@ merely to inspect a past run.
 ## Local file uploads
 
 The navbar keeps its workspace and account actions in one labeled workspace
-actions menu at every viewport size. Its Upload file action sends local files directly to Cloud Storage using
-resumable transfers. Main and automation sessions mount their workspace inputs
-read-only at `/uploads`. See [Workspace uploads](./workspace-uploads.md) for
-ownership, lifecycle, restart requirements, and verification.
+actions menu at every viewport size. Its Upload file action sends legacy
+workspaces directly to Cloud Storage using resumable transfers, while admitted
+VM workspaces receive a short-lived gateway URL for resumable writes to the
+retained `/uploads` path. Main and automation sessions mount their workspace
+inputs read-only at `/uploads`. See [Workspace uploads](./workspace-uploads.md)
+for ownership, lifecycle, restart requirements, and verification.
 
 Named OpenAI-compatible connections use the existing Authentication modal and
 Pi auth workflow. `AuthModal` collects a stable `custom-…` ID and endpoint in

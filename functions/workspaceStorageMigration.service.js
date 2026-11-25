@@ -2,6 +2,7 @@
 
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError} = require("./backendUtils.helpers");
+const {assertVmMigrationAdmission, hasVmMigrationFence} = require("./vmMigrationFence.helpers");
 const {
   isWorkspaceStorageMigrationActive,
 } = require("./runtimeReservation.helpers");
@@ -60,6 +61,7 @@ async function reserveMigration(uid, workspaceId, dependencies) {
     workspace = workspaceSnap.data() || {};
     assertOwner(workspace, uid);
     assertWorkspaceAvailable(workspace);
+    await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
     const sessions = await readSessions(transaction, workspaceRef, dependencies);
     assertPaused(sessions);
 
@@ -88,6 +90,7 @@ async function completeMigration(uid, workspaceId, payload = {}, dependencies = 
     const workspace = workspaceSnap.data() || {};
     assertOwner(workspace, uid);
     assertWorkspaceAvailable(workspace);
+    await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
     assertPaused(await readSessions(transaction, workspaceRef, dependencies));
     const migration = workspace.sharedStorageMigration || {};
     if (migration.operationId !== result.operationId) throw migrationError("workspace_storage_migration_conflict", 409);
@@ -148,6 +151,7 @@ async function failMigration(uid, workspaceId, payload = {}, dependencies = {}) 
     const workspace = workspaceSnap.data() || {};
     assertOwner(workspace, uid);
     assertWorkspaceAvailable(workspace);
+    await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
     const migration = workspace.sharedStorageMigration || {};
     if (!operationId || migration.operationId !== operationId) throw migrationError("workspace_storage_migration_conflict", 409);
     const now = serverTimestamp(dependencies.admin);
@@ -289,6 +293,7 @@ async function reconcileExistingReadyStorage(workspaceRef, uid, workspaceId, des
     const workspace = snapshot.data() || {};
     assertOwner(workspace, uid);
     assertWorkspaceAvailable(workspace);
+    await assertVmMigrationAdmission(transaction, dependencies.db, workspaceId);
     assertPaused(await readSessions(transaction, workspaceRef, dependencies));
     const current = workspace.sharedStorage || {};
     if (current.bucketName && current.bucketName !== descriptor.bucketName) {
@@ -333,6 +338,7 @@ function persistExistingStorageFailure(workspaceRef, uid, error, dependencies) {
     if (!snapshot.exists) return;
     const workspace = snapshot.data() || {};
     if (workspace.ownerUid !== uid) return;
+    if (await hasVmMigrationFence(transaction, dependencies.db, workspaceRef.id)) return;
     const current = workspace.sharedStorage;
     transaction.update(workspaceRef, {
       sharedStorageState: "error",

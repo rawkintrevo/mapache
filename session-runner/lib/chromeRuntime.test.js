@@ -92,6 +92,44 @@ test("Chrome becomes ready only after the loopback CDP version endpoint responds
   assert.equal(runtime.status().processes.chromium, "running");
 });
 
+test("retained-disk Chrome becomes ready without the optional taskbar", async () => {
+  const runtime = createChromeRuntime({
+    chromeEnabled: true,
+    chromeDesktopMinimal: true,
+    chromeCdpHost: "127.0.0.1",
+    chromeCdpPort: 9222,
+    chromeStartupTimeoutMs: 1000,
+    chromeDisplay: ":99",
+    chromeViewport: {width: 1440, height: 1000},
+    chromeVncHost: "127.0.0.1",
+    chromeVncPort: 5900,
+    chromeNoVncPort: 6080,
+  }, {
+    desktop: {
+      start: async () => {},
+      stop: async () => {},
+      status: () => ({
+        state: "running",
+        ready: true,
+        xvfb: "running",
+        windowManager: "running",
+        chromium: "running",
+        vnc: "running",
+      }),
+    },
+    probeVnc: async () => true,
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/browser/test"}),
+    }),
+    delay: async () => {},
+  });
+
+  await runtime.start();
+  assert.equal(runtime.status().state, "ready");
+  assert.equal(runtime.status().ready, true);
+});
+
 test("Chrome is not ready when VNC is absent even if CDP responds", async () => {
   const runtime = createChromeRuntime({
     chromeEnabled: true,

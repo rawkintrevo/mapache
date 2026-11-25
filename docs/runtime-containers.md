@@ -494,6 +494,14 @@ canonical endpoint. Rebuild/publish `gcp-runner` before deploying the caller.
 Existing runner services require recreation; do not restore an old-path
 fallback for compatibility.
 
+The authenticated health response also includes a bounded `disk` projection
+from `session-runner/lib/diskStatus.js` for the runner's workspace filesystem:
+provider-independent capacity, used/free/available bytes, headroom percentage,
+storage mode, and measurement time. It never exposes the filesystem path or
+turns an unavailable `statfs` probe into a false capacity value; callers must
+treat `disk.known=false` as unknown. Provider disk capacity and guest
+filesystem headroom are separate recovery facts.
+
 The one-minute automation reconciler uses `/runner/health` with the runner shutdown
 credential for stale-heartbeat probes. It may reconcile setup polling or
 cleanup, but it never restarts an automation prompt. Cloud Run orphan cleanup
@@ -794,7 +802,24 @@ Chrome-capable images run one workspace-owned headed Chromium desktop alongside 
 
 Cloud Run does not permit the nested PID/network namespaces Chromium's Linux process sandbox requires, so the headed browser retains `--no-sandbox` and relies on the per-session Cloud Run service boundary for workload isolation. Both Chrome images install `/etc/chromium/policies/managed/mapache.json` with `CommandLineFlagSecurityWarningsEnabled` disabled so Chromium does not cover browser content with the corresponding command-line security warning. The image build validates this policy before running the browser smoke test.
 
-The browser surface is protected by the same per-session HMAC browser token as the terminal and preview. `/browser/` serves authenticated noVNC, `/browser/status` reports safe desktop/CDP readiness, `/browser/activity` records meaningful agent browser actions, and the `/browser/vnc` WebSocket bridges only to loopback x11vnc. Browser runtime readiness requires a live CDP endpoint, all required desktop processes, and a reachable loopback VNC port; a later supervised process exit transitions the runtime away from `ready` until the desktop and both probes recover. A dropped VNC bridge is closed so noVNC can reconnect to a replacement x11vnc process. CDP and VNC ports are not public. `mapache-chrome-status` reports only readiness and browser version and exits nonzero when CDP is unavailable.
+Compute Engine retained-disk runners keep the Node server root-owned for disk
+bootstrap and lifecycle ownership, but launch Chromium through `runuser` as the
+image's unprivileged `node` user (`CHROME_SANDBOX_USER=node`, UID/GID 1000).
+The image installs Debian's separate `chromium-sandbox` helper and the image
+build verifies that its setuid mode is present.
+Before launch, the root-owned browser tree is adopted by that user and the
+retained-disk root is changed to traverse-only (`0711`); the browser directory
+and its descendants remain private (`0700`/original file modes). This lets
+Chromium use its Linux sandbox without making the whole runner non-root or
+changing ownership of workspace, HOME, credentials, upload, or cache roots.
+The runner remains `--privileged=false`; the VM grants only the narrowly scoped
+Docker `SYS_ADMIN` capability needed for Chromium's setuid helper to create its
+PID/network namespaces. The VM uses a private subnet and the authenticated
+gateway, and the container blocks metadata-server access. A sandboxed Chromium
+boot must still be re-proven on each changed runner image; falling back to
+`CHROME_DISABLE_SANDBOX` is not an accepted Compute runtime configuration.
+
+The browser surface is protected by the same per-session HMAC browser token as the terminal and preview. `/browser/` serves authenticated noVNC, `/browser/status` reports safe desktop/CDP readiness, `/browser/activity` records meaningful agent browser actions, and the `/browser/vnc` WebSocket bridges only to loopback x11vnc. Browser runtime readiness requires a live CDP endpoint, the required desktop processes for the selected mode, and a reachable loopback VNC port; retained-disk minimal mode intentionally omits the optional taskbar. A later supervised process exit transitions the runtime away from `ready` until the desktop and both probes recover. A dropped VNC bridge is closed so noVNC can reconnect to a replacement x11vnc process. CDP and VNC ports are not public. `mapache-chrome-status` reports only readiness and browser version and exits nonzero when CDP is unavailable.
 
 Chrome profiles are not part of the visible workspace tree or the general home archive. Legacy/shared runners can still read the compatibility archive at `{workspace.storagePrefix}/.mapache-internal/chrome/chrome-profile.tar.gz`, but the current publisher writes immutable, versioned seeds under `{workspace.storagePrefix}/.mapache-internal/chrome-profile-seeds/v1/` and advances `current.json` only after checksum- and generation-validated publication. `session-runner/lib/chromeProfileSeed.service.js` flushes the filesystem, stages a tar capture, verifies that the source directory stayed stable, and retries boundedly; it never stops or kills an active user browser. The seed descriptor is workspace-owned and includes its schema, immutable version/object generation, checksum, capture timestamp, and compatible browser metadata. The publisher is guarded by the workspace writer authority, and a bounded retention pass preserves current/recent versions plus every version referenced by an automation run.
 
@@ -1187,7 +1212,7 @@ Before deleting a service, the backend calls the runner's protected `POST /shutd
 
 When a session reaches the stopped path, the backend records an allocated usage interval under `users/{uid}/sessionUsage/{sessionId}` and marks the session with `usageAccountedAt`. The interval uses the session's active runtime multiplied by the configured Cloud Run CPU and memory limits, producing CPU seconds and memory GiB-seconds for the profile page. Resize operations accrue usage through the resize timestamp before changing the session's resource limits, so lifetime totals account for resource changes within a session. Restarting a stopped session accrues the previously stopped interval, clears `usageAccountedAt`, and starts a new active interval so the next stop records cumulative active usage without charging for time spent stopped. Running sessions and older stopped sessions without `usageAccountedAt` are still included dynamically by `/api/me`, so the profile can show lifetime and trailing-30-day usage without enforcing quotas. These counters intentionally do not use Cloud Monitoring utilization or billing-export data.
 
-Usage reads depend on collection group indexes in `firestore.indexes.json`. The profile API queries `workspaces/{workspaceId}/sessions` by `ownerUid` to include running and unaccounted sessions, and admin-wide reporting can query `users/{uid}/sessionUsage` by `ownerUid` or `endedAt` to aggregate across users and trailing windows.
+Usage reads depend on collection group indexes in `firestore.indexes.json`. The profile API queries `workspaces/{workspaceId}/sessions` by `ownerUid` to include running and unaccounted sessions, reads owner-matched `vmRuntimes_v2` generations for a live VM interval, and aggregates VM-native automation run durations separately from allocated runtime. Admin-wide reporting can query `users/{uid}/sessionUsage` by `ownerUid` or `endedAt` to aggregate across users and trailing windows. VM retained-storage intervals carry an explicit unknown marker when the disk-size cursor is unavailable.
 
 GitHub source reconstruction and internal automation still use protected runner
 services and short-lived installation tokens. The in-memory token provider renews
@@ -1337,6 +1362,33 @@ implemented in Cloud Functions and does not require a runner image rebuild.
 Creation, restart, resize, and recreation derive the bucket and prefix from the
 owner-checked workspace record and refresh the session metadata; stale session
 storage fields cannot select another workspace's `/automations` prefix.
+
+### VM-native automation runtime
+
+Compute Engine main runners keep the retained workspace as the one canonical
+writer. A `vm-native-v1` run does not create a sibling Cloud Run service or
+mount a second writer. `session-runner/lib/vmAutomationRuntime.service.js`
+creates `automation-runs/{runId}/input`, `state`, and `output` on the retained
+disk, copies the workspace into the input tree while filtering
+`.mapache-internal` and rejecting links that escape the workspace, and starts a
+run-private Pi child through `/usr/bin/bwrap`.
+
+Inside the child namespace, the complete retained-disk root is overlaid with an
+empty temporary filesystem before only this run's trees are rebound. The copied
+input is read-only at `/workspace-input`; the live workspace and sibling run
+directories are not reachable; and only the run's retained-disk output tree is
+writable at `/workspace`. Child home, Pi configuration, sessions, and control
+sockets use the run's private state tree. Terminal cleanup removes input and
+ephemeral state after the run reaches a durable outcome, while output remains at
+`/var/lib/mapache/workspace/automation-runs/{runId}/output` for the published
+automation artifact contract.
+
+The `gcp-runner` image must contain Debian's `bubblewrap` package. Rebuild and
+publish the pinned runner image, then recreate/restart VM runners before
+expecting this route on an existing machine. The native executor is unit-tested
+and wired through provisioning, cleanup, and reconciliation; a live stopped-VM
+run, full model/provider proof, and complete migration release matrix are still
+required before broad enablement.
 
 ## Local file uploads
 

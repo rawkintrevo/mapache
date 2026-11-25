@@ -76,7 +76,7 @@ class Snapshot {
   }
 }
 
-function setup(sessions = {}, workspaceOverrides = {}) {
+function setup(sessions = {}, workspaceOverrides = {}, beforeValidationReturns) {
   const db = new Db();
   const workspace = {
     ownerUid: "user-1",
@@ -105,6 +105,7 @@ function setup(sessions = {}, workspaceOverrides = {}) {
       },
       validateExistingWorkspaceSharedStorage: async () => {
         validateCalls++;
+        await beforeValidationReturns?.(db);
         return {
           ...workspace.sharedStorage,
           state: "ready",
@@ -124,6 +125,31 @@ test("requires an existing shared-storage descriptor and never starts bucket pre
       /workspace_shared_storage_required/,
   );
   assert.equal(db.data.get("workspaces/workspace-1").sharedStorageState, "legacy");
+});
+
+test("a VM fence blocks legacy descriptor reconciliation, including a stale provider response", async () => {
+  const fencePath = "vmMigrationFences_v2/workspace-1";
+  const workspacePath = "workspaces/workspace-1";
+  const sharedStorage = {bucketName: "mpw-123-existing", storageGeneration: "existing-generation"};
+  for (const providerFailed of [false, true]) {
+    const {db, service, getValidateCalls} = setup({}, {sharedStorage}, async currentDb => {
+      currentDb.data.set(fencePath, {});
+      if (providerFailed) throw Object.assign(new Error("workspace_bucket_iam_failed"), {publicMessage: "workspace_bucket_iam_failed"});
+    });
+    const original = db.data.get(workspacePath);
+    await assert.rejects(service.prepare("user-1", "workspace-1"),
+        {publicMessage: providerFailed ? "workspace_bucket_iam_failed" : "workspace_vm_migration_active"});
+    assert.deepEqual(db.data.get(workspacePath), original);
+    await assert.rejects(service.prepare("user-1", "workspace-1"), {publicMessage: "workspace_vm_migration_active"});
+    await assert.rejects(service.complete("user-1", "workspace-1", {
+      operationId: "stale", bucketName: sharedStorage.bucketName, storageGeneration: sharedStorage.storageGeneration,
+      readyMarkerObjectPath: "trees/existing-generation/ready",
+    }), {publicMessage: "workspace_vm_migration_active"});
+    await assert.rejects(service.fail("user-1", "workspace-1", {operationId: "stale"}),
+        {publicMessage: "workspace_vm_migration_active"});
+    assert.equal(getValidateCalls(), 1);
+    assert.deepEqual(db.data.get(workspacePath), original);
+  }
 });
 
 test("active services block migration and preserve the legacy pointer on failure", async () => {

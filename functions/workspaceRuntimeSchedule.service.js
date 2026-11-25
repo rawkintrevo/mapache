@@ -6,6 +6,7 @@ const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError, toClientDoc} = require("./backendUtils.helpers");
 const {isMarkedRuntimeSession} = require("./runtimeReservation.helpers");
 const {isAutomationRuntime} = require("./runtimePaths.helpers");
+const {assertVmMigrationAdmission, hasVmMigrationFence, FENCE_ERROR} = require("./vmMigrationFence.helpers");
 const {
   getNextRuntimeScheduleStart,
   getRuntimeScheduleState,
@@ -59,7 +60,7 @@ async function getWorkspaceRuntimePolicy(uid, workspaceId, dependencies = {}) {
   };
 }
 
-async function updateWorkspaceRuntimePolicy(uid, workspaceId, payload, dependencies = {}) {
+async function updateWorkspaceRuntimePolicy(uid, workspaceId, payload, dependencies = {}, targetSessionRef) {
   const firestore = dependencies.db || defaultDb;
   const firestoreAdmin = dependencies.admin || defaultAdmin;
   const workspaceRef = workspaceRefFor(workspaceId, dependencies);
@@ -69,6 +70,7 @@ async function updateWorkspaceRuntimePolicy(uid, workspaceId, payload, dependenc
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
     const workspace = workspaceSnap.data() || {};
     assertWorkspaceOwnerAndAvailable(workspace, uid);
+    await assertVmMigrationAdmission(transaction, firestore, workspaceId);
     const current = resolveStoredPolicy(workspace);
     policy = normalizeRuntimePolicy(payload, current);
     const revision = Number.isSafeInteger(workspace.runtimePolicyRevision) ? workspace.runtimePolicyRevision + 1 : 1;
@@ -87,13 +89,21 @@ async function updateWorkspaceRuntimePolicy(uid, workspaceId, payload, dependenc
     const canonicalSessionId = String(workspace.canonicalSessionId || "").trim();
     const sessionRef = canonicalSessionId ? dependencies.sessionCollection(workspaceId).doc(canonicalSessionId) : null;
     const sessionSnap = sessionRef ? await transaction.get(sessionRef) : null;
-    transaction.update(workspaceRef, update);
-    if (sessionSnap?.exists && !isAutomationRuntime(sessionSnap.data() || {})) {
-      transaction.update(sessionRef, {
-        longRunning: policy.mode === "keep-running",
-        updatedAt: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
-      });
+    const additionalSession = targetSessionRef && targetSessionRef.id !== canonicalSessionId ? targetSessionRef : null;
+    if (targetSessionRef) {
+      const target = additionalSession ? await transaction.get(additionalSession) : sessionSnap;
+      if (!target?.exists) throw httpError(404, "session_not_found");
+      assertLongRunningSession(target.data(), uid);
     }
+    transaction.update(workspaceRef, update);
+    const sessionUpdate = {
+      longRunning: policy.mode === "keep-running",
+      updatedAt: firestoreAdmin.firestore.FieldValue.serverTimestamp(),
+    };
+    if (sessionSnap?.exists && !isAutomationRuntime(sessionSnap.data() || {})) {
+      transaction.update(sessionRef, sessionUpdate);
+    }
+    if (additionalSession) transaction.update(additionalSession, sessionUpdate);
   });
 
   if (policy.mode === "scheduled") {
@@ -104,17 +114,17 @@ async function updateWorkspaceRuntimePolicy(uid, workspaceId, payload, dependenc
 }
 
 async function setSessionLongRunning(uid, workspaceId, sessionId, payload, dependencies = {}) {
-  const {sessionRef, sessionSnap, workspace} = await dependencies.requireSession(uid, workspaceId, sessionId);
-  const session = sessionSnap.data() || {};
+  const {sessionRef, sessionSnap} = await dependencies.requireSession(uid, workspaceId, sessionId);
+  assertLongRunningSession(sessionSnap.data(), uid);
+  if (!payload || typeof payload.enabled !== "boolean") throw httpError(400, "invalid_long_running");
+  await updateWorkspaceRuntimePolicy(uid, workspaceId, {mode: payload.enabled ? "keep-running" : "idle"}, dependencies, sessionRef);
+  return toClientDoc(await sessionRef.get());
+}
+
+function assertLongRunningSession(session = {}, uid) {
+  if (session.ownerUid && session.ownerUid !== uid) throw httpError(403, "session_forbidden");
   if (isAutomationRuntime(session)) throw httpError(409, "automation_session_controlled");
   if (!isMarkedRuntimeSession(session)) throw httpError(409, "long_running_unavailable");
-  if (!payload || typeof payload.enabled !== "boolean") throw httpError(400, "invalid_long_running");
-  await updateWorkspaceRuntimePolicy(uid, workspaceId, {mode: payload.enabled ? "keep-running" : "idle"}, dependencies);
-  await sessionRef.update({
-    longRunning: payload.enabled,
-    updatedAt: (dependencies.admin || defaultAdmin).firestore.FieldValue.serverTimestamp(),
-  });
-  return toClientDoc(await sessionRef.get());
 }
 
 async function runRuntimeScheduleTick(event = {}, dependencies = {}) {
@@ -210,6 +220,7 @@ async function reconcileWorkspaceRuntimeSchedule(workspaceId, nowValue, dependen
   const now = nowValue ? asDate(nowValue) : dependencies.now ? asDate(dependencies.now()) : new Date();
   const claim = await claimWorkspace(workspaceId, now, dependencies);
   if (!claim) return {workspaceId, skipped: true, reason: "not_scheduled_or_unavailable"};
+  if (claim.fenced) return {workspaceId, skipped: true, reason: FENCE_ERROR};
   if (claim.busy) return {workspaceId, skipped: true, reason: "reconciliation_in_progress"};
   const workspaceRef = claim.workspaceRef;
   let result = {workspaceId, action: "none", failed: false};
@@ -219,7 +230,8 @@ async function reconcileWorkspaceRuntimeSchedule(workspaceId, nowValue, dependen
     const currentSnap = await workspaceRef.get();
     if (!currentSnap.exists) return {workspaceId, skipped: true, reason: "workspace_missing"};
     const workspace = currentSnap.data() || {};
-    if (workspace.runtimePolicyRevision !== claim.revision || workspace.runtimePolicy?.mode !== "scheduled") {
+    const revision = Number.isSafeInteger(workspace.runtimePolicyRevision) ? workspace.runtimePolicyRevision : 0;
+    if (revision !== claim.revision || workspace.runtimePolicy?.mode !== "scheduled") {
       result = {workspaceId, skipped: true, stale: true, reason: "policy_changed"};
     } else {
       const schedule = workspace.runtimePolicy.schedule;
@@ -275,6 +287,10 @@ async function reconcileWorkspaceRuntimeSchedule(workspaceId, nowValue, dependen
       return result;
     }
   } catch (caught) {
+    if (caught?.publicMessage === FENCE_ERROR) {
+      await completeClaim(claim, {}, dependencies);
+      return {workspaceId, skipped: true, reason: FENCE_ERROR};
+    }
     error = caught;
     result = {
       workspaceId,
@@ -309,24 +325,20 @@ async function claimWorkspace(workspaceId, now, dependencies = {}) {
   const firestoreAdmin = dependencies.admin || defaultAdmin;
   const workspaceRef = workspaceRefFor(workspaceId, dependencies);
   const token = crypto.randomUUID();
-  let claim = null;
-  await firestore.runTransaction(async (transaction) => {
+  return firestore.runTransaction(async (transaction) => {
     const snap = await transaction.get(workspaceRef);
     if (!snap.exists) return;
     const workspace = snap.data() || {};
     if (workspace.runtimePolicy?.mode !== "scheduled" || !workspace.runtimePolicy.schedule || isWorkspaceUnavailable(workspace)) return;
+    if (await hasVmMigrationFence(transaction, firestore, workspaceId)) return {fenced: true};
     const lease = workspace.runtimeScheduleLease || {};
-    if (Number(lease.expiresAt || 0) > now.getTime()) {
-      claim = {busy: true, workspaceId, workspaceRef};
-      return;
-    }
+    if (Number(lease.expiresAt || 0) > now.getTime()) return {busy: true};
     const revision = Number.isSafeInteger(workspace.runtimePolicyRevision) ? workspace.runtimePolicyRevision : 0;
     transaction.update(workspaceRef, {
       runtimeScheduleLease: {token, expiresAt: now.getTime() + LEASE_MS},
     });
-    claim = {token, revision, workspaceId, workspaceRef, ownerUid: workspace.ownerUid, firestoreAdmin};
+    return {token, revision, workspaceId, workspaceRef};
   });
-  return claim;
 }
 
 async function completeClaim(claim, updates, dependencies = {}) {
@@ -339,9 +351,10 @@ async function completeClaim(claim, updates, dependencies = {}) {
     if (workspace.runtimeScheduleLease?.token !== claim.token) return;
     const latestRevision = Number.isSafeInteger(workspace.runtimePolicyRevision) ? workspace.runtimePolicyRevision : 0;
     const stale = latestRevision !== claim.revision || workspace.runtimePolicy?.mode !== "scheduled";
+    const fenced = await hasVmMigrationFence(transaction, firestore, claim.workspaceId);
     transaction.update(claim.workspaceRef, {
       runtimeScheduleLease: firestoreAdmin.firestore.FieldValue.delete(),
-      ...(!stale ? updates : {}),
+      ...(!stale && !fenced ? updates : {}),
     });
   });
 }

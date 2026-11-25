@@ -7,12 +7,18 @@ function fixture() {
   let time = 1000;
   let calls = 0;
   let run = async () => ({status: "running"});
+  let fenced = false;
   const snapshot = () => ({id: "s", exists: !!session, ref, data: () => ({...session})});
   const ref = {get: async () => snapshot()};
   // Serialize transactions, including concurrent delivery tests.
   let lock = Promise.resolve();
-  const db = {runTransaction: (fn) => {
-    const result = lock.then(() => fn({get: async () => snapshot(), update: (_ref, update) => { session = {...session, ...update}; }}));
+  const fenceRef = {};
+  const db = {collection: name => {
+    assert.equal(name, "vmMigrationFences_v2");
+    return {doc: () => fenceRef};
+  }, runTransaction: (fn) => {
+    const result = lock.then(() => fn({get: async requested => requested === fenceRef ? {exists: fenced} : snapshot(),
+      update: (_ref, update) => { session = {...session, ...update}; }}));
     lock = result.catch(() => {});
     return result;
   }};
@@ -23,13 +29,19 @@ function fixture() {
     resizeSession: async (...args) => {calls++; return run(...args);},
     now: () => time,
   });
-  return {service, get: () => session, set: (patch) => {session = {...session, ...patch};}, calls: () => calls,
+  return {service, fence: () => {fenced = true;}, get: () => session, set: (patch) => {session = {...session, ...patch};}, calls: () => calls,
     advance: () => {time += CLAIM_TIMEOUT_MS;}, run: (fn) => {run = fn;},
     event: () => {const data = {...session}; return {params: {workspaceId: "w"}, data: {after: {...snapshot(), data: () => data}}};}};
 }
 
 (async () => {
   const resources = {cpu: "2", memory: "8Gi"};
+  const migrating = fixture();
+  await migrating.service.enqueueResize("u", "w", "s", resources);
+  migrating.fence();
+  await assert.rejects(migrating.service.enqueueResize("u", "w", "s", resources), {publicMessage: "workspace_vm_migration_active"});
+  await assert.rejects(migrating.service.resizeQueuedSession(migrating.event()), {publicMessage: "workspace_vm_migration_active"});
+  assert.equal(migrating.calls(), 0);
   const f = fixture();
   await assert.rejects(f.service.enqueueResize("other", "w", "s", resources), /forbidden/);
   await assert.rejects(f.service.enqueueResize("u", "w", "s", {}), /invalid_session_resources/);

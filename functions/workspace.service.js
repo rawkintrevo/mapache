@@ -26,6 +26,7 @@ const {
 } = require("./mcpConfig.helpers");
 const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
 const {isMainRuntime} = require("./runtimePaths.helpers");
+const {assertVmMigrationAdmission, hasVmMigrationFence} = require("./vmMigrationFence.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
 const {
   COMPUTE_ENGINE_BACKEND,
@@ -51,7 +52,7 @@ function createWorkspaceService(dependencies = {}) {
     listWorkspaces: (uid) => listWorkspaces(uid, dependencies),
     prepareWorkspaceStorageMigration: (uid, workspaceId) => dependencies.workspaceStorageMigrationService.prepare(uid, workspaceId),
     renameWorkspace: (uid, workspaceId, payload) => renameWorkspace(uid, workspaceId, payload, dependencies),
-    saveWorkspaceMcpConfig,
+    saveWorkspaceMcpConfig: (uid, workspaceId, payload) => saveWorkspaceMcpConfig(uid, workspaceId, payload, dependencies),
   };
 }
 
@@ -61,60 +62,54 @@ async function listWorkspaces(uid, dependencies = {}) {
   const snap = await workspaceDb.collection("workspaces")
       .where("ownerUid", "==", uid)
       .get();
-  const workspaces = await Promise.all(snap.docs.filter((doc) => !isWorkspaceDeleted(doc.data() || {})).map((doc) =>
+  const workspaces = await Promise.all(snap.docs.filter((doc) => {
+    const data = doc.data() || {};
+    return !isWorkspaceDeleted(data) && !isWorkspaceMigrated(data);
+  }).map((doc) =>
     ensureCanonicalSession(uid, doc, {db: workspaceDb, admin: workspaceAdmin}),
   ));
-  return workspaces.map(serializeWorkspaceForClient).sort(sortByUpdatedAtDesc);
+  return workspaces.filter(Boolean).map(serializeWorkspaceForClient).sort(sortByUpdatedAtDesc);
 }
 
 async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
   const workspaceDb = dependencies.db || db;
   const workspaceAdmin = dependencies.admin || admin;
   const workspaceRef = workspaceDb.collection("workspaces").doc(workspaceId);
-  const workspaceSnap = await workspaceRef.get();
-  if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
-  let workspace = workspaceSnap.data() || {};
-  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
-  assertWorkspaceMutable(workspace);
-
-  const name = cleanName(payload && payload.name);
-  if (!name) throw httpError(400, "invalid_workspace_name");
-  const update = {
-    name,
-    updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
-  };
-  if (payload && Object.prototype.hasOwnProperty.call(payload, "resources")) {
-    try {
-      update.resources = normalizeSessionResources(payload.resources || {});
-    } catch (error) {
-      if (error && error.code === "invalid_session_resources") {
-        throw httpError(400, error.code, error);
+  await workspaceDb.runTransaction(async transaction => {
+    const workspace = await readMutableWorkspace(transaction, workspaceRef, uid);
+    await assertVmMigrationAdmission(transaction, workspaceDb, workspaceId);
+    const name = cleanName(payload && payload.name);
+    if (!name) throw httpError(400, "invalid_workspace_name");
+    const updatedAt = workspaceAdmin.firestore.FieldValue.serverTimestamp();
+    const update = {name, updatedAt};
+    if (payload && Object.prototype.hasOwnProperty.call(payload, "resources")) {
+      try {
+        update.resources = normalizeSessionResources(payload.resources || {});
+      } catch (error) {
+        if (error?.code === "invalid_session_resources") throw httpError(400, error.code, error);
+        throw error;
       }
-      throw error;
+      const canonical = await readCanonicalSession(transaction, workspaceRef, workspace);
+      if ((workspace.canonicalSessionId || null) !== (canonical?.id ?? null)) {
+        update.canonicalSessionId = canonical?.id ?? null;
+      }
+      if (canonical && !["queued", "running"].includes(canonical.resizeOperationState) &&
+          !["running", "ready"].includes(String(canonical.status || "").toLowerCase())) {
+        transaction.update(canonical.ref, {resources: update.resources, updatedAt});
+      }
     }
-    workspace = await ensureCanonicalSession(uid, workspaceSnap, {
-      db: workspaceDb,
-      admin: workspaceAdmin,
-    });
-    await updateCanonicalSessionResources(workspaceRef, workspace, update.resources, workspaceAdmin);
-  }
-  await workspaceRef.update(update);
+    transaction.update(workspaceRef, update);
+  });
   return serializeWorkspaceForClient(toClientDoc(await workspaceRef.get()));
 }
 
-async function updateCanonicalSessionResources(workspaceRef, workspace, resources, workspaceAdmin) {
-  const canonicalSessionId = workspace.canonicalSessionId;
-  if (!canonicalSessionId || typeof workspaceRef.collection !== "function") return;
-  const sessionRef = workspaceRef.collection("sessions").doc(canonicalSessionId);
-  const sessionSnap = await sessionRef.get();
-  if (!sessionSnap.exists) return;
-  if (["queued", "running"].includes(sessionSnap.data()?.resizeOperationState)) return;
-  const status = String(sessionSnap.data()?.status || "").toLowerCase();
-  if (["running", "ready"].includes(status)) return;
-  await sessionRef.update({
-    resources,
-    updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
-  });
+async function readMutableWorkspace(transaction, reference, uid) {
+  const snapshot = await transaction.get(reference);
+  if (!snapshot.exists) throw httpError(404, "workspace_not_found");
+  const workspace = snapshot.data() || {};
+  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+  assertWorkspaceMutable(workspace);
+  return workspace;
 }
 
 async function getWorkspaceMcpConfig(uid, workspaceId) {
@@ -122,20 +117,20 @@ async function getWorkspaceMcpConfig(uid, workspaceId) {
   return normalizeStoredMcpConfig(workspace.mcpConfig || {});
 }
 
-async function saveWorkspaceMcpConfig(uid, workspaceId, payload) {
-  const workspaceRef = db.collection("workspaces").doc(workspaceId);
-  const workspaceSnap = await workspaceRef.get();
-  if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
-  const workspace = workspaceSnap.data() || {};
-  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
-  assertWorkspaceMutable(workspace);
-
-  const mcpConfig = normalizeMcpConfigPayload(payload);
-  await workspaceRef.update({
-    mcpConfig,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+async function saveWorkspaceMcpConfig(uid, workspaceId, payload, dependencies = {}) {
+  const workspaceDb = dependencies.db || db;
+  const workspaceAdmin = dependencies.admin || admin;
+  const workspaceRef = workspaceDb.collection("workspaces").doc(workspaceId);
+  return workspaceDb.runTransaction(async transaction => {
+    await readMutableWorkspace(transaction, workspaceRef, uid);
+    await assertVmMigrationAdmission(transaction, workspaceDb, workspaceId);
+    const mcpConfig = normalizeMcpConfigPayload(payload);
+    transaction.update(workspaceRef, {
+      mcpConfig,
+      updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
+    });
+    return mcpConfig;
   });
-  return mcpConfig;
 }
 
 async function deleteWorkspace(uid, workspaceId, dependencies = {}) {
@@ -472,17 +467,41 @@ function isWorkspaceDeleted(workspace = {}) {
 
 function assertWorkspaceMutable(workspace = {}) {
   if (isWorkspaceDeleted(workspace)) throw httpError(409, "workspace_deleted");
+  if (isWorkspaceMigrated(workspace)) throw httpError(409, "workspace_migrated_to_vm");
+}
+
+function isWorkspaceMigrated(workspace = {}) {
+  return workspace.migrationAuthority === "compute-engine";
 }
 
 async function ensureCanonicalSession(uid, workspaceDoc, dependencies = {}) {
-  const workspace = {id: workspaceDoc.id, ...workspaceDoc.data()};
-  if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
-
   const workspaceDb = dependencies.db || db;
   const workspaceAdmin = dependencies.admin || admin;
-  const sessionsRef = workspaceDb.collection("workspaces").doc(workspace.id).collection("sessions");
-  const sessionsSnap = await sessionsRef.get();
-  const sessions = sessionsSnap.docs.map((doc) => ({id: doc.id, ref: doc.ref, ...doc.data()}));
+  const workspaceRef = workspaceDoc.ref;
+  return workspaceDb.runTransaction(async transaction => {
+    const snapshot = await transaction.get(workspaceRef);
+    if (!snapshot.exists) return null;
+    const workspace = {id: snapshot.id, ...snapshot.data()};
+    if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+    if (isWorkspaceDeleted(workspace)) return null;
+    if (isWorkspaceMigrated(workspace)) return null;
+    if (await hasVmMigrationFence(transaction, workspaceDb, snapshot.id)) return workspace;
+    const canonical = await readCanonicalSession(transaction, workspaceRef, workspace);
+    const canonicalSessionId = canonical?.id ?? null;
+    if ((workspace.canonicalSessionId || null) !== canonicalSessionId) {
+      transaction.update(workspaceRef, {
+        canonicalSessionId,
+        updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
+      });
+      workspace.canonicalSessionId = canonicalSessionId;
+    }
+    return workspace;
+  });
+}
+
+async function readCanonicalSession(transaction, workspaceRef, workspace) {
+  const sessionsSnap = await transaction.get(workspaceRef.collection("sessions"));
+  const sessions = sessionsSnap.docs.map(doc => ({...doc.data(), id: doc.id, ref: doc.ref}));
   const mainSessions = sessions.filter(isMainRuntime);
   let canonical = workspace.canonicalSessionId ?
     mainSessions.find((session) => session.id === workspace.canonicalSessionId) : null;
@@ -495,21 +514,7 @@ async function ensureCanonicalSession(uid, workspaceDoc, dependencies = {}) {
     })[0];
   }
 
-  if (canonical && workspace.canonicalSessionId !== canonical.id) {
-    await workspaceDoc.ref.update({
-      canonicalSessionId: canonical.id,
-      updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
-    });
-    workspace.canonicalSessionId = canonical.id;
-  } else if (!canonical && workspace.canonicalSessionId) {
-    await workspaceDoc.ref.update({
-      canonicalSessionId: null,
-      updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
-    });
-    workspace.canonicalSessionId = null;
-  }
-
-  return workspace;
+  return canonical;
 }
 
 function workspaceSessionCollection(workspaceId) {
@@ -531,4 +536,5 @@ module.exports = {
   renameWorkspace,
   saveWorkspaceMcpConfig,
   isWorkspaceDeleted,
+  isWorkspaceMigrated,
 };

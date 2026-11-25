@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const {db: defaultDb, admin: defaultAdmin} = require("./backendContext");
 const {httpError, serialize} = require("./backendUtils.helpers");
+const {assertVmMigrationAdmission} = require("./vmMigrationFence.helpers");
 const {normalizeWorkspaceRunRequest} = require("./workspaceRunContract.helpers");
 const {errorDescriptor} = require("./workspaceRequestErrors.helpers");
 
@@ -55,6 +56,7 @@ async function createTicket(actor, workspaceId, body = {}, options = {}, depende
       ticket = {id: ticketId, ...existing.data()};
       return;
     }
+    await assertVmMigrationAdmission(transaction, dependencies.db, targetWorkspaceId);
     const now = dependencies.admin.firestore.FieldValue.serverTimestamp();
     ticket = {id: ticketId, ownerUid: uid, workspaceId: targetWorkspaceId, request, status: "submitting", createdAt: now, updatedAt: now};
     transaction.set(ticketRef, ticket);

@@ -52,6 +52,7 @@ function createAutomationReconciliationService(dependencies = {}) {
     processDueRetries: dependencies.processDueRetries,
     requestRunnerJson: dependencies.requestRunnerJson,
     sessionCollection: dependencies.sessionCollection,
+    vmRuntime: dependencies.vmRuntime,
     reconcileWorkspaceRequest: dependencies.reconcileWorkspaceRequest,
   };
   if (typeof shared.cleanupAutomationRun !== "function") {
@@ -91,7 +92,7 @@ async function reconcile(dependencies = {}) {
   const liveAutomationLabels = new Set();
 
   for (const run of eligibleRuns) {
-    if (!isSharedWorkspaceRequest(run)) {
+    if (!isSharedWorkspaceRequest(run) && run.executionRoute !== "vm-native-v1") {
       const label = cloudRunServiceLabels({
         automationRunId: run.runId,
         ownerUid: run.ownerUid,
@@ -127,6 +128,9 @@ async function reconcile(dependencies = {}) {
 
 async function reconcileRun(run, dependencies = {}) {
   const status = normalize(run.status);
+  if (run.executionRoute === "vm-native-v1") {
+    return reconcileVmNativeRun(run, dependencies);
+  }
   if (isSharedWorkspaceRequest(run) && typeof dependencies.reconcileWorkspaceRequest === "function") {
     const repairCandidate = isRepairableInterruptedRequest(run);
     if (isTerminalAutomationStatus(status) && !repairCandidate && normalize(run.cleanupState) !== "complete") {
@@ -195,6 +199,97 @@ async function reconcileRun(run, dependencies = {}) {
   await requestInterruptedCleanup(run.runId, health.errorCode, dependencies);
   await dependencies.cleanupAutomationRun(run.runId);
   return "interrupted";
+}
+
+async function reconcileVmNativeRun(run, dependencies = {}) {
+  const status = normalize(run.status);
+  if (status === "provisioning") {
+    if (typeof dependencies.provisionAutomationRun !== "function") return "retained";
+    await dependencies.provisionAutomationRun(run.runId);
+    return "provisioning";
+  }
+  if (status === "stopping" || (isTerminalAutomationStatus(status) && normalize(run.cleanupState) !== "complete")) {
+    await dependencies.cleanupAutomationRun(run.runId);
+    return "cleanup";
+  }
+  if (status !== "running") return "retained";
+  if (run.dispatchState !== "accepted") {
+    if (run.executionStartedAt) {
+      await markVmDispatchAccepted(run.runId, dependencies);
+    } else {
+      const dispatched = await retryVmNativeDispatch(run, dependencies);
+      if (!dispatched) return "retained";
+    }
+  }
+  if (typeof dependencies.vmRuntime?.readSession !== "function") {
+    await requestInterruptedCleanup(run.runId, "vm_automation_runtime_unavailable", dependencies);
+    await dependencies.cleanupAutomationRun(run.runId);
+    return "interrupted";
+  }
+  const session = await dependencies.vmRuntime.readSession(run.ownerUid, run.workspaceId);
+  if (!session?.serviceUrl || !session.shutdownToken) {
+    await requestInterruptedCleanup(run.runId, "vm_automation_runner_unreachable", dependencies);
+    await dependencies.cleanupAutomationRun(run.runId);
+    return "interrupted";
+  }
+  const health = await probeRunner(session, dependencies);
+  if (!health.ok) {
+    await requestInterruptedCleanup(run.runId, health.errorCode, dependencies);
+    await dependencies.cleanupAutomationRun(run.runId);
+    return "interrupted";
+  }
+  try {
+    const result = await dependencies.requestRunnerJson(session, `/automation/runs/${encodeURIComponent(run.runId)}`, {
+      unavailableError: "vm_automation_runner_unreachable",
+    });
+    if (!result || result.ok === false) throw reconciliationError(result?.error || "vm_automation_status_unavailable");
+    await markHealthy(run.runId, dependencies);
+    return "healthy";
+  } catch (error) {
+    await requestInterruptedCleanup(run.runId, stableReconciliationErrorCode(error, "vm_automation_status_unavailable"), dependencies);
+    await dependencies.cleanupAutomationRun(run.runId);
+    return "interrupted";
+  }
+}
+
+async function retryVmNativeDispatch(run, dependencies = {}) {
+  if (typeof dependencies.vmRuntime?.ensureReady !== "function" ||
+      typeof dependencies.requestRunnerJson !== "function") {
+    await markReconciliationError(run.runId, "vm_automation_dispatch_unavailable", dependencies);
+    return false;
+  }
+  try {
+    const session = await dependencies.vmRuntime.ensureReady(run.ownerUid, run.workspaceId, {
+      requestId: `automation-${run.runId}`,
+    });
+    if (!session?.id || !session.serviceUrl || !session.shutdownToken) {
+      throw reconciliationError("vm_automation_runner_unreachable");
+    }
+    const response = await dependencies.requestRunnerJson(session, "/automation/runs", {
+      body: {runId: run.runId},
+      failureError: "vm_automation_dispatch_failed",
+      method: "POST",
+      unavailableError: "vm_automation_runner_unreachable",
+    });
+    if (!response || response.ok === false) {
+      throw reconciliationError(response?.error || "vm_automation_dispatch_failed");
+    }
+    await markVmDispatchAccepted(run.runId, dependencies);
+    return true;
+  } catch (error) {
+    await markReconciliationError(run.runId, stableReconciliationErrorCode(error, "vm_automation_dispatch_failed"), dependencies);
+    return false;
+  }
+}
+
+async function markVmDispatchAccepted(runId, dependencies = {}) {
+  const timestamp = serverTimestamp(dependencies.admin);
+  await dependencies.db.collection("automationRuns").doc(runId).update({
+    dispatchState: "accepted",
+    dispatchAcceptedAt: timestamp,
+    reconciliationErrorCode: null,
+    updatedAt: timestamp,
+  });
 }
 
 function heartbeatIsStale(run, session, dependencies = {}) {
@@ -459,6 +554,12 @@ function stableReconciliationErrorCode(error, fallback = "automation_reconciliat
   const code = normalize(error?.code || error?.publicMessage || fallback);
   if (/^[a-z0-9_:-]{1,120}$/.test(code)) return code;
   return fallback;
+}
+
+function reconciliationError(code) {
+  const error = new Error(code);
+  error.code = code;
+  return error;
 }
 
 module.exports = {

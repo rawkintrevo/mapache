@@ -2,6 +2,7 @@ import {describe, expect, test} from "vitest";
 import {
   calculateEstimatedHourlyPrice,
   calculateEstimatedUsageCost,
+  formatComputeEngineMachineType,
   formatEstimatedHourlyPrice,
   inferSessionSize,
   isValidSessionResourcePair,
@@ -47,5 +48,12 @@ describe("session resource catalog helpers", () => {
     expect(calculateEstimatedHourlyPrice("8", "32Gi")).toBe(0.7488);
     expect(formatEstimatedHourlyPrice("1", "2Gi")).toBe("$0.0792/hr estimate");
     expect(calculateEstimatedUsageCost({cpuSeconds: 3600, memoryGbSeconds: 7200})).toBe(0.0792);
+  });
+
+  test("formats the supported Compute Engine custom machine types", () => {
+    expect(formatComputeEngineMachineType("1", "2Gi")).toBe("e2-custom-medium-2048");
+    expect(formatComputeEngineMachineType("2", "4Gi")).toBe("e2-custom-2-4096");
+    expect(formatComputeEngineMachineType("6", "24Gi")).toBe("e2-custom-6-24576");
+    expect(formatComputeEngineMachineType("3", "4Gi")).toBe("Unsupported VM shape");
   });
 });

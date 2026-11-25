@@ -58,6 +58,7 @@ function createChromeDesktopService(config = {}, deps = {}) {
         await ensurePrivateRuntimeDirectory(config.chromeProfileDir, {fsImpl});
       }
       await fsImpl.promises.mkdir(config.chromeProfileDir, {recursive: true, mode: 0o700});
+      await prepareSandboxProfile(fsImpl, config);
       await cleanupStaleLocks(fsImpl, config);
 
       startProcess("xvfb", "Xvfb", [
@@ -120,7 +121,7 @@ function createChromeDesktopService(config = {}, deps = {}) {
   }
 
   function startChromium() {
-    const args = [
+    const chromiumArgs = [
       `--user-data-dir=${config.chromeProfileDir}`,
       `--display=${config.chromeDisplay}`,
       `--remote-debugging-address=${config.chromeCdpHost}`,
@@ -134,9 +135,18 @@ function createChromeDesktopService(config = {}, deps = {}) {
       ...browserProxyArgs(config.browserEgressEnabled),
       "about:blank",
     ];
-    startProcess("chromium", "chromium", args, {
+    const command = config.chromeSandboxUser ? "runuser" : "chromium";
+    const args = config.chromeSandboxUser ? [
+      "--preserve-environment", "--user", config.chromeSandboxUser, "--", "chromium", ...chromiumArgs,
+    ] : chromiumArgs;
+    startProcess("chromium", command, args, {
       DISPLAY: config.chromeDisplay,
       CHROME_USER_DATA_DIR: config.chromeProfileDir,
+      ...(config.chromeSandboxUser ? {
+        HOME: config.chromeSandboxHome || `/home/${config.chromeSandboxUser}`,
+        LOGNAME: config.chromeSandboxUser,
+        USER: config.chromeSandboxUser,
+      } : {}),
     });
   }
 
@@ -292,6 +302,33 @@ async function cleanupStaleLocks(fsImpl, config) {
   if (displayNumber) {
     await removeIfPresent(fsImpl, `/tmp/.X${displayNumber[1]}-lock`);
   }
+}
+
+async function prepareSandboxProfile(fsImpl, config) {
+  if (config.retainedDiskMode !== true || config.chromeSandboxEnabled !== true || !config.chromeSandboxUser) return;
+  if (!/^[a-z_][a-z0-9_-]{0,31}$/i.test(config.chromeSandboxUser) ||
+      !Number.isSafeInteger(config.chromeSandboxUid) || config.chromeSandboxUid < 1 ||
+      !Number.isSafeInteger(config.chromeSandboxGid) || config.chromeSandboxGid < 1) {
+    throw new Error("chrome_sandbox_identity_invalid");
+  }
+  const promises = fsImpl.promises;
+  const root = config.retainedDiskPaths?.root;
+  if (root) await promises.chmod(root, 0o711);
+  const browserRoot = path.dirname(config.chromeProfileDir);
+  await adoptSandboxTree(promises, browserRoot, config.chromeSandboxUid, config.chromeSandboxGid);
+  await promises.chmod(browserRoot, 0o700);
+}
+
+async function adoptSandboxTree(promises, target, uid, gid) {
+  const stat = await promises.lstat(target);
+  if (stat.isSymbolicLink()) {
+    if (typeof promises.lchown === "function") await promises.lchown(target, uid, gid);
+    return;
+  }
+  await promises.chown(target, uid, gid);
+  if (!stat.isDirectory()) return;
+  const entries = await promises.readdir(target, {withFileTypes: true});
+  for (const entry of entries) await adoptSandboxTree(promises, path.join(target, entry.name), uid, gid);
 }
 
 async function isDisplayReady(fsImpl, config, execFileImpl = execFile) {

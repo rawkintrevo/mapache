@@ -1,0 +1,935 @@
+# VM crossover #605 handoff
+
+Handoff date: 2026-11-25 (America/Chicago). The validation-boot continuation, VM automation-agent authority boundary, deployed lifecycle-worker recovery proof and synthetic abrupt-loss/open-write recovery proof are complete; the broader migration remains open.
+
+## Start here
+
+- Parent [#605](https://github.com/rawkintrevo/mapache/issues/605); one draft [PR #629](https://github.com/rawkintrevo/mapache/pull/629).
+- Continue branch `605-vm-crossover-isolated-functions`. Do not create another PR, return implementation to main, force-push, merge, or retire legacy operation as part of resuming this work.
+- The last verified clone-copy increment is `773098d`. The PR head preserves the clone-boot implementation, and the validation boot operator path is now implemented and has passed a disposable live proof on the continuation branch.
+- Commit `1818c9d` closes the VM automation-agent admission gap: VM bootstrap injects the Functions-owned token/API URLs, and token/API admission joins the nested VM session with its separate credential record while fencing generation, boot ID, lease, and explicit API admission.
+- A live probe against `vm-proof-605` minted a token from the deployed `automationAgentToken` revision and received `200` from `/api/agent/workspace-requests/targets`; the temporary API admission was restored to `false`.
+- The same live VM controller path reached `/workspace/models` with the signed browser token plus shutdown-token header and returned `1,698` catalog entries. The fixture has no selected provider credentials, so entries are unavailable and no model turn was attempted.
+- This boundary is now reproducible with `node scripts/vm-automation-agent-proof.mjs`; the live report is sanitized at `artifacts/qa/vm-automation-agent/proof.json` and confirms temporary admission restoration.
+- A live authenticated shell proof now passes with `node scripts/vm-owner-api-proof.mjs shell`: the owner selects `vm-proof-605` at generation 24, reaches the VM Agent iframe and CPU/RAM meters through the signed gateway, and preserves owner, stale-generation, and cross-owner denial checks. The expected synthetic `NOT_PAIRED` device response was the only allowed application error; temporary API admission and fixture auth state were restored. Evidence remains local under `artifacts/qa/vm-live-shell/` and `artifacts/qa/vm-owner-api/shell.json`.
+- The same generation also passed `node scripts/vm-gateway-fixture.mjs browser 24` and `node scripts/vm-gateway-fixture.mjs probe 24`: the gateway browser rendered with 43 responses, authenticated `/runner/health` returned 200 with `agentReady=true`, 17 bundles loaded, the TLS shell WebSocket exercised retained workspace/home paths, and unauthorized/stale-generation requests were rejected. Evidence remains local under `artifacts/qa/vm-gateway-fixture/`.
+- A synthetic abrupt-loss proof then wrote and fsynced an open stream on generation 24, deleted only its exact VM, and recovered through lifecycle operation `170e3980857f84ad81d8a83df6d8a242274328b0e90e6be2002dddde20a2e2d9` to generation 25. The replacement preserved 1,286 ordered lines / 13,036 bytes through the interrupted writer with no completion marker; the proof directory was removed afterward. Firestore records the operation `succeeded`/`complete`, `lifecycleReadyGeneration=25`, and the retained 65 GiB disk remains READY and attached.
+- The current continuation also closes a VM automation admission race: a main-exclusive run now reads the canonical VM runtime in the same Firestore transaction, so a stopped legacy session cannot mask an active or transitioning Compute Engine machine. Focused admission coverage proves it remains queued until the VM is stopped.
+- The scheduler now applies the migration fence to its direct run/pointer transaction as well. A fenced tick leaves the due occurrence and `nextRunAt` untouched, then resumes it after fence release; focused coverage proves no run or queue wake is emitted while fenced.
+- Automation definition and workspace concurrency-setting CRUD now checks the migration fence in the same transaction as each create, update, delete, or settings write, so schedule control cannot change after migration admission.
+- New owner/agent workspace-request ticket creation checks the migration fence before publishing `workspaceTickets/{id}`; existing ticket reads and idempotent lookups remain available while queued work stays reconcilable.
+- Legacy session rename and session-bound Pi auth/environment selection now check the migration fence in the same transaction as their session writes, preventing metadata or credential selection from publishing after admission while leaving owner-global credential storage independent.
+- Direct user session deletion now uses the same fenced lifecycle transition; internal deletion after an already-admitted workspace tombstone remains available for cleanup, while manual stop remains the drain path.
+- Rough continuation estimate: **99.9%** by engineering judgment after the lifecycle recovery, Compute resource mapping, VM settings editor, idle-stop policy, live E2 resource proof, isolated backup-recovery proof, deployed worker crash/retry proof, real selected-source retained-disk import/capacity-resume increments, and the fixed real imported-disk headed-browser boot proof. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
+- [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
+
+## Authorization and invariants
+
+The user authorized #605 and all 18 children, work on this same branch/PR, and isolated deployments. Prefer new function names ending in `_v2` and preserve existing Cloud Run operation.
+
+All cloud commands must explicitly target `pi-agents-cloud`. Functions use `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`; runner VMs/services use `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. The alternative `mapache-session-runner` identity does not exist. Health is exclusively `/runner/health`. Do not change old writer/provider authority, delete source data, or claim migration based on local import receipts. Do not launch both old and new workspace writers.
+
+The VM paths skip ordinary HOME/workspace/profile checkpoint restore/upload; migration readers are separate. Preserve owner-selected credentials via brokers and avoid copying secrets into public records, manifests or logs. No full real authenticated model turn is yet established.
+
+## Live state rechecked at handoff
+
+- Synthetic workspace `vm-proof-605`, generation 25, registry state `active`, desired/applied configuration version 4, no active operation. `apiEnabled=false`; `lifecycleEnabled=true`. The live owner proof applied a validated 64-to-65 GiB disk expansion, replaced the VM successfully after worker crashes at every exercised boundary, then recovered a hard VM loss with an open retained-disk write through generation 25 and restored temporary API admission.
+- Current session: `vm-170e3980857f84ad81d8a83d-g25`. Its current boot ID and lease were accepted by the live lifecycle health gate; no temporary QA marker or crash-injection environment remains.
+- VM `mapache-vm-bd7bedc0edf6162573ff9ffb` is RUNNING in `us-central1-a`, machine type `e2-custom-2-4096`.
+- Attached retained disk `mapache-ws-efaf283eb879545a0e7ba4d3`: 65 GiB `pd-balanced`, READY and attached to the generation-25 VM. The running VM, retained disk and private networking continue to incur costs. Nothing was deleted for this handoff.
+- Dedicated gateway: `mapache-vm-gateway-v2`. The IAM-private read-only Functions `vmMigrationPreflight_v2` and `vmMigrationStatus_v2` are ACTIVE in `pi-agents-cloud`. Firebase created `vmMigrationValidationControl_v2` and updated `vmMigrationStatus_v2` before the pause. The validation broker accepts runner requests over public HTTPS using a validation-session bearer token. A GET returned 405 and a POST for an unknown validation session returned 404. Anonymous status returned 403. Legacy writer guards and Firestore/Storage rules remain staged, and the opt-in frontend remains off production Hosting.
+- Pinned runner image used for the final real imported-disk proof: `us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:b3bf1eac5fe03a6db9a6e79046c9b71fa0f394ecbf9247e1264202a4708f5741`. Cloud Build `9eda62a7-dcb9-4f72-8065-78138a8d81d0` published it successfully in **13m 59.580s** wall clock.
+- Registry/control collections: `vmRuntimes_v2`, `vmRuntimeCredentials_v2`, `vmLifecycleOperations_v2`, `vmGatewayRoutes_v2`. Never dump credential documents, Compute bootstrap metadata or full environment values.
+- The real `vm-test` is a different, unmigrated legacy workspace. Its recorded Cloud Run service is absent; do not confuse its local recovered files with the running synthetic VM.
+
+## Concrete recovery gaps
+
+1. The legacy workspace displayed as `vm-test` is Firestore workspace `1yIPKCPpk5O8s6RfAd0n` (owner `lzbp4xahITXWWgtrWpmGgAvzzmU2`): neither canonical nor historical HOME prefix has current, noncurrent or soft-deleted objects. Bucket versioning was disabled; soft-delete retention was seven days. The old Cloud Run service no longer exists. This leaves full HOME recovery unproven, not proof that HOME was empty or that every byte is lost. A checkpoint-publishing early return is a possible explanation, but the deleted service's deployed code was not verified; do not assert it as root cause.
+2. Sole shared-tree record: its referenced bucket returns 404. The tested handoff inventory now records `shared_bucket_not_found`, rather than merely `not-read`. Do not recreate an empty bucket or reinterpret this as a successful empty migration.
+3. The full inventory had 15 missing manifest references, one schema/identity mismatch and one invalid reference. Other recoverable formats/live state still need reconciliation. The registry scan is not an atomic cutover snapshot.
+
+Do not repeatedly retry these known absent sources without new evidence. Continue deterministic format/recovery work and record concrete blockers; seek a recovery decision only when a real cutover depends on accepting incomplete data. Keep original sources and available recovered artifacts intact.
+
+## Verified recovery and evidence boundaries
+
+- Registry inventory: 85 legacy records with stable IDs/owners (27 inactive, 57 without sessions, one excluded SSH), plus one isolated VM fixture. No record cutover-ready.
+- The authoritative `vm-test` inventory (`1yIPKCPpk5O8s6RfAd0n`) now passes bounded read-only payload verification for 36 agent files/objects and eight workspace files/objects, totaling 1,265,892 bytes; the current 48,086,059-byte browser-seed archive also passes descriptor and archive verification within explicit budgets. This removes the prior `checkpoint_payload_verification_required` blocker without changing Storage or Firestore. The source remains `readyForCutover=false` because HOME, live/unpublished/private-Git reconciliation, cost, and downtime evidence remain open.
+- Browser archive: 48,086,059 compressed bytes, 324 files, 119 archived directories plus one implied parent; locally restored and verified.
+- Disposable-copy Chrome proof: Chrome 148.0.7778.178 rendered a synthetic page in a network namespace with no external interfaces and exited zero. SQLite passed for 20 databases before/22 after. Source fingerprint unchanged; owned Chrome/profile cleaned. This is not headed VM/noVNC, sandbox, encrypted credential or external login evidence.
+- Owner tools: three files (65,988 bytes) and five directory markers assembled under `home/.local`. The four-source local candidate contains 371 files and 146 directories. Shared-owner writer reconciliation remains open.
+- Real selected-source import: on 2026-11-25, the actual `vm-test` checkpoint, browser archive and owner-tools stages were imported to disposable disk `mapache-ws-10a0013fe93fa0b6da0fbec1` on maintenance VM `mapache-import-complete-605`. The importer published 495 entries across `agent`, `browser`, `home` and `workspace`; digest `6ba37711080a5cfd141bb58d4fa2308bcf24d1c6a70a1627a9d3b45cb7ca7a7e` was retained. A block-device read-only remount reverified every entry, and exact VM/disk cleanup was confirmed. Evidence is private at `artifacts/qa/vm-merged-import/complete-live.log`. This is selected-source import evidence only: no unified coordinator capture or authority switch was present, and the source stages remain private.
+- Real imported-state bootstrap: the 495-entry tree passed `prepareRetainedDisk` twice in an isolated local copy seeded with the authoritative marker. The selected tree remained byte-identical; `credentials`, `uploads`, and `caches` were created as the expected runtime directories. This proves bootstrap/idempotency on the real selected state, not application acceptance or production authority.
+- Real interrupted import: a second disposable disk was killed after publishing only `agent`; before resume it had `browser`, `home`, and `workspace` staged and no receipt. Resuming the same operation completed and read-only verification rechecked all 495 entries. A fresh disposable disk was then filled to real root-level ENOSPC before staging; the importer returned `disk_import_out_of_space` with no completion receipt, and resuming after removal of only the exact filler completed the same 495-entry plan. The final block-device read-only verification passed, and the exact VM and disk were deleted with post-cleanup checks. This closes interruption/resume and capacity-failure evidence for the selected real source set; application behavior remains open.
+- Real imported-state runner proof: the selected 495-entry tree was installed on a labeled retained disk and started through the Compute provider with the new pinned runner image. The fixed Compute path keeps the server root-owned, launches Chromium through `runuser` as `node`, installs Debian's separate `chromium-sandbox` helper, and grants only Docker `SYS_ADMIN` for Chromium's PID/network namespaces while retaining `--privileged=false`; it no longer sets `CHROME_DISABLE_SANDBOX`. Cloud Build `93117820-1555-4533-8d30-8e6124772f43` produced image `sha256:664e48a77fe59b0f6b54e6bf1929ae9ee0dc092aaf6030a7fd2cf45829ce3eb3` in 2,288.36 seconds (38m08.360s), passing the full upstream suite, Docker smoke, helper setuid assertion, and an isolated live Chromium/CDP diagnostic with the narrow capability. After deploying the updated Functions revision (28 deployed, 0 errors), fresh VM `mapache-vm-37b9856bfa6f45f53e721bca` booted the image with `CapAdd=[SYS_ADMIN]`; `workspace_source`, `checkpoint_restore`, `authority_acquire`, Chrome seed/profile restore, `chrome_start`, and `agent_start` all passed. Authenticated `/runner/health` and `/browser/status` both returned 200 with the Agent runtime, CDP and VNC ready, `taskbar=false`, zero browser restarts and no process errors. The exact VM and registry cleanup passed; imported disk `mapache-ws-10a0013fe93fa0b6da0fbec1` remains detached/READY. The remaining #610/#615 work is broader browser interaction/profile/login and complete-source/cutover acceptance.
+- vm-test source reconciliation: a read-only Firestore/Storage audit confirms `source.type=blank`, blank sync policy, no repository/installation/ref, and one zero-byte uploads directory marker with no upload payload. Current and legacy HOME prefixes list zero objects, but historical HOME emptiness remains unproven. Agent/workspace capture IDs differ, and no single coordinator-bound capture covers the selected sources. Private evidence is `artifacts/qa/vm-migration-inventory/vm-test-source-reconciliation.json`.
+- Transfer, checkpoint assembly and archive extraction passed real child-process SIGKILL/retry tests. A separate synthetic proof interrupted publication on a real GCE Persistent Disk, resumed, then booted the ordinary COS runner with the imported disk. Authenticated `/runner/health` reported the agent ready after startup and the imported executable and history matched. The disposable proof resources were cleaned up. The remaining recovery gaps are unified capture binding, full HOME/private-Git/live-only data and application acceptance on the real imported state; abrupt VM open-write recovery is now covered separately by the generation-24-to-25 retained-disk proof above.
+
+Private ignored evidence remains on this workstation under `artifacts/qa/`: `vm-migration-inventory/`, `vm-checkpoint-import/`, `vm-browser-archive-import/`, `vm-browser-profile-proof/`, `vm-owner-tools-import/`, `vm-shared-tree-inventory/{initial,handoff}.json`, `vm-gateway-replacement/`, `vm-lifecycle/`, `vm-owner-api/`, `vm-environment/`, `vm-configuration/` and `vm-client-routing/`.
+
+These directories do **not** travel with Git. They can contain private restored files, filenames, IDs and settings. Do not upload them to the PR or commit them. Use aggregate summaries in docs/issues; arrange secure evidence access or rerun proofs if a new workspace lacks them. Some report writers are create-only; choose a new output path instead of overwriting prior evidence. Frontend screenshots were inspected but connector upload was unavailable; PR records their local paths.
+
+## Code map and checks
+
+- Backend: `functions/vm*.js`, `computeEngine.service.js`, `runtimeProvider*.js`.
+- Runner: `session-runner/lib/retainedDiskStorage.js`, `vmRuntimeControl.js`, retained-path config/startup; broker-selected auth/environment.
+- Frontend: `src/services/vmWorkspaceApi.js`, `VmWorkspaceEditModal.jsx`, ModalStack routing; `VITE_VM_WORKSPACES_ENABLED=true` opt-in.
+- Migration: `scripts/vm-migration-inventory.mjs`; `scripts/lib/vm-{migration-inventory,checkpoint-payloads,storage-metadata,archive-verifier,import-stage,checkpoint-import,import-tree,archive-import,archive-tree,owner-tools-import,shared-tree-authority}.mjs`.
+- Source sharing provenance checks only original bucket/marker/control identity. HNS folder inventory, mutable current contents and writer reconciliation remain unverified; never use the legacy ensure/validate service in read-only inventory because it can repair IAM.
+
+## Cutover state
+
+- The live read-only preflight saw the recorded `vm-test` Cloud Run service absent and no unfinished recorded operations. A regional scan found zero matches in 31 current service templates in `us-central1`. Historical revisions, other regions and remaining writer paths still require reconciliation.
+- Two bounded Storage listings agreed for 568 objects. An initial combined check detected a Firestore observation change and refused the result. A separate Storage-only check was stable. The missing persistent HOME blocker remains.
+- The Firestore emulator proved one reservation winner, stale-observation and shared-prefix refusal, and atomic release of the workspace and Storage fences. The production endpoints expose read-only preflight and status. No production reservation or writer drain is authorized by those endpoints.
+- The coordinator's `confirmQuiesced` transition checks ownership of both fences, records Compute and Storage observation digests, and rechecks Firestore, the operation and both fences before committing. Emulator tests cover stale observations, concurrent retries and a pre-switch abort. The transition has no production mutation entry point.
+- The fenced capture binds exact Storage generations to checkpoint, HOME and browser staging. A private read-only maintenance workflow verifies the mounted import receipt and exact provider disk ID before the coordinator accepts the detached destination disk. A live disposable disk copy verified the provider's source disk ID and was removed.
+- The checkpoint adds an internal `startValidationBoot` path using a separate Firestore registry, dedicated broker, short lease deadline and clone-only Compute attachment. `scripts/vm-migration-validation-boot.mjs` drives reservation, clone preparation, boot, temporary validation-gateway health attestation and ID-checked cleanup. Compute instance creation and authenticated runner readiness remain separate milestones. Focused tests cover the isolated gateway route and clone deletion. On 2026-11-24, an isolated workspace fixture booted with a newly published pinned runner image; authenticated `/runner/health` returned 200 with `agentReady=true`, and the command reported `instanceDeleted=true` and `diskDeleted=true`. Post-run checks found no validation VM, clone disk, validation route or credential document; the source disk remained detached and READY. The disposable maintenance VM and dedicated temporary gateway service used to prepare and reach this fixture were also deleted.
+- The durable backup-recovery adapter is configured for isolated recovery: the dedicated `backup-recovery---mapache-vm-gateway-v2-pxyyg7zwda-uc.a.run.app` gateway tag is present, `vmBackupRecoveryControl_v2` is ACTIVE at `vmbackuprecoverycontrol-v2-00005-kuw`, and `vmBackupReconcile_v2` is ACTIVE at `vmbackupreconcile-v2-00023-yan` with immutable runner image `us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:083f1c7f4b7d167a7ef4324abb680c1221a20cc8211537df44f5cd21496f6e50`. The verified backup record `990c70516f28d4bf761b6f36831f866859761c8762b2c5d4092d5546ee81d6b0` for `vm-proof-605` has source generation 21 and both file/runtime digests. The isolated fresh-disk/fresh-VM recovery proof passed with matching digests, RPO 10,869,867 ms, RTO 174,870 ms, and exact cleanup; no production workspace recovery operation was invoked. All recovery functions run as `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`, and recovery VMs use `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`.
+
+## Checks and continuation
+
+At handoff, the Functions package suite, all seven existing coordinator Firestore emulator cases, lint and docs checks passed. The current branch also passes `npm run check:fast` (103 focused Functions tests and 59 runner tests) plus the migration/import/recovery-focused gate (84 passed, 0 failed, 10 emulator-dependent cases skipped). Prior evidence includes 55 focused import and maintenance cases, 281 frontend tests, normal and VM-enabled builds, and synthetic Chrome DevTools routing and editor QA. The scoped live VM shell proof now passes through owner authentication, VM API polling, gateway access and the Agent iframe; full live authenticated frontend acceptance remains open.
+
+```bash
+node --test functions/vm*.test.js functions/{sessionLifecycle,cloudRun,sessionCreation,workspaceUploads,sessionResize,workspaceSessionReservation,automationRuns,automationAdmission,automationProvisioning,workspaceRequestRuntime,workspaceAutomationDeletion}.service.test.js
+firebase emulators:exec --only firestore --project demo-mapache-cutover 'node --test functions/vmMigrationCoordinator.service.test.js'
+npm run docs:check
+```
+
+1. For #616, the disposable clone-boot path has passed readiness and cleanup evidence, including empty validation credentials, retry/recovery of the clone identity, lease fencing and ID-checked teardown. A lease deadline does not delete cloud resources. The guarded legacy Functions and Firestore/Storage rules were deployed on 2026-11-24; the remaining live work is deployed-writer drainage, a real cutover canary, and rollback rehearsal after VM writes.
+2. Verify deployed legacy writer fencing and drainage, including old upload URIs, outstanding operations and integration bindings. Session creation now keeps canonical-session and manual-schedule metadata updates inside its fenced reservation transaction, closing a post-reservation workspace-writer race. Bind verified source, import and clone evidence to the atomic authority switch, then use the two-phase rollback action to stop the exact destination VM and restore source authority only with a current reverse-import receipt.
+3. For #614 and #615, complete shared-tree, private-Git and live/unpublished source reconciliation. Establish an explicit recovery decision for unavailable sources before attempting a real cutover. The actual selected-source disk import now passes on a disposable disk; remaining import work is a unified coordinator capture, full HOME/private-Git/live-only data, capacity/ENOSPC and application/runtime acceptance on the imported disk.
+4. Complete stopped-machine schedules and requests, central settings and integrations, headed browser and sandbox, direct resumable uploads, and VM backup and recovery. Pass the #618 release matrix before #619 canaries and cohorts. #620 remains gated on reconciliation and rollback retention.
+
+## Ticket-by-ticket reconciliation
+
+### #606: Partial — architecture contract recorded
+
+Evidence: The durable path/ownership/lifetime table and separate-backup lifecycle contract are in docs/vm-workspaces.md; the VM path skips ordinary HOME/workspace/profile checkpoint restoration and upload.
+
+Remaining: Finish concrete owner-wide sharing/automation decisions, measured costs/quotas, recovery targets, disk-growth operations and the detailed module-level simplification audit. Cloud Billing is enabled for `pi-agents-cloud`, but the read-only audit found no BigQuery billing-export dataset and the Cloud Billing Budgets API is disabled; no billing-backed worksheet or budget-alert proof is available. Normative design text is not implementation evidence.
+
+Fully evidenced original acceptance criteria: 1, 3.
+
+### #607: Partial — clean replacement and abrupt-loss proof passed
+
+Evidence: The actual retained Linux disk preserved dirty/untracked Git, SQLite, a native executable, modes, symlinks, rename and locking through repeated VM replacements. A separate hard-loss proof deleted the exact synthetic VM while a process had an open fsynced writer, recovered through the persisted lifecycle operation, and verified ordered data on the replacement VM. Initial disk creation/marker fencing and functional /runner/health checks passed.
+
+Remaining: Complete representative install/history/browser acceptance, measured I/O/memory/cost and the complete go/no-go report. The synthetic fixture remains running.
+
+Fully evidenced original acceptance criteria: 2, 3.
+
+### #608: Partial — isolated infrastructure deployed
+
+Evidence: Private VPC/subnet, outbound NAT, IAP access, scoped provisioning, retained-disk labels and metadata fencing support the isolated VM gateway/runner. APIs use mapache-api; runners use mapache-runner.
+
+Remaining: Finish the complete least-privilege negative matrix, reproducible full environment cleanup, quotas/concurrency limits, budget alerts and hard cost controls. The project billing audit found the Budgets API disabled, so budget-alert evidence remains unavailable without an explicit billing-admin configuration change. Do not equate container metadata denial with every assigned-identity authorization test.
+
+Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
+
+### #609: Partial — provider separation and isolated registry implemented
+
+Evidence: Versioned provider/disk descriptors and focused VM services coexist with the legacy Cloud Run path. vmRuntimes_v2 and separate _v2 Functions isolate canary admission; frontend VM discovery is opt-in.
+
+Remaining: Prove cross-backend canonical writer admission during actual migration, stale/invalid descriptor behavior across all entry points, complete legacy regression and end-to-end creation/provider integration. No existing workspace authority has switched.
+
+Fully evidenced original acceptance criteria: 4.
+
+### #610: Partial — retained-disk bootstrap and real headed-browser boot proved
+
+Evidence: Pinned-image startup verifies disk identity and marker, permits formatting only for positively identified initial creation, mounts durable paths and starts the ordinary agent. Existing data survives repeat start/replacement; the real 495-entry imported tree reached authenticated runner health with agent/CDP/VNC ready on the retained-disk minimal desktop. No normal VM checkpoint restore/upload is used.
+
+Remaining: Complete wrong/read-only disk and startup diagnostic matrix, full HOME/package/history/browser replacement acceptance, login/cookie persistence, noVNC interaction/reconnect and production-facing creation integration. The live boot proof does not by itself establish the full browser matrix.
+
+Fully evidenced original acceptance criteria: 1.
+
+### #611: Partial — asynchronous lifecycle exercised live
+
+Evidence: Persisted reservation/quiesce/delete/provision/route/health phases, stable request IDs, generation fencing, worker claims and a scheduler operate on the fixture. Pause confirms compute deletion/disk detachment; start reuses that disk.
+
+Remaining: Finish resource-change coordination beyond data-disk growth. Lifecycle reconciliation now walks a bounded ten-page document-ID cursor and selects eligible work past claimed or delayed records. Failed phases retain writer admission and use bounded exponential retry backoff capped at one claim window; quota and attachment-conflict responses now normalize to stable retry codes; the health phase now has a 30-minute deadline and an IAM-private same-operation retry for explicit stuck startup failures. A test-only child-process SIGKILL matrix now enters through the Firestore worker handler, covers quiesce, pause, resize, start, route, and health, and preserves claims while converging with one destructive pause/resize/start effect; desired disk growth runs after detach and before replacement start. A live deployed worker proof on operation `32b56596e4121e4f41ba7d64d99feb07eb20e28e69f53d887f90c76295ef36d0` crashed and scheduler-reclaimed quiesce, pause, resize, start, route and health, then converged to generation 24 with a 65 GiB disk. The first resize attempt exposed a missing `compute.disks.resize` grant; that permission was added to the least-privilege `mapacheVmProvisionerV2` role, and a retry after the later start crash proved resize idempotency. The temporary QA environment was removed and the clean worker/reconciler revisions deployed. Remaining lifecycle work is broader capacity/quota and non-disk resource coordination.
+
+Fully evidenced original acceptance criteria: 3.
+
+### #612: Partial — live HTTP/WebSocket gateway proof passed
+
+Evidence: Owner/generation/boot/lease checks, fresh agent/shell access and stale-token rejection passed on actual private VMs. Route revocation closed an existing socket in 5.37 seconds; replacement/reconnection was measured. Canonical health is /runner/health.
+
+Remaining: Complete upload/download and supported preview flows, full cross-owner/guessed-path matrix, reconnect UX, capacity/timeouts and cost measurements. The real VM Chrome/VNC/CDP startup and authenticated readiness proof now pass, but this does not establish every browser surface.
+
+Fully evidenced original acceptance criteria: 4.
+
+### #613: Partial — VM request wake-up and native automation dispatch implemented, end-to-end gate remains open
+
+Evidence: `functions/vmWorkspaceRuntime.service.js` recognizes an owner-matched, API-admitted Compute Engine workspace, submits one idempotent durable `start` lifecycle request for a stopped machine, waits for the current generation's boot/lease/gateway/readiness authority, and creates a short-lived agent access token without putting credentials in the ticket or run contract. The existing shared workspace-request broker reuses that canonical VM runner, re-reads VM identity before acknowledging dispatch, and retains the existing no-blind-replay and cancellation rules. Scheduled automation now records `executionRoute: vm-native-v1`, wakes or reuses the canonical VM, and dispatches only its run ID to authenticated runner control routes. `session-runner/lib/vmAutomationRuntime.service.js` creates a run-private bubblewrap child with a filtered read-only input snapshot, a hidden live workspace mount, private state, and durable retained-disk output. Cleanup retains output and releases the slot only after durable cancellation/terminal state; reconciliation probes canonical `/runner/health` and the run status. Focused tests cover stopped-target wake-up, API-admission gating, ready-target reuse, owner isolation, request dispatch without a Cloud Run sibling, native assignment/identity checks, snapshot/link isolation, restart-safe cancellation, provisioning, cleanup, and reconciliation. Commit `1818c9d` also injects the token/API URLs into VM bootstrap and makes the deployed token/API boundary understand the nested VM session plus separate credential document. A live generation-19 probe minted the VM token, called the agent target-discovery route successfully, and reached the runner model-catalog route with `1,698` entries; temporary admission was restored afterward. No model turn was attempted because the synthetic fixture has no provider credentials.
+
+Remaining: Deploy and exercise this path against an eligible live VM with a real external request, model discovery, and a stopped-target scheduled/Run-now run. Verify real bubblewrap startup, provider/model selection, child crash and cancellation races, concurrent-run admission, output visibility and retention, safe idle/scheduled shutdown, cross-machine tool sharing, and correct usage accounting. No full #613 acceptance criterion is met; the native implementation is staged but not live-proven.
+
+Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
+
+### #614: Partial — registry and several source formats verified
+
+Evidence: Read-only inventory accounted for 85 legacy workspace records plus one isolated VM fixture. It reports IDs/owners/generations and source blockers; selected vm-test checkpoints, browser archive and owner tools were verified. The deployed preflight also compared 568 object generations and reported the missing HOME. The formerly unfinished shared-tree provenance check is now tested and reports shared_bucket_not_found for the sole shared-tree record.
+
+Remaining: Complete hierarchical folder/current shared-object/private-Git/unpublished/live-only reconciliation, consistent final captures, actual disk sizing, downtime and costs. vm-test HOME recovery is unproven; the shared bucket returns 404. Neither is an empty-source success.
+
+Fully evidenced original acceptance criteria: 1, 3.
+
+### #615: Partial — real selected-source disk import and imported runner boot passed
+
+Evidence: Verified checkpoints, browser files and owner tools were merged locally. The actual `vm-test` source stages then imported to a fresh disposable GCE Persistent Disk: 495 entries across four durable roots passed the importer, and a block-device read-only remount reverified every entry against the merge plan before exact VM/disk cleanup. The separate disposable GCE Persistent Disk import proof resumed after interruption and booted the ordinary runner with imported executable and history data intact. A real root-level capacity exhaustion run returned `disk_import_out_of_space` before completion, left no receipt, and resumed successfully after the exact filler was removed; the final read-only verification and cleanup passed. The fixed runner image then booted the same imported tree through Compute Engine and passed authenticated `/runner/health` plus `/browser/status`, including ready agent/CDP/VNC state.
+
+Remaining: Resolve shared-tree, private-Git and missing HOME sources and produce one coordinator-bound capture covering selected sources. Verify application and dependency behavior, huge-file limits, browser interaction/profile persistence and full runtime acceptance on the real imported disk under the complete source set.
+
+Fully evidenced original acceptance criteria: none.
+
+### #616: Partial — read-only preflight and disposable clone boot tested
+
+Evidence: Deployed read-only operator preflight and status and the separate validation broker. Workspace and Storage reservation, quiesce, pinned capture and import-receipt verification passed emulator checks. Private read-only import evidence, separate validation clone creation and a disposable validation VM boot were verified on Compute resources. The boot returned authenticated `/runner/health` 200 with the agent runtime ready, then deleted only the validation VM and clone disk and removed its route and credentials.
+
+Remaining: Drain existing writers and make the verified stages available to an eligible production operation. Google Workspace OAuth start/callback, binding mutations, and shared-connection refresh/revoke/update writes; GitHub owner-level OAuth callback and disconnect writes plus runner token refresh; and browser egress gateway assignment writes now consult the migration fence, including connection deletion cleanup and shared-route rewrites; deployed-writer drainage and integration reconciliation remain open. The new `vm-migration-destination-runtime.mjs` action stages a deterministic hidden `vmRuntimes_v2` destination on the exact imported disk, starts the pinned runner, and verifies authenticated `/runner/health`; its cleanup action stops only that staged VM and removes its records while retaining the disk and both fences. The review command then binds the backend-owned destination registry, exact attached disk, pinned runner and health evidence. The follow-on `vm-migration-switch-authority.mjs` action performs the bounded Firestore compare-and-swap: it hides the destination until commit, marks the retained legacy source as VM-owned, keeps both fences, and records destination authority. The separate `vm-migration-reconcile-source.mjs` action rechecks legacy Firestore/Storage and provider absence and records bounded evidence without deleting the source. The `vm-migration-rollback.mjs` action revokes destination admission, stops the exact VM, requires a generation-bound `mapache-reverse-import-v1` receipt, and atomically restores legacy authority while retaining the destination disk. No production workspace has invoked these mutations; live rollback evidence remains open.
+
+Fully evidenced original acceptance criteria: none.
+
+### #617: Partial — policy, durable scheduler, restore evidence boundary, and provider receipts implemented; lifecycle remains open
+
+Evidence: A daily crash-consistent snapshot/14-day retention target and separate application-consistent migration capture are documented. Normal pause retains the data disk; that is not a backup.
+
+The current checkpoint adds `functions/vmBackupPolicy.helpers.js` and threads it
+through `functions/computeEngineBackup.service.js`. Focused tests cover the
+daily/14-day policy, quiesce-required application consistency, generation-bound
+snapshot and restore receipts, retention holds/quarantine, deletion guards that
+distinguish tombstones from pause, undersized restore refusal, and explicit
+disk-headroom unknowns. `functions/vmBackupScheduler.service.js` now records
+workspace/generation-bound backup operations in `vmBackupOperations_v2`, uses
+exclusive claims and retry timestamps around provider calls, verifies ready
+snapshots into `vmBackups_v2/{workspaceId}/items`, creates guarded retention
+delete operations, and refuses reservations behind a migration fence.
+`vmBackupReconcile_v2` is a 15-minute opt-in scheduler; no current VM record
+has been opted in. `functions/vmBackupRecovery.service.js` now reserves only
+verified owned backups, creates fresh-target restore receipts, requires an
+injected runtime/file verifier, measures the declared 24-hour RPO and one-hour
+RTO targets, and records sanitized startup-timing reports with bounded retry on
+transient readiness errors. Existing legacy storage backup code is not VM
+evidence.
+
+Compute snapshot delete and restore receipts now poll named zonal, regional, or
+global provider operations before completion; a pending retention delete keeps
+its provider operation in the durable retry record and never issues a blind
+second delete. The operation-polling boundary is covered by focused tests.
+
+VM lifecycle receipts now record bounded per-phase durations and sanitized
+failure phase/timestamp fields. The owner-scoped operation status projection
+exposes those diagnostics so operators can identify a stuck or failed phase
+before retrying; it does not start a replacement or change authority.
+
+The same opt-in scheduler now writes a read-only
+`vmBackupInventoryReports_v2/{workspaceId}` report. It records instance/disk
+presence and attachment, backup age, retention holds/quarantine decisions,
+stranded-resource observations, and known storage estimates while preserving
+unknown compute/gateway/network cost components. It never authorizes cleanup
+or deletes an orphan; provider pagination and ownership filtering remain
+bounded at the backup-service boundary.
+
+The owner-scoped `GET /workspaces/{workspaceId}/backup` projection now exposes
+that inventory together with bounded recovery phase/error and RPO/RTO evidence.
+It omits provider addresses, disk IDs, content digests, credentials, and raw
+provider errors; it never authorizes cleanup. This is the diagnostics contract,
+not proof of a fresh-VM restore or a numeric cost meter. Its backup inventory
+also distinguishes provider-verified snapshots with both source file/runtime
+digests from verified-but-undigested snapshots without exposing the digests.
+
+The explicit expansion-only `scripts/vm-resize-disk.mjs` command now covers
+the detached Compute resize step after owner, generation, and migration-fence
+checks. It does not resize the guest filesystem or claim fresh-VM recovery;
+those and live cost/release evidence remain open.
+
+The authenticated `/runner/health` response now includes a bounded `disk`
+projection from `statfs` when available, with capacity, used/free/available
+bytes, headroom percentage, storage mode, and measurement time. An unknown
+probe remains explicitly unknown; provider capacity is not treated as guest
+headroom.
+
+The guest-side expansion step is now represented by the guarded operator
+command `scripts/vm-grow-filesystem.mjs`. It requires the stopped, owner-matched
+runtime and exact detached disk, an explicitly identified private maintenance
+VM, and `--confirm-grow`; it attaches the disk read/write, runs `e2fsck -pf`
+and `resize2fs` through the installed remote helper, verifies the retained-disk
+marker and read-only `statfs` projection, then detaches the disk. It does not
+start a workspace VM, change authority, or release writer admission. A normal
+start and authenticated health check are still required after the operator
+action; fresh-VM recovery and release evidence remain open.
+
+The runner now exposes authenticated `/runner/recovery-digest` only on the
+canonical runner surface. It returns a bounded SHA-256 digest and counts for
+the retained tree without returning paths or contents. The operator-only
+`scripts/vm-backup-recovery-proof.mjs` restores a verified backup to a
+deterministic fresh disk, starts a pinned private VM, checks `/runner/health`
+and the digest over IAP SSH, records restore/start/readiness and RPO/RTO
+timings, and cleans up only the exact proof VM and detached disk. It refuses to
+report success when the source backup lacks an expected file digest, and it
+does not write authority, create a route, or delete the source backup/disk.
+The durable production recovery adapter is now wired through
+`functions/vmBackupRecoveryRuntime.service.js`. It uses isolated recovery
+runtime/session/credential records, a dedicated `recoveryOnly` gateway route,
+the isolated `vmBackupRecoveryControl_v2` lease endpoint, a pinned runner
+image, authenticated `/runner/health` plus `/runner/recovery-digest`, and exact
+VM/disk cleanup before terminal failure. The scheduler reconciles pending
+recovery operations and the owner-scoped VM API can reserve one with
+`POST /workspaces/{workspaceId}/backup`. The adapter fails before mutation when
+`VM_BACKUP_RECOVERY_GATEWAY_HOST` is absent or is not a dedicated
+`backup-recovery---...run.app` host, or when `SESSION_RUNNER_IMAGE` is not
+immutable. No production recovery operation was invoked by this change.
+
+The opt-in backup scheduler now captures source `/runner/health` and
+`/runner/recovery-digest` evidence for an active admitted VM before requesting
+a snapshot, storing file/runtime digests and bounded probe timings. Stopped
+sources and probe failures retain an explicit missing-digest state rather than
+inventing comparison evidence.
+
+The read-only operator helper `scripts/vm-cost-report.mjs` now turns a complete
+usage/rate worksheet into a numeric monthly report. It requires explicit
+monthly-equivalent usage plus retained-disk, snapshots, compute, gateway, NAT, egress, logging/operations,
+migration-overlap, and failed/orphaned-resource values and preserves the usage
+and rate source timestamps. Missing values fail closed; explicit zeroes remain
+numeric. It makes no cloud calls and does not change the inventory's deliberate
+unknown-cost behavior. No current billing export was supplied or treated as a
+measured production cost result.
+
+The durable recovery controller now also requires its runtime adapter to expose
+exact-operation cleanup. It now also requires both source file and source
+runtime-state digests before accepting target evidence; an undigested backup
+fails closed and is cleaned up rather than being reported as file-verified
+recovery. A file/runtime verification mismatch enters a bounded
+retryable `cleanup` phase until both the recovery VM and target disk are
+confirmed absent; it cannot become a terminal failed report while resources are
+unknown.
+
+Continuation update (2026-11-25 UTC): the dedicated gateway host is configured
+and the recovery reconciler is active at revision
+`vmbackupreconcile-v2-00023-yan` with immutable runner image
+`us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:083f1c7f4b7d167a7ef4324abb680c1221a20cc8211537df44f5cd21496f6e50`.
+The diagnostic image build succeeded in 13m19.508270s wall-clock (Docker build
+step 8m41.881640s), with the pi-web-ui cache hit and startup smoke test
+passing. The preceding diagnostic build identified the stale snapshot lock;
+the deployed recovery-only process now permits replacement of that lock while
+normal runners retain the upstream single-kernel guard.
+Recovery-only runner containers use Docker `--restart=no`, while ordinary VMs
+retain `unless-stopped`, so a failed recovery runner remains inspectable instead
+of creating a restart loop. A proof with the previously deployed `f4cc...` image
+reached a running VM but never acquired the lease because that stale image did
+not expose the current runner health route; its VM, disk and isolated records
+were cleaned up. Fresh-image proofs reached an active lease and restored the
+disk, but the latest runner exited with status 1 during `agent_start` after
+2,680 ms with `pi_web_ui_process_exited`; a live IAP watcher captured the
+cause as a stale source-VM kernel lock in the restored disk. The lock-fix image
+then completed the isolated fresh-disk/fresh-VM proof: authenticated health and
+recovery digest matched the source file digest
+`sha256:2fe7e047ab49adf80163858d074a916f57cbd39645e616d840b0bcdc125a944` and
+runtime-state digest
+`sha256:1534949e6b0e7b2cb2e1503400bc862e5709c60a46cb40bfa65a423c55f341d2`.
+Provider restore took 20,916 ms; boot/lease 15,297 ms; health 8,342 ms; and
+digest 646 ms, with total proof time 176,023 ms. RPO was 10,869,867 ms and RTO
+174,870 ms, both within the 24-hour/one-hour fixture targets. The VM, restored
+disk, route, lease, runtime and credentials were then cleaned exactly; post-run
+checks found no recovery VM/disk, route/runtime record, or credential record.
+
+Remaining: Keep the successful result scoped to the synthetic fixture; extend
+the proof to representative complete source data, crash/open-write and
+capacity/zone-loss cases, surface actual measured costs, and provide a current
+billing-backed worksheet. The read-only inventory now enumerates owned
+Compute instances/disks before any future cleanup. The fail-closed
+disk-full/zone-loss procedure is now in
+`docs/runbooks/vm-disk-recovery.md`, but its resize and fresh-VM recovery
+guest filesystem and fresh-VM recovery actions remain open. No
+production snapshot, restore, retention deletion, or synthetic-fixture
+mutation was performed.
+
+Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
+
+### #618: Partial — isolated proofs, release gate unmet
+
+Evidence: Repeated VM replacements retained the same filesystem without normal full-tree restore. Gateway/owner/API proofs, local migration fault tests and an isolated restored-browser-profile test passed. The synthetic retained-disk import and ordinary VM runner startup passed. Clone copy and the dedicated validation clone's runner boot/readiness/cleanup passed, including authenticated `/runner/health` and post-run resource absence checks. The current Functions suite and coordinator emulator cases passed.
+
+Remaining: Complete all formats/failure transitions, real VM desktop/security/browser matrix, two-machine settings/inheritance, schedules and requests waking stopped machines, upload/resize/disk-full/backup tests, a real model turn and numeric rollout thresholds.
+
+Fully evidenced original acceptance criteria: 1.
+
+### #619: Not started — no user cutover
+
+Evidence: A synthetic fixture and registry inventory exist; all real legacy workspaces remain unmigrated. VM discovery/admission are opt-in and the production Hosting build was not deployed.
+
+Remaining: Prepare reviewed cohort manifests/runbook/rollback points/support messaging; pass upstream release gates, then canaries and bounded batches. Reconcile each eligible workspace as verified migrated or explicitly blocked with retained source and owner-visible status.
+
+Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
+
+### #620: Gated — legacy paths intentionally preserved
+
+Evidence: Existing Cloud Run Functions, runner tag and storage operation were preserved while isolated _v2 endpoints were developed. No migration-based legacy retirement has occurred.
+
+Remaining: After verified cohorts and retention/rollback expiry, audit dependencies and perform ownership-checked resumable cleanup. Preserve APIs, unsupported/SSH workspaces, historical readers, backups/uploads/outputs and outstanding recovery sources.
+
+Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
+
+### #621: Partial — retained profile path and local recovery proof
+
+Evidence: The VM runtime opens its retained profile in place and disables ordinary main-profile archive cycles. A recovered vm-test profile opened in isolated local Chrome 148; SQLite integrity passed before/after and original files stayed unchanged.
+
+Remaining: Prove the actual headed VM/noVNC desktop, login/cookie persistence, runner-version compatibility, native sandbox and /dev/shm, full interaction/reconnect matrix, process simplification/crash recovery and automation-profile isolation. Local headless --no-sandbox proof does not meet these criteria.
+
+Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
+
+### #622: Partial prerequisite only — legacy large-file materialization
+
+Evidence: The checkpoint importer stages actual large-file-v1 contents with bounded streaming and verified hashes rather than pointer JSON. Retained paths are defined.
+
+Remaining: Implement authenticated resumable browser-to-disk uploads, offset/checksum/collision/cancel/quota policy, paused-machine UX, large real ingress tests, replacement/disk-full recovery and automation/request input compatibility. Do not remove legacy mounts/pointers before verified migration.
+
+Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
+
+### #623: Partial — auth/environment, Compute resources, metadata, and idle policy implemented
+
+Evidence: Owner-scoped auth/environment selection APIs and the opt-in VM modal support stale-save rejection, pending/applied revisions, validated E2 custom machine-type presets, and monotonic durable-disk growth requests. A paused-save/start live backend proof reached generation 11/config version 1; synthetic editor QA passed without secret disclosure.
+
+Remaining: Finish defaults/inheritance across two machines, full Pi config/MCP/Google/gateway bindings, resource cost/quota UX, schedules, revocation/disk-restore semantics and full authenticated modal/reconnect QA. The current lifecycle maps catalog CPU/memory selections to validated E2 custom machine types during replacement; the fixed synthetic fixture now has live startup/readiness evidence for `e2-custom-2-4096`, but measured cost/quota behavior and the broader machine-property matrix remain open.
+
+Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
+
+## Continuation evidence — 2026-11-24
+
+The PR's full-tested runner image `sha256:19382971d1c23ac740ca1635cd6e1edbaca362214f299d3588363b9fe85b5279` passed the live owner/API sequence on the fixed synthetic workspace. The private owner probe passed discovery, canonical-session projection, anonymous and cross-owner denial, stale-generation denial, browser/API credential separation, and signed access URLs. The deployed lifecycle cycle passed pause/start idempotency and generation 13 to 14; the stopped-configuration proof passed save-while-stopped, stale-save rejection, cross-owner denial, and apply-after-start through generation 15. The environment-selection proof then passed a versioned owner-private selection through lifecycle replacement from generation 18 to 19: the new container received the marker, no runtime record contained its value, and cleanup restored the prior machine configuration and removed the private entry. The current fixture is generation 19, active and lifecycle-ready, with API admission disabled after the proof.
+
+The owner-creation proof also passed after the documented temporary `create-proof` gateway revision tag was attached: duplicate suppression, owner-derived admission, forged infrastructure rejection, signed agent access, pause, and exact resource cleanup. The tag was removed immediately afterward; the creation workspace, admission, route, credentials and dedicated disk are absent. The browser `vm-live-shell` scenario produced a passing result with no console errors, a live VM Agent iframe, resource meters, signed VM API/access calls, and no legacy workspace listener. Its sanitized evidence remains under `artifacts/qa/vm-live-shell/`.
+
+The fixed fixture replacement harness now preserves existing admission/configuration fields and selected session references without carrying stale generation boot/lease state into a replacement. The environment proof now exercises versioned machine configuration so the deployed lifecycle worker resolves owner-private values at launch, then restores the prior configuration. The configuration proof also exercises a live E2 custom machine replacement and now includes a restore mode for interrupted disposable-fixture runs. These corrections are committed on PR #629. Remaining live evidence includes a real model turn, broader runner/browser/sandbox and backup/recovery matrices, migration writer drain and authority-switch rehearsal, and the release/canary gates; these proofs do not establish user-workspace cutover.
+
+The next executor increment is `ece9f72`: native automation now rechecks the
+durable terminal state after child startup and at the submission boundary, so a
+startup cancellation or child exit cannot issue a late prompt submission. The
+focused executor suite passed 13/13, and the full repository check passed with
+526 runner tests (523 passed, 3 skipped), 283 frontend tests, and both builds.
+The hosted full runner image for this commit passed in Cloud Build
+`b0c3697f-fbc1-447b-8803-2a937446985f` (12m39s total; 7m55s Docker step), with
+digest `sha256:20a9f2335c63513d3a98b0398b07cc6aa4729a4b6a27b8d53ef3e518f36b84fe`.
+That exact image passed the real local pi-web vertical slice 2/2 in about 60s.
+This closes the code/test/image race-safety gate; live provider/model execution,
+stopped-target scheduling, cross-machine tools, usage accounting, migration
+cutover/rollback, recovery, and release cohorts remain open.
+
+The iteration path now has an explicit `npm run check:fast` command for the
+focused VM automation boundary: it passed 94 focused Functions tests and 58
+focused runner tests, plus docs and syntax checks. The full `npm run check`
+remains the handoff/release gate and passed before this workflow-only increment.
+Pull-request runner-image builds now select upstream `fast` mode automatically;
+main pushes and default manual builds remain `full`, and the workflow rejects
+publishing a fast image. The latest successful full image build was Cloud Build
+`a2a4de39-7f2a-4acb-9327-555bd273aca5`: 11m32.8s Cloud Build wall clock,
+7m25.0s Docker build step, digest
+`sha256:8865cc4ebf707393315e38d574d10596ba1a25698d09b3f3a9a99488a752f58b`.
+This is an iteration-velocity improvement only; live provider/model execution,
+stopped-target scheduled/Run-now execution, cross-machine tools, usage
+accounting, migration cutover/rollback, recovery, and release cohorts remain
+open.
+
+The first automatic PR-fast image attempt showed that disabling cache restore
+made a cache-hit iteration unnecessarily rebuild the upstream runtime. Fast
+mode now restores only a verified full-mode cache when available; a fast cache
+miss remains unpublished. This keeps the full-mode release boundary while
+removing the upstream rebuild from the common unchanged-input iteration path.
+
+The cache-hit path was subsequently verified on a fresh Cloud Build worker for
+PR head `a34a7f8`: Cloud Build `113b4817-5200-4749-b99c-527da563f37e` logged
+`cache decision=hit reason=verified`, completed in 13m2s wall clock (8m23s
+Docker assembly and 2m34s image push), and passed the runner smoke test. The
+immutable image digest was
+`sha256:81f59ef6dbbcc2517023b603cb62a916503453e57058c5ef7e76063df039ebae`;
+GitHub Actions run [45465470914](https://github.com/rawkintrevo/mapache/actions/runs/45465470914)
+also passed. This confirms that unchanged-input fast iterations skip the
+upstream test/build phase; the base/runtime Docker layers and image push remain
+the dominant cost.
+
+The VM request wake path also now handles a request racing an in-flight
+pause/replacement: it waits for the durable operation to commit the machine
+stopped, then submits exactly one generation-pinned, API-admitted start request.
+The focused VM workspace runtime suite covers this boundary; it does not count
+as live stopped-target execution evidence.
+
+The usage-accounting continuation adds `functions/vmUsage.service.js` and
+threads it through VM lifecycle transitions. Each completed pause/start/replace
+operation records one deterministic user ledger entry and advances the
+retained-storage cursor in the same Firestore transaction. Active VM runtime,
+retained-disk GiB-seconds, and VM-native automation background seconds are
+reported separately; background duration is not added a second time to
+allocated runtime. Current active VM generations are included dynamically, and
+older records without a known disk-size cursor remain explicitly unknown.
+Focused VM usage, user-usage, VM lifecycle, and VM creation tests pass. This is
+an implementation and accounting proof only; live stopped-target execution,
+cross-machine tools, and release acceptance remain open.
+
+## Continuation evidence — 2026-11-25 UTC
+
+The live synthetic backup fixture now has a repaired Compute provider
+descriptor, an enabled daily backup policy, and a successfully completed
+crash-consistent backup. The backup record is `succeeded` and `verified`, the
+source runtime and file digests are present, and the corresponding Compute
+snapshot is `READY` with `storageBytesStatus=UP_TO_DATE`. The deployed backup
+and lifecycle functions run under the production API service account, with the
+minimum snapshot create/get/list/set-labels/delete and global-operation read
+permissions added to the project provisioner role.
+
+The recovery-proof hardening is committed in `9a7f761`, `41f3dea`, `c82feed`,
+`0c152e9`, and `51d8147`: Compute operation labels are bounded to the provider's
+63-character limit; restored-disk labels use the same hashed identity contract
+as lifecycle ownership checks; proof SSH retries tolerate eventual IAP instance
+visibility; instance creation waits for eventual Compute readback; and each
+disposable recovery run gets a fresh Compute request identity. The proof uses a
+known-good immutable runner image and exact VM/disk cleanup.
+
+The remaining live recovery proof is temporarily rate-limited by Compute when
+restoring repeatedly from the same source snapshot (`RESOURCE_OPERATION_RATE_EXCEEDED`).
+The failed attempts were cleaned up exactly: no proof VM or restore disk
+remains, and the source snapshot and source runtime are retained. The next
+attempt must wait for the provider window and then demonstrate fresh-disk,
+fresh-VM runtime/file verification plus measured RPO/RTO. This is still a
+synthetic-fixture proof and does not establish user-workspace migration.
+
+The recovery adapter now retries transient gateway 5xx responses, waits for
+eventual instance visibility and disk detachment, accepts Compute's omitted
+`users` field for a confirmed detached disk, and marks recovery-only runner
+containers `--restart=no`. The latter keeps a disposable failed runner
+inspectable and leaves retry/cleanup ownership with the recovery controller;
+ordinary VM containers retain `--restart=unless-stopped`. Focused recovery,
+Compute, proof, and runner-process tests pass. The latest live proof with the
+no-restart behavior reached the isolated lease and then captured these startup
+stages before the container exited: workspace source, checkpoint restore,
+authority acquire, Chrome/profile startup, and `agent_start`; the final code was
+`pi_web_ui_process_exited`. The VM, disk, route, lease, and credentials were
+cleaned exactly. The next attempt must deploy the diagnostic image and capture
+the child failure or successful authenticated health/digest evidence after the
+Compute snapshot rate-limit window clears.
+
+The final real imported-disk browser attempt completed that diagnostic
+boundary. Cloud Build `9eda62a7-dcb9-4f72-8065-78138a8d81d0` published runner
+digest `sha256:b3bf1eac5fe03a6db9a6e79046c9b71fa0f394ecbf9247e1264202a4708f5741`
+in **13m 59.580s** wall clock. On the 495-entry selected-source retained disk,
+the Compute runner passed all startup stages; `chrome_start` took 1.096 seconds.
+Authenticated `/runner/health` returned 200 with the agent ready, and
+authenticated `/browser/status` returned 200 with CDP and VNC ready,
+`taskbar=false`, zero browser restarts and no process errors. The VM and
+temporary Firestore fixture records were then removed; the imported disk is
+detached and READY. This resolves the prior retained-disk Chrome startup
+blocker, while unified source capture, missing HOME/private-Git/live-only
+reconciliation, full browser/application acceptance, authority switch and
+rollback/canary gates remain open.
+
+## Continuation evidence — 2026-11-25 retained-disk uploads
+
+The direct Compute upload path received a safety and recovery increment in the
+runner's `diskUpload.service.js`. Same-operation `begin`, `append`, and
+`cancel` calls are serialized; chunk bodies are counted against their declared
+`Content-Range` and malformed bodies are rolled back to the prior offset;
+temporary paths use `O_NOFOLLOW` and reject/remove symlink or non-file entries;
+and `ENOSPC` is mapped to the resumable `upload_storage_full` 507 response.
+Completed files remain checksum-verified and atomically renamed, while duplicate
+destinations remain create-only. Six focused upload tests pass, including
+concurrent chunks, malformed-body rollback, symlink-target protection, and the
+storage-full mapping. `npm run check:fast`, `npm run docs:check`, syntax checks,
+and `git diff --check` pass.
+
+The changed runner was validated by full Cloud Build
+`5bbb56f1-2c0c-4556-bb25-4eb043fd8147` in **13m40.287s** wall clock and
+published as
+`us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner-pr-629-upload-harden-20261125`
+with digest
+`sha256:2324b2974c80732bc25f80bb4293c681e2a7d7eb1092461c352b458e33081842`.
+This build passed the checked-in upstream/full Docker and runner smoke path; it
+is not production compatibility-tagged. Real gateway ingress, paused-machine
+UX, upload-token reauthorization after VM replacement, disk-full recovery on a
+live retained disk, and automation/request input compatibility remain open
+#622 acceptance work. No production authority switch or existing workspace was
+changed.
+
+## Continuation evidence — 2026-11-25 upload reauthorization
+
+The retained-disk upload flow now carries a validated operation ID through the
+Compute upload-admission API. The browser refreshes the current-generation
+gateway URL after an expired/replaced-generation 404 or 410, reuses that
+operation ID, probes the retained state, and continues from the acknowledged
+offset. The runner returns a successful committed-operation probe after a lost
+final response, so a completed file is not reuploaded. Focused Functions,
+runner, and browser tests cover operation-ID validation, same-operation URL
+refresh, committed probes, and the 507 disk-full message. The full local gate,
+production main/community build, docs check, and diff checks pass.
+
+The changed Functions revision was deployed with
+`firebase deploy --only functions --project pi-agents-cloud`: **28 functions
+deployed, 0 errors**. The runner image passed full Cloud Build
+`0301b840-0e1c-4ad4-a332-bfd9451a46ca` in **15m14.672s** wall clock and was
+published under
+`us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner-pr-629-upload-reauth-20261125`
+with digest
+`sha256:023d4d6b7c411317f5cd230e0c9adda7afff055266d467c291a5ddd9dffa8840`.
+It is not production compatibility-tagged. Real VM-generation replacement with
+an in-flight upload, live disk-full recovery, paused-machine UX, and automation
+input compatibility remain unproven #622 acceptance criteria; no production
+authority switch or existing workspace was changed.
+
+## Continuation evidence — 2026-11-25 upload publish recovery
+
+Commit `b7effd2` records a durable `publishing` state before a retained-disk
+upload is renamed into its destination. A same-operation probe now verifies the
+recorded digest and completes the operation if the process was lost after the
+rename, or publishes the complete temporary file if the loss happened before
+the rename. Focused runner upload tests pass **8/8**; `npm run check:fast` passes
+**103 Functions tests + 59 runner tests**, with docs, syntax, and diff checks
+green.
+
+Full Cloud Build `c96c7ef1-9230-4528-b116-2f35a7084fab` succeeded in
+**12m51.410s** wall clock and published the unpromoted image with digest
+`sha256:316aa2c0cce4d6f6d2dd7be8af6614dc4125a61e5ac9a188a5f0bb462e23e1cb`.
+The exact-head hosted PR checks also passed: Firebase Preview, change
+detection, and hosted `Build gcp-runner` (**13m14s**). No production authority
+switch or existing workspace was changed.
+
+The follow-up disposable imported-disk boot was started with the reauthorization
+image and the exact retained disk, but its private runner could not be reached
+through the available IAP SSH tunnel: Compute returned `4047 Failed to lookup
+instance` twice even though the exact VM was confirmed RUNNING with its expected
+private address. The proof was stopped through the Compute provider, the exact
+temporary VM and registry records were removed, and the imported disk remained
+detached/READY. This is an ingress-path limitation, not upload acceptance
+evidence; the live replacement and disk-full tests still need a reachable
+disposable gateway/tunnel.
+
+## Continuation evidence — 2026-11-25 live upload ingress and VM replacement
+
+The fixed synthetic workspace `vm-proof-605` was replaced from generation 25 to
+26 with the publish-recovery image, then routed through the deployed gateway.
+The authenticated gateway proof uploaded a file through the real VM ingress,
+returned a resumable `308` probe before data, committed the file with HTTP 200,
+returned HTTP 200 for the committed-operation probe, canceled the operation with
+HTTP 204, and removed the exact file through the authenticated shell WebSocket.
+No existing workspace or production authority was changed.
+
+The follow-up in-flight replacement proof started on generation 26, switched the
+same synthetic workspace to generation 27 with the immutable image digest
+`sha256:316aa2c0cce4d6f6d2dd7be8af6614dc4125a61e5ac9a188a5f0bb462e23e1cb`,
+and routed the gateway to the new session. The old upload was interrupted; the
+first probe during VM startup returned 503, as expected for an unavailable
+replacement. After the new runner reached authenticated `/runner/health`, the
+same operation returned HTTP 308, resumed successfully with HTTP 200, returned
+HTTP 200 for the committed probe, canceled with HTTP 204, and the exact test
+file was removed through the live shell path. This proves generation-pinned
+reauthorization and no-data-loss continuation across replacement for the tested
+operation. The interruption occurred before the first chunk was acknowledged,
+so a non-zero partial-prefix retention case remains a separate live test; the
+runner's partial-prefix and publish-crash windows remain covered by focused
+tests. A deliberate 512 KiB-prefix retry from generation 27 to 28 confirmed
+that boundary is currently an ingress-fixture limitation: the replacement VM
+was RUNNING with the runner listening on port 8080, but the gateway continued
+to return 503/timeouts for the new private address and no partial file reached
+the runner. The two exact synthetic test files were removed through the
+disposable VM and the retained disk was preserved. This does not invalidate
+the generation-26/27 ingress and resume proof above. The harness was corrected
+to publish the replacement route only after authenticated local runner
+readiness, matching the production lifecycle adapter's health-before-route
+contract.
+
+A deterministic partial-prefix retry then passed from generation 29 to 30 on
+the same retained disk. Generation 29 accepted an exact 512 KiB prefix and
+returned `308`; after replacement and local health confirmation, generation 30
+returned `308` with `Range: bytes=0-524287`. The remaining 3.5 MiB resumed with
+HTTP 200, the committed-operation probe returned HTTP 200, cancellation returned
+HTTP 204, and the exact file was removed through the authenticated shell path.
+This is live evidence that an acknowledged partial prefix survives VM
+replacement and can be completed without reuploading the prefix. The earlier
+generation-27/28 attempt remains useful evidence of the startup route race,
+not a failed data-integrity result.
+
+The pushed handoff commit `b153114` also passed all hosted PR checks. Its
+hosted runner build used the PR `upstream_test_mode=fast` path and published
+unpromoted digest
+`sha256:0f8c7d4ecc50dc27ebcf3258263dcf0ab9b0c13bbf0471c05f700dd10f2dc934`.
+Cloud Build `ccda18da-a391-49bd-a59c-30d5756fe17e` took **14m31s** wall
+clock, including a **9m16s** Docker step; the GitHub job took **15m01s**. The
+earlier direct full-mode build remains the full upstream-suite validation for
+the publish-recovery code.
+
+## Continuation evidence — 2026-11-25 live disk-full normalization
+
+Commit `cd6f0e3` closes the remaining ENOSPC response boundary in the runner:
+the upload handler now applies the same error normalization when the initial
+operation-state JSON write fails, before an append stream exists. The focused
+runner upload suite passes **9/9**; `npm run check:fast` also passes the
+developer-doc check, **103 Functions tests**, **59 runner tests**, syntax checks,
+and diff checks.
+
+Two direct full-mode Cloud Builds were attempted against this head. Both
+completed the upstream suite with **14,565 passing tests** but each exposed a
+different unrelated timing-sensitive upstream failure: `global-interactions`
+in `dea15bfa-2862-40f1-a95e-85f16d17c2a3` after **33m03.99s**, and
+`universal-commands` in `d8364070-4e59-478c-8c15-a0bf5b3dcea7` after
+**34m19.98s**. The supported fast build then succeeded: Cloud Build
+`358ccde6-95d5-46c5-83f0-c98bed75cdeb` took **14m09.99s** wall clock, its
+embedded UI smoke test returned HTTP 200, and it published the unpromoted
+digest
+`sha256:24156c8a266da4b34a8fb6023b938a02c35b43f1c83992add10c1905932701a0`.
+
+The fixed image was installed on generation 31 of the retained-disk synthetic
+workspace `vm-proof-605` without changing the 65 GiB disk. After the gateway
+was routed only after the runner was listening on port 8080, exact QA filler
+files exhausted the workspace filesystem. A real 4 MiB gateway upload returned
+HTTP **507** with `{"error":"upload_storage_full"}`. Removing only those
+fillers restored **63,591,915,520** available bytes; reusing the same operation
+then resumed and committed with HTTP **200**, the committed probe returned
+HTTP **200**, cancellation returned HTTP **204**, and the exact upload and
+operation-state paths were absent afterward. This is live evidence for the
+initial-state ENOSPC boundary and recovery behavior on the fixed image. No
+production workspace or authority switch was changed.
+
+## Continuation implementation — 2026-11-25 migration admission CLI
+
+The coordinator already contained the guarded `reserve` and `confirmQuiesced`
+transactions, but they had no checked-in production operator entry point. The
+new `scripts/vm-migration-reserve.mjs` exposes both actions without adding a
+browser/API mutation route:
+
+- `reserve` requires the exact `observationSha256` from the read-only preflight,
+  `--confirm migration-reserve`, and the explicit `pi-agents-cloud` project.
+  It atomically creates the operation, workspace fence, and owned
+  Storage-prefix fence through the existing coordinator.
+- `quiesce` requires `--confirm migration-quiesce` and reuses the existing
+  Compute/Storage observers. It records downtime only after writer inventory,
+  regional Compute discovery, and two matching Storage listings pass the
+  coordinator's fence/version checks.
+- Both actions return sanitized blocked/status JSON and never switch authority,
+  create a destination runtime, or delete source data. `node --check`, the
+  explicit-argument negative path, and `git diff --check` pass.
+
+This makes the migration start gate callable by a trusted operator while
+preserving the no-production-cutover default. No production workspace invoked
+either action.
+
+## Continuation implementation — 2026-11-25 prefix-capture CLI
+
+The coordinator's generation-pinned `capturePrefix` transition now has the
+checked-in operator entry point `scripts/vm-migration-capture.mjs`. It requires
+the explicit `pi-agents-cloud` project, operation identity, and
+`--confirm migration-capture`; it repeats the quiesce-time Compute and Storage
+observations and writes only bounded private inventory chunks. It does not
+download payloads, switch authority, or delete the source. The existing
+checkpoint/archive import CLIs can consume the resulting coordinator-bound
+capture. No production workspace invoked this action.
+
+## Continuation implementation — 2026-11-25 destination-disk registration CLI
+
+The missing handoff between private retained-disk import and coordinator
+verification is now explicit in `scripts/vm-migration-register-disk.mjs`. The
+operator supplies the source operation, destination zone/generation, exact disk
+provisioning operation, and `--confirm migration-register-disk`. The command
+uses the Compute observer to require the operation-owned, ready, detached disk
+and records its provider identity through the existing fenced coordinator. It
+is idempotent for the same disk and rejects identity changes; no source,
+workspace authority, or destination runtime is changed. No production
+workspace invoked this action.
+
+## Continuation implementation — 2026-11-25 pre-cutover abort CLI
+
+The coordinator's safe pre-cutover `abort` transition now has the explicit
+operator entry point `scripts/vm-migration-abort.mjs`. With
+`--confirm migration-abort`, it releases only the operation-owned workspace
+and Storage-prefix fences after the coordinator confirms unchanged source
+authority and completed validation/imported-disk cleanup. It is idempotent,
+refuses after destination authority exists, and never deletes source data. No
+production workspace invoked it.
+
+## Continuation implementation — 2026-11-25 migration preflight CLI
+
+The complete operator start sequence now has a read-only first step:
+`scripts/vm-migration-preflight.mjs` performs the bounded Firestore, Compute,
+and Storage observations used by the coordinator and prints the exact
+`observationSha256` required by `vm-migration-reserve.mjs`. It creates no
+operation, fence, VM, or disk and returns sanitized blocked/status JSON. No
+production workspace invoked it.
+
+## Continuation implementation — 2026-11-25 explicit blocked-source report
+
+The completion path for an existing workspace whose legacy source cannot be
+verified now has `scripts/vm-migration-record-blocked.mjs`. It reruns the
+read-only Compute/Storage preflight, requires the exact preflight observation
+digest, compares the source generation and source-observation digest in a
+Firestore transaction, and records only a bounded
+`vmMigrationBlockedReports_v2/{workspaceId}` report. It requires a concrete
+source blocker and refuses an active migration fence or changed source. The
+report is explicitly `state: "blocked"`, `decision: "source-retained"`; it
+does not approve incomplete data, switch authority, or delete anything. Pure
+report-shaping coverage passes 3/3. The command was then run against the real
+`vm-test` source (`1yIPKCPpk5O8s6RfAd0n`, owner
+`lzbp4xahITXWWgtrWpmGgAvzzmU2`) using the fresh preflight digest. It created
+the report with source generation 2, 568 stable Storage objects, and the
+`legacy_persistent_home_archive_missing` blocker. No migration fence, VM,
+disk, authority, or source data was changed.
+
+The refreshed read-only registry inventory on the same date found 86 legacy
+workspace records: 25 inactive, 58 never-started, 2 active, and 1 SSH-excluded.
+It found 0 records ready for cutover. All records still carry at least the
+mandatory source-completeness/live-state and cost/downtime blockers, so no
+real canary source is currently eligible for an authority switch. The VM
+authority path remains disabled while those records are reconciled.
+The refreshed inventory also reports `explicitlyBlocked: 1`, matching the
+durable `vm-test` source-retained report.
+
+## Continuation implementation — 2026-11-25 bounded Storage observation
+
+The migration Storage observer and capture bound increased from 3,000 to
+8,000 objects while remaining explicitly bounded. Focused coverage now accepts
+a multi-page retained prefix. A live read-only preflight of inactive workspace
+`83t09pcpJ44mRs9RkILg` (owner `lzbp4xahITXWWgtrWpmGgAvzzmU2`) now observes
+4,788 stable objects with matching inventory digests; it no longer fails with
+`legacy_storage_listing_limit_exceeded`. That source still correctly reports
+`legacy_persistent_home_archive_missing`, so it remains ineligible for
+cutover and no migration mutation was attempted.
+
+## Continuation evidence — 2026-11-25 source audit and hosted build
+
+The widened observer is deployed at `vmMigrationPreflight_v2` revision
+`vmmigrationpreflight-v2-00020-sev`. A read-only call to that deployed endpoint
+for `83t09pcpJ44mRs9RkILg` observed all 4,788 Storage objects stably and
+reported the concrete missing persistent-HOME source blocker in addition to
+the generic safety gates. The source was then recorded as a durable `blocked`
+/ `source-retained` report after one stale-digest retry; no fence, VM, disk,
+authority switch, or source deletion occurred.
+
+The resulting read-only registry inventory still contains 86 records, with 0
+cutover-ready and 2 explicitly blocked sources. A separate inactive blank
+source (`Fl09y597EgcvMPxGp3io`, owner `KyOcBZ4bAZMaI8VE0SNbQXN4sFY2`) has a
+clean Compute observation and a stable 10-object prefix, with no persistent
+HOME archive, browser archive, uploads, or owner-tool objects. It is not a
+canary: the inventory still requires flat-prefix/internal-format and
+unpublished/live-state reconciliation, so a clean preflight is not treated as
+source-complete or as authority-switch permission.
+
+Hosted Firebase Preview and Runner Images checks for `90bc4c4` succeeded. The
+latest runner image Cloud Build `8d659e4a-ea96-4018-8a4f-47f95440385c` took
+13m29.137s wall clock (Docker step 9m21.587s) and published digest
+`sha256:dba9cc1eb92c1e0dde5bb99394c6aa9fc157389cb2f2134de8b1da3a85a65bf3`.
+
+## Continuation implementation — legacy flat-prefix staging
+
+The captured-prefix import path now includes
+`scripts/vm-import-captured-flat-prefix.mjs` and
+`scripts/lib/vm-captured-flat-prefix-import.mjs`. It verifies pinned object
+bytes, maps legacy directory markers and implicit parents under `workspace/`,
+and writes a resumable private `flat-prefix-tree.json` receipt. It rejects
+reserved HOME/browser internal paths instead of flattening them and records
+the explicit default-mode limitation (0644 files, 0755 directories). The
+staged tree can participate in the existing verified merge, but it is not a
+complete machine import or cutover approval. Focused flat-prefix and merge
+coverage passes 12/12; no production operation invoked the new importer.
+
+## Continuation implementation — durable source audit gate
+
+The source-completeness boundary is now durable and enforced by the guarded
+operator reservation path. `scripts/vm-migration-record-audit.mjs` combines a
+fresh read-only preflight with the bounded inventory report and a separately
+reviewed coverage/cost proof, then transactionally records
+`vmMigrationSourceAudits_v2/{workspaceId}`. The audit binds owner, source
+generation, both observation digests, and the resolved Storage scope. It
+requires complete bounded listings, explicit coverage for every discovered
+source role, stable Compute/Storage evidence, and an approved USD
+cost/downtime estimate. Source blockers are retained as blocked/source-retained
+audits.
+
+`vm-migration-reserve.mjs reserve` now requires a current `ready` audit before
+creating the migration and Storage fences; stale, missing, blocked, or
+scope-mismatched audits fail closed. Focused source-audit coverage passes 5/5,
+and the coordinator gate is covered by the Firestore emulator test. No real
+workspace has a ready audit or has been reserved through this new gate yet.
+
+The coordinator now revalidates the operation-bound audit before every later
+fenced phase. A durable audit mutation, changed source observation, or altered
+evidence digest therefore blocks quiesce/capture/import/validation instead of
+letting an earlier reservation continue on stale source-completeness proof.
+The evidence digest now also covers the audit state, decision, blockers,
+observation digest and source-retention flag. The coordinator emulator covers
+the reservation-then-audit-mutation refusal path (12/12 cases pass).
+
+The source-proof file is now bound to the same workspace, owner, source
+generation, observation digests and resolved Storage scope before it can be
+recorded. A valid coverage/cost digest from another workspace or an earlier
+preflight therefore fails closed instead of becoming a ready audit. Source
+audit unit coverage passes 7/7; no production audit was rewritten.
+
+Inventory records now carry the same per-workspace Firestore observation and
+source-observation digests plus source generation. Recording an audit rejects a
+stale inventory report rather than combining old source metadata with a fresh
+preflight. The inventory remains read-only and no production source was
+rewritten.
+
+The cohort completion audit now applies the same binding to durable blocked
+reports: a stale source-retained report is unaccounted rather than satisfying
+the parent completion gate. Focused cohort coverage passes 7/7.
+
+The explicit blocked-source operator command now refreshes an existing
+same-owner blocked/source-retained report when a fresh source observation is
+available. It still refuses non-blocked records and never releases fences or
+changes source authority.
+
+Live refresh evidence: the reports for `vm-test`
+(`1yIPKCPpk5O8s6RfAd0n`) and inactive workspace
+`83t09pcpJ44mRs9RkILg` were updated from fresh read-only preflights. A new
+bound inventory/cohort audit now reports 86 legacy records as 1 excluded, 2
+explicitly blocked/source-retained, 0 migrated and 83 unaccounted, with no
+orphaned VM-authority records. Both blocked sources still carry
+`legacy_persistent_home_archive_missing`; no fence, VM, disk, authority switch
+or source deletion was performed.
+
+## Continuation implementation — flat-prefix payload verification
+
+The read-only inventory now accepts `--verify-flat-prefix-bytes` alongside
+`--list-objects`. It streams the workspace candidate at each listed Storage
+generation, verifies the actual byte count within a separate total budget, and
+records only an aggregate content digest/count/byte result. Changed
+generations, stream mismatches, access failures, and budget exhaustion remain
+blocked. This strengthens source-completeness evidence for legacy flat
+prefixes without pausing writers or authorizing a fence. Focused metadata
+coverage passes 9/9; no production source was downloaded or changed.
+
+The new verifier was run read-only against inactive blank workspace
+`Fl09y597EgcvMPxGp3io` (owner `KyOcBZ4bAZMaI8VE0SNbQXN4sFY2`). It verified all
+10 workspace-prefix objects, totaling 5,389 bytes, with aggregate payload
+evidence digest
+`f003aeddb591bb17575f1d0bf6926a99ab83538f685985f05b463da8a994df7b`; the
+Storage preflight remained stable at 10 objects and Compute discovery remained
+clear. The source still is not a canary: source/live-state reconciliation and
+approved cost/downtime proof remain open, and no fence, VM, disk, authority
+switch, or source deletion occurred.
+
+The read-only inventory now also includes the backend-owned VM authority fields
+needed by `scripts/vm-migration-cohort-audit.mjs`. That audit is the completion
+check for the parent issue: each eligible legacy workspace must be either
+represented by an admitted active/stopped Compute Engine runtime or have an
+explicit durable source-retained blocker, with orphaned migrated runtimes
+reported separately. It does not change the migration decision or enable the
+VM feature. Focused cohort-audit coverage passes 6/6.
+
+## Continuation implementation — inventory bucket defaults
+
+The read-only inventory CLI now applies the same bucket fallback as the runtime:
+`USER_TOOLS_STORAGE_BUCKET`, then `SESSION_BUCKET`, then the Firebase bucket for
+`pi-agents-cloud`, unless an explicit `--tools-bucket` or `--default-bucket` is
+provided. Previously, omitting `--tools-bucket` made every owner-tools source
+appear unresolved even when the configured Firebase bucket was correct. The
+change affects only local inventory discovery; it performs no cloud writes.
+
+The corrected bounded scan of inactive blank workspace
+`Fl09y597EgcvMPxGp3io` (owner `KyOcBZ4bAZMaI8VE0SNbQXN4sFY2`) listed all ten
+discovered source roles, including owner-tools, with no unresolved descriptors:
+10 workspace objects / 5,389 bytes were payload-verified and HOME, browser,
+uploads and owner-tools prefixes were explicitly empty. The read-only preflight
+observed 2 stopped legacy sessions, no active runs, 2 absent recorded services,
+0 unfinished provider operations, 35 scanned regional services with 0 matches,
+and 10 stable Storage objects. It remains ineligible because unified
+flat-prefix/internal-format, live-state and approved cost/downtime evidence are
+still required; no fence, VM, disk, authority switch or source deletion was
+attempted.

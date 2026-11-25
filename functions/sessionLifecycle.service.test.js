@@ -34,8 +34,22 @@ const sessionRef = {
 };
 const workspace = {source: {type: "blank"}, bucket: "bucket", storagePrefix: "workspaces/user-1/workspace-1", mcpConfig: {}};
 let deleteServiceResult = true;
+let fenced = false;
+const fenceRef = {};
+const db = {
+  collection(name) {
+    if (name === "workspaces") return {doc: () => ({update: async () => {}})};
+    assert.equal(name, "vmMigrationFences_v2");
+    return {doc: () => fenceRef};
+  },
+  runTransaction: callback => callback({
+    get: requested => requested === fenceRef ? {exists: fenced} : sessionRef.get(),
+    update: (requested, updates) => requested.update(updates),
+  }),
+};
 const lifecycle = createSessionLifecycleService({
   admin,
+  db,
   deleteSessionService: async (...args) => {
     calls.push({kind: "deleteService", args});
     if (!deleteServiceResult) currentSession = {...currentSession, status: "stop_failed"};
@@ -101,6 +115,46 @@ assert.strictEqual(isIdleSession({
 }, now), true);
 
 (async () => {
+  fenced = true;
+  for (const agentUiVersion of [undefined, "pi-web-ui-v1"]) {
+    calls.length = 0;
+    currentSession = {ownerUid: "user-1", status: "running", imageKey: "gcp-runner", agentUiVersion,
+      image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner"};
+    await assert.rejects(lifecycle.restartSession("user-1", "workspace-1", "session-1"),
+        {publicMessage: "workspace_vm_migration_active"});
+    await assert.rejects(lifecycle.resizeSession("user-1", "workspace-1", "session-1", {}),
+        {publicMessage: "workspace_vm_migration_active"});
+    assert.deepEqual(calls, []);
+    assert.equal(currentSession.status, "running");
+  }
+  currentSession = {
+    ownerUid: "user-1",
+    name: "Fenced name",
+    status: "running",
+    imageKey: "pi-chrome",
+    image: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:pi-chrome",
+  };
+  calls.length = 0;
+  await assert.rejects(
+      lifecycle.renameSession("user-1", "workspace-1", "session-1", {name: "Should not publish"}),
+      {publicMessage: "workspace_vm_migration_active"},
+  );
+  assert.strictEqual(currentSession.name, "Fenced name");
+  assert.deepEqual(calls, []);
+  currentSession = {
+    ownerUid: "user-1",
+    status: "running",
+    serviceUrl: "https://runner",
+    shutdownToken: "token",
+  };
+  calls.length = 0;
+  await assert.rejects(
+      lifecycle.deleteSession("user-1", "workspace-1", "session-1"),
+      {publicMessage: "workspace_vm_migration_active"},
+  );
+  assert.strictEqual(currentSession.status, "running");
+  assert.deepEqual(calls, []);
+  fenced = false;
   currentSession = {ownerUid: "user-1", status: "running", serviceUrl: "https://runner", shutdownToken: "token", resources: {cpu: "1"}};
   const lookedUp = await lifecycle.requireSession("user-1", "workspace-1", "session-1");
   assert.strictEqual(lookedUp.sessionRef, sessionRef);

@@ -13,6 +13,14 @@ test("runner image builds avoid log streaming and wait for Cloud Build status", 
   assert.match(workflow, /FAILURE\|INTERNAL_ERROR\|TIMEOUT\|CANCELLED\|EXPIRED\|STATUS_UNKNOWN/);
 });
 
+test("runner image iteration uses fast PR builds and keeps published builds full", () => {
+  assert.match(workflow, /UPSTREAM_TEST_MODE:.*github\.event_name == 'pull_request' && 'fast'/);
+  assert.match(workflow, /--substitutions="_IMAGE=\$image,_UPSTREAM_TEST_MODE=\$UPSTREAM_TEST_MODE"/);
+  assert.match(workflow, /Published runner images require UPSTREAM_TEST_MODE=full/);
+  assert.match(workflow, /type: choice/);
+  assert.match(workflow, /default: full/);
+});
+
 test("runner image digest lookup happens only after a successful build", () => {
   const successIndex = workflow.indexOf("SUCCESS)");
   const digestIndex = workflow.indexOf("digest=$(gcloud artifacts docker images describe");
@@ -21,6 +29,10 @@ test("runner image digest lookup happens only after a successful build", () => {
   assert.ok(digestIndex > successIndex);
   assert.match(workflow, /Cloud Build: \$build_url/);
   assert.match(workflow, /digest=\$digest source=\$GITHUB_SHA build=\$build_url/);
+});
+
+test("runner image timing values remain single shell fields", () => {
+  assert.match(workflow, /const format = \(value\) => value === null \? "unknown" : `\$\{Math\.floor\(value \/ 60\)\}m\$\{value % 60\}s`/);
 });
 
 test("runner image builds resolve and verify the pi-web-ui cache before packaging", () => {

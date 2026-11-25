@@ -11,6 +11,7 @@ const {validateAutomationId} = require("./automationValidation.helpers");
 const {recordSinkDeliveryAttempt} = require("./workspaceRunDelivery.helpers");
 const {isSharedWorkspaceRequest} = require("./workspaceRequestRuntime.service");
 const {errorDescriptor} = require("./workspaceRequestErrors.helpers");
+const {isComputeEngineRuntime} = require("./runtimeProvider.helpers");
 
 const TERMINAL_OUTCOMES = new Set(["succeeded", "failed", "canceled", "interrupted"]);
 
@@ -26,6 +27,8 @@ function createAutomationCleanupService(dependencies = {}) {
     sessionCollection: dependencies.sessionCollection,
     deliverRunSinks: dependencies.deliverRunSinks || deliverRunSinks,
     cancelWorkspaceRequest: dependencies.cancelWorkspaceRequest,
+    requestRunnerJson: dependencies.requestRunnerJson,
+    vmRuntime: dependencies.vmRuntime,
     wakeQueue: dependencies.wakeQueue,
   };
   if (typeof shared.deleteSessionService !== "function") {
@@ -151,6 +154,9 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
   if (isSharedWorkspaceRequest(run)) {
     return cleanupSharedWorkspaceRequest(run, runRef, normalizedRunId, dependencies);
   }
+  if (run.executionRoute === "vm-native-v1") {
+    return cleanupVmAutomationRun(run, runRef, normalizedRunId, dependencies);
+  }
   if (typeof dependencies.inspectOom === "function") {
     try {
       await dependencies.inspectOom(normalizedRunId);
@@ -173,15 +179,35 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
     workspaceId: run.workspaceId,
     ownerUid: run.ownerUid,
   };
+  let isVmWorkspace = false;
+  if (typeof dependencies.vmRuntime?.isVmWorkspace === "function") {
+    try {
+      isVmWorkspace = await dependencies.vmRuntime.isVmWorkspace(run.ownerUid, run.workspaceId);
+    } catch (error) {
+      return markCleanupError(runRef, normalizedRunId, {code: "vm_automation_workspace_lookup_failed"}, dependencies);
+    }
+  }
+  if (isVmWorkspace && sessionExists && isComputeEngineRuntime(session)) {
+    // The dedicated automation contract has no VM-native executor yet. Never
+    // dispatch a Compute Engine automation session through generic cleanup:
+    // that provider owns the canonical VM and could pause/delete user state.
+    return markCleanupError(runRef, normalizedRunId, {code: "vm_automation_cleanup_not_admitted"}, dependencies);
+  }
   let deletion;
-  try {
-    deletion = await dependencies.deleteSessionService(sessionRef, session, {
-      reason: "automation_cleanup",
-      returnDetails: true,
-      skipSessionState: !sessionExists,
-    });
-  } catch (error) {
-    return markCleanupError(runRef, normalizedRunId, error, dependencies);
+  if (isVmWorkspace && !sessionExists) {
+    // The VM provisioning guard can fail a run before a dedicated session is
+    // created. There is no runtime to delete in that case.
+    deletion = {serviceAbsent: true};
+  } else {
+    try {
+      deletion = await dependencies.deleteSessionService(sessionRef, session, {
+        reason: "automation_cleanup",
+        returnDetails: true,
+        skipSessionState: !sessionExists,
+      });
+    } catch (error) {
+      return markCleanupError(runRef, normalizedRunId, error, dependencies);
+    }
   }
   const details = deletion && typeof deletion === "object" ? deletion : {serviceAbsent: deletion === true};
   if (details.serviceAbsent !== true) {
@@ -223,6 +249,50 @@ async function cleanupAutomationRun(runId, dependencies = {}) {
   }
 }
 
+async function cleanupVmAutomationRun(initialRun, runRef, runId, dependencies = {}) {
+  let run = initialRun;
+  if (!isTerminalAutomationStatus(run.status)) {
+    if (typeof dependencies.vmRuntime?.ensureReady !== "function" ||
+        typeof dependencies.requestRunnerJson !== "function") {
+      return markCleanupError(runRef, runId, {code: "vm_automation_cleanup_unavailable"}, dependencies);
+    }
+    let session;
+    try {
+      session = await dependencies.vmRuntime.ensureReady(run.ownerUid, run.workspaceId, {
+        requestId: `automation-cleanup-${runId}`,
+      });
+      const response = await dependencies.requestRunnerJson(session, `/automation/runs/${encodeURIComponent(runId)}/cancel`, {
+        body: {runId},
+        failureError: "vm_automation_cancel_failed",
+        method: "POST",
+        unavailableError: "vm_automation_runner_unreachable",
+      });
+      if (!response || response.ok === false) {
+        return markCleanupError(runRef, runId, {code: response?.error || "vm_automation_cancel_failed"}, dependencies);
+      }
+    } catch (error) {
+      return markCleanupError(runRef, runId, error, dependencies);
+    }
+    const latest = await runRef.get();
+    if (!latest.exists) return {runId, skipped: "run_missing"};
+    run = {runId, ...latest.data()};
+    if (!isTerminalAutomationStatus(run.status)) return {runId, cleaned: false, cancelRequested: true};
+  }
+
+  const finalized = await finalizeRun(runRef, runId, {}, dependencies);
+  if (!finalized) return {runId, skipped: "run_missing"};
+  await dependencies.deliverRunSinks(runRef, runId, dependencies);
+  try {
+    const released = await dependencies.releaseAutomationSlot(runId, {serviceAbsent: true});
+    if (!released?.released && released?.workspaceId) throw cleanupError("automation_slot_release_failed");
+    if (typeof dependencies.scheduleRetry === "function") await dependencies.scheduleRetry(runId);
+    return {runId, cleaned: true, released: released?.released !== false, vmNative: true};
+  } catch (error) {
+    await markCleanupError(runRef, runId, {code: "automation_slot_release_failed"}, dependencies);
+    return {runId, cleaned: false, error: "automation_slot_release_failed"};
+  }
+}
+
 async function cleanupSharedWorkspaceRequest(initialRun, runRef, runId, dependencies = {}) {
   let run = initialRun;
   if (!isTerminalAutomationStatus(run.status)) {
@@ -257,7 +327,9 @@ async function deliverRunSinks(runRef, runId, dependencies = {}) {
         throw cleanupError("unsupported_sink");
       }
       if (declared.kind === "workspace_output") {
-        if (!run.workspaceOutput?.prefix) throw cleanupError("workspace_output_not_published");
+        if (!run.workspaceOutput?.prefix && run.workspaceOutput?.storageMode !== "retained-disk") {
+          throw cleanupError("workspace_output_not_published");
+        }
         delivery = {workspaceOutputPublished: run.workspaceOutput};
       } else {
         const ticketId = String(declared.reference || run.ticketId || "").trim();

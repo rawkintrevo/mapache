@@ -64,6 +64,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
   let startPromise = null;
   let stopping = false;
   let readyOnce = false;
+  let childOutput = "";
 
   return {
     enabled: () => enabled,
@@ -99,6 +100,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     stopping = false;
     lastError = "";
     lastHealth = null;
+    childOutput = "";
     setState("starting");
     startPromise = startInternal();
     try {
@@ -179,8 +181,8 @@ function createPiWebUiProcess(config = {}, deps = {}) {
       throw publicError("pi_web_ui_spawn_failed", cause);
     }
     child = next;
-    consumeOutput(next.stdout);
-    consumeOutput(next.stderr);
+    consumeOutput(next.stdout, appendChildOutput);
+    consumeOutput(next.stderr, appendChildOutput);
     if (typeof next.once === "function") {
       next.once("error", (error) => handleChildExit(next, null, null, error));
       next.once("exit", (code, signal) => handleChildExit(next, code, signal));
@@ -430,6 +432,9 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     }
     state = "error";
     lastError = cause ? "pi_web_ui_process_error" : "pi_web_ui_process_exited";
+    if (!readyOnce && childOutput && environment.MAPACHE_RECOVERY_ONLY === "true") {
+      logger.error?.("pi-web-ui child exited during startup", {output: sanitizeChildOutput(childOutput)});
+    }
     notifyStateChange();
     const exitError = publicError(lastError);
     if (readyOnce && typeof onExit === "function") {
@@ -484,6 +489,11 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     delete childEnv.GOOGLE_MCP_TOKEN_REFRESH_URL;
     delete childEnv.GOOGLE_MCP_CONNECTION_ID;
     delete childEnv.GOOGLE_MCP_TOKEN_SOCKET_PATH;
+    // A snapshot can preserve the upstream kernel lock from the source VM,
+    // but a recovery-only VM cannot preserve that process. Permit the
+    // isolated recovery child to replace that stale lock; normal runners keep
+    // the upstream one-kernel-per-data-directory guard.
+    delete childEnv.PI_WEB_ALLOW_MULTI_INSTANCE;
     return {
       ...childEnv,
       HOME: config.homeDir || environment.HOME || "/root",
@@ -500,6 +510,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
       PI_WEB_PKG_ROOT: config.piWebUiRoot,
       PI_WEB_PORT: String(config.piWebUiPort || 8787),
       PI_WEB_TOKEN: token,
+      ...(environment.MAPACHE_RECOVERY_ONLY === "true" ? {PI_WEB_ALLOW_MULTI_INSTANCE: "1"} : {}),
       ...(config.githubTokenSocketPath ? {MAPACHE_GITHUB_TOKEN_SOCKET: config.githubTokenSocketPath} : {}),
       ...(config.googleMcpTokenSocketPath ? {GOOGLE_MCP_TOKEN_SOCKET: config.googleMcpTokenSocketPath} : {}),
       MAPACHE_AUTOMATION_AGENT_SOCKET: config.automationAgentSocketPath || "",
@@ -556,6 +567,10 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     };
   }
 
+  function appendChildOutput(chunk) {
+    childOutput = `${childOutput}${String(chunk || "")}`.slice(-4096);
+  }
+
   function setState(next) {
     state = next;
     notifyStateChange();
@@ -581,9 +596,16 @@ function makePrivateToken(randomBytesImpl) {
   return Buffer.from(value).toString("base64url");
 }
 
-function consumeOutput(stream) {
-  stream?.on?.("data", () => {});
+function consumeOutput(stream, onChunk) {
+  stream?.on?.("data", (chunk) => onChunk?.(chunk));
   stream?.on?.("error", () => {});
+}
+
+function sanitizeChildOutput(value) {
+  return String(value || "")
+      .replace(/\b[A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY)[A-Z0-9_]*\s*[=:]\s*[^\s]+/gi, "<redacted-secret>")
+      .replace(/\s+/g, " ")
+      .slice(-2000);
 }
 
 function safeBuildDescriptor(value) {

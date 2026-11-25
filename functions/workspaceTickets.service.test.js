@@ -39,3 +39,28 @@ test("ticket reads are owner scoped and expose the shared run status", async () 
   assert.equal(result.status, "queued");
   await assert.rejects(service.getTicket({uid: "other"}, created.id), /ticket_forbidden/);
 });
+
+test("new ticket writes stop at the VM migration fence", async () => {
+  const {db, runs, service} = setup();
+  db.values.set("vmMigrationFences_v2/workspace-1", {operationId: "migration-1"});
+
+  await assert.rejects(
+      service.createTicket({uid: "user-1"}, "workspace-1", {request: "must not queue"}, {idempotencyKey: "fenced"}),
+      error => error.publicMessage === "workspace_vm_migration_active",
+  );
+  assert.equal(runs.length, 0);
+  assert.equal([...db.values.keys()].some((key) => key.startsWith("workspaceTickets/")), false);
+});
+
+test("an existing idempotent ticket remains readable while fenced", async () => {
+  const {db, runs, service} = setup();
+  const created = await service.createTicket(
+      {uid: "user-1"}, "workspace-1", {request: "already admitted"}, {idempotencyKey: "existing"});
+  db.values.set("vmMigrationFences_v2/workspace-1", {operationId: "migration-1"});
+
+  const repeated = await service.createTicket(
+      {uid: "user-1"}, "workspace-1", {request: "must not change"}, {idempotencyKey: "existing"});
+  assert.equal(repeated.id, created.id);
+  assert.equal(repeated.status, "queued");
+  assert.equal(runs.length, 1);
+});

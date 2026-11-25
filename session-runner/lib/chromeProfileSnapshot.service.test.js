@@ -4,6 +4,14 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {createChromeProfileSnapshotService} = require("./chromeProfileSnapshot.service");
 
+test("retained profiles never schedule legacy archive uploads", async () => {
+  const service = createChromeProfileSnapshotService({config: {chromeEnabled: true, retainedDiskMode: true},
+    snapshot: () => { throw new Error("must not upload retained profile"); }});
+  assert.equal(service.enabled(), false);
+  assert.equal((await service.snapshot()).skipped, true);
+  assert.equal((await service.finalize()).skipped, true);
+});
+
 test("serializes periodic Chrome profile snapshots and sanitizes final state", async () => {
   let release;
   let snapshotCalls = 0;

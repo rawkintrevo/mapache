@@ -6,13 +6,19 @@ const {createAutomationAgentApiService} = require("./automationAgentApi.service"
 const {createAutomationAgentAuthService} = require("./automationAgentAuth.service");
 
 class Ref {
-  constructor(value, id) {
+  constructor(value, id, db, path) {
     this.value = value;
     this.id = id;
+    this.db = db;
+    this.path = path;
   }
 
   async get() {
     return {exists: this.value !== undefined, id: this.id, data: () => this.value};
+  }
+
+  collection(name) {
+    return {doc: (id) => new Ref(this.db.data.get(`${this.path}/${name}/${id}`), id, this.db, `${this.path}/${name}/${id}`)};
   }
 }
 
@@ -37,7 +43,7 @@ class Db {
   }
 
   collection(name) {
-    return {doc: (id) => new Ref(this.data.get(`${name}/${id}`), id)};
+    return {doc: (id) => new Ref(this.data.get(`${name}/${id}`), id, this, `${name}/${id}`)};
   }
 
   sessionCollection(workspaceId) {
@@ -47,6 +53,18 @@ class Db {
 
 function setup(runtimeKind = "automation") {
   const db = new Db();
+  if (runtimeKind === "vm") {
+    const lease = Date.now() + 60_000;
+    db.data.set("vmRuntimes_v2/workspace-1", {
+      ownerUid: "user-1", backend: "compute-engine", apiEnabled: true, lifecycleEnabled: true,
+      state: "active", generation: 7, currentSessionId: "session-1", bootId: "vm-boot-1", leaseExpiresAt: lease,
+    });
+    db.data.set("vmRuntimes_v2/workspace-1/sessions/session-1", {
+      ownerUid: "user-1", generation: 7, state: "active", bootId: "vm-boot-1", leaseExpiresAt: lease,
+      runtimeProvider: {version: 1, backend: "compute-engine", workspaceId: "workspace-1", ownerUid: "user-1", generation: 7},
+    });
+    db.data.set("vmRuntimeCredentials_v2/session-1", {ownerUid: "user-1", generation: 7, shutdownToken: "runner-secret"});
+  }
   if (runtimeKind === "main" || runtimeKind === "legacy-main") {
     const session = db.data.get("workspaces/workspace-1/sessions/session-1");
     session.runnerSessionId = "session-1";
@@ -160,6 +178,18 @@ for (const runtimeKind of ["main", "legacy-main", "automation"]) {
   });
 
 }
+
+test("VM agent API revokes a token when the runtime boot changes", async () => {
+  const {auth, db, service} = setup("vm");
+  const token = await tokenFor(auth);
+  db.data.set("vmRuntimes_v2/workspace-1", {
+    ...db.data.get("vmRuntimes_v2/workspace-1"), bootId: "vm-boot-2",
+  });
+  await assert.rejects(
+      () => service.handleRequest(request(token, "GET"), {resource: "definitions", action: "list"}),
+      (error) => error.status === 401 && error.publicMessage === "automation_agent_unauthorized",
+  );
+});
 
 for (const [target, patch] of [
   ["workspace", {agentRuntimeSessionId: "replacement"}],

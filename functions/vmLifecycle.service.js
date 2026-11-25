@@ -1,0 +1,373 @@
+"use strict";
+const {createHash, randomBytes, randomUUID} = require("node:crypto");
+const {normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
+const {tokenHash} = require("./vmRuntimeControl.service");
+const {httpError} = require("./backendUtils.helpers");
+const {resolveVmEnvironment} = require("./vmEnvironment.service");
+const {recordVmUsageInTransaction} = require("./vmUsage.service");
+const {vmMachineTypeForResources} = require("./vmMachineResources.helpers");
+const {getNextRuntimeScheduleStart, getRuntimeScheduleState} = require("./runtimeSchedule.helpers");
+
+const OPERATIONS = "vmLifecycleOperations_v2";
+// Workers have a hard 540-second platform timeout. Do not reclaim an uncertain
+// cloud operation until that invocation is necessarily gone, plus a margin.
+const CLAIM_MS = 15 * 60 * 1000;
+const RETRY_BACKOFF_BASE_MS = 15 * 1000;
+const RETRY_BACKOFF_MAX_MS = CLAIM_MS;
+// Leave room for one uncertain 15-minute claim plus a bounded reconciliation
+// retry before failing a boot that never becomes healthy.
+const STARTUP_DEADLINE_MS = 30 * 60 * 1000;
+const RETRYABLE_PHASES = new Set(["disk", "quiesce", "delete", "cleanup", "reserve", "provision", "route", "health"]);
+function createVmLifecycleService({db, compute, quiesce, publishRoute, health, now = Date.now,
+  claimMs = CLAIM_MS, afterEffect = async () => {}}) {
+  const workspaceRef = id => db.collection("vmRuntimes_v2").doc(identifier(id));
+  const opRef = id => db.collection(OPERATIONS).doc(identifier(id));
+  async function request({workspaceId, ownerUid, requestId, action, expectedGeneration, requireApiAdmission = false,
+    runtimeScheduleManualPause = false, runtimeScheduleManualStart = false}) {
+    identifier(ownerUid); identifier(requestId);
+    if (!["start", "pause", "replace", "delete"].includes(action)) throw httpError(400, "invalid_vm_action");
+    const wr = workspaceRef(workspaceId);
+    const id = createHash("sha256").update(`${workspaceId}:${requestId}`).digest("hex");
+    const ref = opRef(id);
+    return db.runTransaction(async tx => {
+      const [w, existing] = await Promise.all([tx.get(wr), tx.get(ref)]);
+      const ws = w.data();
+      if (!ws || ws.ownerUid !== ownerUid || ws.backend !== "compute-engine") throw httpError(404, "not_found");
+      if (requireApiAdmission && ws.apiEnabled !== true) throw httpError(404, "not_found");
+      if (existing.exists) {
+        const operation = existing.data();
+        if (operation.ownerUid !== ownerUid || operation.action !== action || operation.oldGeneration !== expectedGeneration) throw httpError(409, "vm_request_id_conflict");
+        return {operationId: id, status: operation.status};
+      }
+      if (ws.lifecycleEnabled !== true) throw httpError(409, "vm_lifecycle_not_admitted");
+      if (ws.generation !== expectedGeneration) throw httpError(409, "vm_generation_mismatch");
+      if (ws.activeOperationId) throw httpError(409, "vm_operation_in_progress");
+      if ((action === "start" && ws.state !== "stopped") ||
+          (action === "delete" && !["active", "released", "stopped"].includes(ws.state)) ||
+          (["pause", "replace"].includes(action) && !["active", "released"].includes(ws.state))) {
+        throw httpError(409, "vm_state_conflict");
+      }
+      if (!/^us-central1-docker\.pkg\.dev\/pi-agents-cloud\/pi-agents\/session-runner@sha256:[a-f0-9]{64}$/.test(ws.runnerImage || "") ||
+          !/^[a-z0-9][a-z0-9.-]{0,252}$/.test(ws.gatewayHost || "")) throw httpError(409, "vm_lifecycle_configuration_missing");
+      const ss = (await tx.get(wr.collection("sessions").doc(identifier(ws.currentSessionId)))).data();
+      if (!ss || ss.ownerUid !== ownerUid || ss.generation !== ws.generation) throw httpError(409, "vm_session_mismatch");
+      const descriptor = normalizeRuntimeDescriptor(ss.runtimeProvider, {workspaceId, ownerUid});
+      if (descriptor.backend !== "compute-engine" || descriptor.generation !== ws.generation) throw httpError(409, "vm_descriptor_mismatch");
+      const startedAtMs = now();
+      const operation = {workspaceId, ownerUid, action, oldGeneration: ws.generation,
+        oldWorkspaceState: ws.state, oldSessionState: ss.state,
+        oldSessionId: ws.currentSessionId, descriptor, runnerImage: ws.runnerImage, gatewayHost: ws.gatewayHost,
+        ...(runtimeScheduleManualPause && action === "pause" ? {runtimeScheduleManualPause: true} : {}),
+        phase: action === "start" ? "delete" : action === "delete" && ws.state === "stopped" ? "delete" : "quiesce",
+        status: "pending", claim: null,
+        phaseStartedAtMs: startedAtMs, phaseTimingsMs: {}, phaseAttempts: {},
+        lastError: null, lastErrorAtMs: null, createdAtMs: startedAtMs, updatedAtMs: startedAtMs};
+      tx.set(ref, operation);
+      tx.update(wr, {activeOperationId: id, state: action === "delete" ? "deleting" : "stopping",
+        ...(runtimeScheduleManualStart && action === "start" ? {runtimeScheduleManualPauseWindowKey: null} : {})});
+      tx.update(wr.collection("sessions").doc(ws.currentSessionId), {state: "stopping"});
+      return {operationId: id, status: "pending"};
+    });
+  }
+  async function retry({workspaceId, ownerUid, operationId}) {
+    identifier(workspaceId); identifier(ownerUid); operationIdentifier(operationId);
+    const wr = workspaceRef(workspaceId);
+    const ref = opRef(operationId);
+    return db.runTransaction(async tx => {
+      const [w, existing] = await Promise.all([tx.get(wr), tx.get(ref)]);
+      const ws = w.data();
+      const operation = existing.data();
+      if (!ws || ws.ownerUid !== ownerUid || !operation || operation.workspaceId !== workspaceId ||
+          operation.ownerUid !== ownerUid) throw httpError(404, "not_found");
+      if (ws.activeOperationId !== operationId || operation.status !== "failed" || operation.phase !== "failed" ||
+          !RETRYABLE_PHASES.has(operation.failedPhase)) throw httpError(409, "vm_operation_not_retryable");
+      if (ws.generation !== operation.descriptor.generation) throw httpError(409, "vm_operation_authority_lost");
+      const retriedAtMs = now();
+      tx.update(ref, {
+        status: "pending",
+        phase: operation.failedPhase,
+        claim: null,
+        nextAttemptAtMs: null,
+        startupDeadlineAtMs: operation.failedPhase === "health" ? retriedAtMs + STARTUP_DEADLINE_MS : null,
+        lastError: null,
+        lastErrorAtMs: null,
+        retryCount: Number(operation.retryCount || 0) + 1,
+        updatedAtMs: retriedAtMs,
+      });
+      return {operationId, status: "pending", phase: operation.failedPhase};
+    });
+  }
+  async function step(operationId) {
+    const ref = opRef(operationId);
+    const claimId = randomUUID();
+    const operation = await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const op = snap.data();
+      if (!op || op.status !== "pending" || op.claim?.expiresAt > now() || op.nextAttemptAtMs > now()) return null;
+      const ws = (await tx.get(workspaceRef(op.workspaceId))).data();
+      assertOperation(ws, op, operationId);
+      const startupDeadlineAtMs = startupDeadlineForOperation(op);
+      if (op.phase === "health" && startupDeadlineAtMs !== null && startupDeadlineAtMs <= now()) {
+        const failedAtMs = now();
+        tx.update(ref, {status: "failed", phase: "failed", claim: null, failedPhase: "health",
+          lastError: "vm_startup_deadline_exceeded", lastErrorAtMs: failedAtMs, updatedAtMs: failedAtMs});
+        return {...op, operationId, deadlineExceeded: true};
+      }
+      tx.update(ref, {claim: {id: claimId, expiresAt: now() + claimMs}, updatedAtMs: now()});
+      return {...op, operationId};
+    });
+    if (!operation) return {claimed: false};
+    if (operation.deadlineExceeded) return {claimed: false, failed: true, reason: "vm_startup_deadline_exceeded"};
+    const wr = workspaceRef(operation.workspaceId);
+    const commit = async (nextPhase, fields = {}, workspaceFields = {}) => db.runTransaction(async tx => {
+      const [snapshot, w] = await Promise.all([tx.get(ref), tx.get(wr)]);
+      const op = snapshot.data();
+      assertOperation(w.data(), op, operationId);
+      if (op.claim?.id !== claimId || op.phase !== operation.phase || !(op.claim.expiresAt > now())) throw httpError(409, "vm_worker_claim_lost");
+      const currentWorkspace = w.data() || {};
+      let route;
+      if (workspaceFields.state === "deleted" && currentWorkspace.gatewayHost) {
+        const routeRef = db.collection("vmGatewayRoutes_v2").doc(currentWorkspace.gatewayHost);
+        route = {ref: routeRef, data: (await tx.get(routeRef)).data()};
+      }
+      if (op.phase === "health" && fields.status === "succeeded") {
+        const session = (await tx.get(wr.collection("sessions").doc(op.sessionId))).data();
+        const ws = w.data();
+        if (ws.state !== "active" || ws.currentSessionId !== op.sessionId || !ws.bootId ||
+            !(ws.leaseExpiresAt > now()) || session?.state !== "active" || session.bootId !== ws.bootId ||
+            !(session.leaseExpiresAt > now())) throw httpError(409, "vm_readiness_authority_lost");
+        if (op.configVersion) {
+          if (session.configVersion !== op.configVersion || !ws.machineConfig || ws.machineConfig.desiredVersion < op.configVersion ||
+              ws.machineConfig.appliedVersion > op.configVersion) throw httpError(409, "vm_configuration_authority_lost");
+          workspaceFields.machineConfig = {...ws.machineConfig, appliedVersion: op.configVersion,
+            state: ws.machineConfig.desiredVersion === op.configVersion ? "applied" : "pending-restart"};
+        }
+      }
+      const completedAtMs = now();
+      if (op.phase === "delete" && op.action !== "create") {
+        const oldSessionRef = wr.collection("sessions").doc(op.oldSessionId);
+        const oldSession = (await tx.get(oldSessionRef)).data() || {};
+        await recordVmUsageInTransaction({
+          db,
+          tx,
+          workspaceRef: wr,
+          sessionRef: oldSessionRef,
+          workspaceId: op.workspaceId,
+          workspace: w.data() || {},
+          session: oldSession,
+          ownerUid: op.ownerUid,
+          generation: op.oldGeneration,
+          operationId,
+          endedAtMs: completedAtMs,
+          includeActiveRuntime: op.oldWorkspaceState === "active" && op.oldSessionState === "active",
+        });
+      }
+      tx.update(ref, {phase: nextPhase, claim: null, phaseStartedAtMs: completedAtMs,
+        phaseTimingsMs: recordPhaseTiming(op, completedAtMs), lastError: null, lastErrorAtMs: null,
+        updatedAtMs: completedAtMs, ...fields});
+      if (Object.keys(workspaceFields).length) {
+        const manualScheduleFields = operation.runtimeScheduleManualPause && operation.action === "pause" && nextPhase === "complete" ?
+          manualSchedulePauseFields(w.data(), completedAtMs) : {};
+        tx.update(wr, {...workspaceFields, ...manualScheduleFields});
+      }
+      if (workspaceFields.state === "stopped") tx.update(wr.collection("sessions").doc(op.oldSessionId), {state: "stopped", leaseExpiresAt: 0});
+      if (workspaceFields.state === "deleted") {
+        tx.update(wr.collection("sessions").doc(op.oldSessionId), {state: "deleted", leaseExpiresAt: 0});
+        if (route?.data) tx.update(route.ref, {enabled: false, disabledAtMs: completedAtMs});
+      }
+    });
+    try {
+      if (operation.phase === "disk") {
+        if (operation.action !== "create" || operation.descriptor.generation !== 1) throw httpError(409, "vm_initial_disk_authority_missing");
+        const ws = (await wr.get()).data();
+        if (ws?.initialOperationId !== operationId || ws.bootId) throw httpError(409, "vm_initial_disk_authority_missing");
+        await compute.ensureDataDisk(operation.descriptor, {operationId: `${operationId}-create`, allowCreateDisk: true, requireCreationMatch: true, timeoutMs: 240000});
+        await afterEffect(operation, "disk");
+        await commit("provision");
+      } else if (operation.phase === "quiesce") {
+        const result = await quiesce(operation);
+        await afterEffect(operation, "quiesce");
+        await commit("delete", {quiesceResult: result});
+      } else if (operation.phase === "delete") {
+        await compute.pause(operation.descriptor, {operationId: `${operationId}-delete`, timeoutMs: 240000});
+        await afterEffect(operation, "pause");
+        if (operation.action === "pause") {
+          await commit("complete", {status: "succeeded", completedAtMs: now()},
+              {state: "stopped", activeOperationId: null, leaseExpiresAt: 0, bootId: null});
+        } else if (operation.action === "delete") {
+          await commit("cleanup", {quiesceResult: operation.quiesceResult || null});
+        } else {
+          await commit("reserve");
+        }
+      } else if (operation.phase === "cleanup") {
+        const currentWorkspace = (await wr.get()).data();
+        assertOperation(currentWorkspace, operation, operationId);
+        if (typeof compute.deleteRetainedDisk !== "function") throw httpError(409, "vm_data_disk_cleanup_unavailable");
+        if (typeof currentWorkspace.initialOperationId !== "string" || !currentWorkspace.initialOperationId) {
+          throw httpError(409, "vm_data_disk_cleanup_unverified");
+        }
+        await compute.deleteRetainedDisk(operation.descriptor, {
+          operationId: `${operationId}-cleanup`,
+          creationOperationId: `${currentWorkspace.initialOperationId}-create`,
+          timeoutMs: 240000,
+        });
+        await afterEffect(operation, "cleanup");
+        await commit("complete", {status: "succeeded", completedAtMs: now()},
+            {state: "deleted", activeOperationId: null, leaseExpiresAt: 0, bootId: null,
+              apiEnabled: false, lifecycleEnabled: false, deletedAtMs: now()});
+      } else if (operation.phase === "reserve") {
+        await db.runTransaction(async tx => {
+          const [snapshot, w] = await Promise.all([tx.get(ref), tx.get(wr)]);
+          const op = snapshot.data();
+          assertOperation(w.data(), op, operationId);
+          if (op.claim?.id !== claimId || op.phase !== "reserve" || !(op.claim.expiresAt > now())) throw httpError(409, "vm_worker_claim_lost");
+          const generation = operation.oldGeneration + 1;
+          const sessionId = `vm-${operationId.slice(0, 24)}-g${generation}`;
+          const sr = wr.collection("sessions").doc(sessionId);
+          const cr = db.collection("vmRuntimeCredentials_v2").doc(sessionId);
+          const [s, c, old] = await Promise.all([tx.get(sr), tx.get(cr), tx.get(wr.collection("sessions").doc(operation.oldSessionId))]);
+          if (s.exists || c.exists) throw httpError(409, "vm_reservation_conflict");
+          const saved = old.data();
+          if (saved?.ownerUid !== operation.ownerUid || saved.generation !== operation.oldGeneration) throw httpError(409, "vm_previous_session_mismatch");
+          const descriptor = normalizeRuntimeDescriptor({...operation.descriptor, generation, instanceName: null});
+          const secrets = {ownerUid: operation.ownerUid, generation, controlToken: randomBytes(32).toString("hex"),
+            browserToken: randomBytes(32).toString("hex"), shutdownToken: randomBytes(32).toString("hex")};
+          const config = w.data().machineConfig;
+          const selected = config?.desired || saved;
+          const configVersion = config?.desiredVersion || 0;
+          const desiredDiskSizeGb = selected?.diskSizeGb == null ? null : Number(selected.diskSizeGb);
+          const desiredMachineType = config?.desired?.resources ? vmMachineTypeForResources(config.desired.resources) : null;
+          tx.set(cr, secrets);
+          tx.set(sr, {ownerUid: operation.ownerUid, generation, state: "reserved", runtimeProvider: descriptor,
+            authSelection: selected.authSelection || {harness: "pi", providers: {}}, piScopedModels: saved.piScopedModels || [],
+            environmentEntryIds: selected.environmentEntryIds || [], configVersion,
+            controlTokenHash: tokenHash(secrets.controlToken)});
+          tx.update(wr, {generation, currentSessionId: sessionId, state: "reserved", bootId: null, leaseExpiresAt: 0});
+          const committedAtMs = now();
+          tx.update(ref, {phase: "provision", descriptor, sessionId, configVersion, claim: null,
+            desiredDiskSizeGb, desiredMachineType,
+            phaseStartedAtMs: committedAtMs, phaseTimingsMs: recordPhaseTiming(op, committedAtMs),
+            lastError: null, lastErrorAtMs: null, updatedAtMs: committedAtMs});
+        });
+      } else if (operation.phase === "provision") {
+        const currentWorkspace = (await wr.get()).data();
+        assertOperation(currentWorkspace, operation, operationId);
+        const credentials = (await db.collection("vmRuntimeCredentials_v2").doc(operation.sessionId).get()).data();
+        if (credentials?.ownerUid !== operation.ownerUid || credentials.generation !== operation.descriptor.generation) throw httpError(409, "vm_credentials_mismatch");
+        const session = (await wr.collection("sessions").doc(operation.sessionId).get()).data();
+        if (session?.ownerUid !== operation.ownerUid || session.generation !== operation.descriptor.generation) throw httpError(409, "vm_session_mismatch");
+        const environment = await resolveVmEnvironment({db, ownerUid: operation.ownerUid, entryIds: session.environmentEntryIds || []});
+        if (operation.desiredDiskSizeGb !== null && operation.desiredDiskSizeGb !== undefined) {
+          if (typeof compute.resizeDataDisk !== "function") throw httpError(409, "vm_data_disk_resize_unavailable");
+          // A worker can die after the provider resize and after the new VM
+          // starts. Inspect first so retrying that same provision phase does
+          // not attempt to resize an already-attached disk a second time.
+          const observed = typeof compute.inspect === "function" ? await compute.inspect(operation.descriptor) : null;
+          if (!(Number(observed?.disk?.sizeGb) >= operation.desiredDiskSizeGb)) {
+            await compute.resizeDataDisk(operation.descriptor, {sizeGb: operation.desiredDiskSizeGb,
+              operationId: `${operationId}-resize`, timeoutMs: 240000});
+            await afterEffect(operation, "resize");
+          }
+        }
+        await compute.start(operation.descriptor, {operationId: `${operationId}-create`, timeoutMs: 240000,
+          allowCreateDisk: false, expectedSizeGb: operation.desiredDiskSizeGb || undefined,
+          machineType: operation.desiredMachineType || undefined,
+          allowInitializeDisk: operation.action === "create" && operation.descriptor.generation === 1 &&
+            currentWorkspace.initialOperationId === operationId && !currentWorkspace.bootId,
+          runnerImage: operation.runnerImage,
+          subnetwork: "projects/pi-agents-cloud/regions/us-central1/subnetworks/mapache-vm-v2-us-central1",
+          env: {...environment, GCLOUD_PROJECT: "pi-agents-cloud", MAPACHE_AGENT_UI_VERSION: "pi-web-ui-v1",
+            MAPACHE_VM_CONTROL_URL: "https://us-central1-pi-agents-cloud.cloudfunctions.net/vmRuntimeControl_v2",
+            MAPACHE_VM_CONTROL_TOKEN: credentials.controlToken, SESSION_ID: operation.sessionId,
+            SESSION_BROWSER_TOKEN_SECRET: credentials.browserToken, SESSION_SHUTDOWN_TOKEN: credentials.shutdownToken,
+            MAPACHE_PI_MODEL_CATALOG_REFRESH: "false",
+            RUNNER_CAPABILITIES: JSON.stringify({terminal: true, preview: true, chrome: false, previewQa: false, functions: false})}});
+        await afterEffect(operation, "start");
+        await commit("route");
+      } else if (operation.phase === "route") {
+        await publishRoute(operation);
+        await afterEffect(operation, "route");
+        await commit("health", {startupDeadlineAtMs: now() + STARTUP_DEADLINE_MS});
+      } else if (operation.phase === "health") {
+        const ready = await health(operation);
+        await afterEffect(operation, "health");
+        if (ready) await commit("complete", {status: "succeeded", completedAtMs: now()}, {activeOperationId: null, lifecycleReadyGeneration: operation.descriptor.generation});
+        else await commit("health", {nextAttemptAtMs: now() + 15000});
+      } else throw httpError(409, "vm_operation_phase_invalid");
+      return {claimed: true};
+    } catch (error) {
+      // Retain the claim after uncertain effects. A later bounded invocation
+      // reconciles the same phase and operation ID; it never releases admission.
+      await db.runTransaction(async tx => {
+        const current = (await tx.get(ref)).data();
+        if (current?.claim?.id === claimId) {
+          const failedAtMs = now();
+          const phaseAttempts = Number(current.phaseAttempts?.[operation.phase] || 0) + 1;
+          const nextAttemptAtMs = failedAtMs + retryBackoffMs(phaseAttempts);
+          tx.update(ref, {lastError: error.publicMessage || error.code || "vm_operation_failed",
+            lastErrorAtMs: failedAtMs, failedPhase: operation.phase,
+            phaseAttempts: {...(current.phaseAttempts || {}), [operation.phase]: phaseAttempts},
+            nextAttemptAtMs, updatedAtMs: failedAtMs});
+        }
+      });
+      throw error;
+    }
+  }
+  return {request, retry, step};
+}
+
+function manualSchedulePauseFields(workspace = {}, nowMs) {
+  const policy = workspace.runtimePolicy;
+  if (policy?.mode !== "scheduled" || !policy.schedule) return {};
+  try {
+    const state = getRuntimeScheduleState(policy.schedule, new Date(nowMs));
+    if (!state.active) return {};
+    const next = getNextRuntimeScheduleStart(policy.schedule, new Date(nowMs));
+    return {runtimeScheduleManualPauseWindowKey: state.windowKey, runtimeScheduleStatus: "manually_paused",
+      runtimeScheduleNextEvent: {action: next.action, at: next.at, windowKey: next.windowKey, timezone: policy.schedule.timezone}};
+  } catch { return {}; }
+}
+
+function recordPhaseTiming(operation, completedAtMs) {
+  const startedAtMs = Number(operation?.phaseStartedAtMs || operation?.createdAtMs);
+  const elapsedMs = Number.isSafeInteger(startedAtMs) && Number.isSafeInteger(completedAtMs) && completedAtMs >= startedAtMs
+    ? completedAtMs - startedAtMs : null;
+  const current = operation?.phaseTimingsMs && typeof operation.phaseTimingsMs === "object" && !Array.isArray(operation.phaseTimingsMs)
+    ? operation.phaseTimingsMs : {};
+  return elapsedMs === null ? current : {...current, [operation.phase]: elapsedMs};
+}
+function assertOperation(ws, op, operationId) {
+  if (!ws || !op || ws.ownerUid !== op.ownerUid || ws.activeOperationId !== operationId ||
+      ws.backend !== "compute-engine" || ws.generation !== op.descriptor.generation) throw httpError(409, "vm_operation_authority_lost");
+}
+function identifier(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value)) throw httpError(400, "invalid_identity");
+  return value;
+}
+function operationIdentifier(value) {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) throw httpError(400, "invalid_operation_id");
+  return value;
+}
+function startupDeadlineForOperation(operation = {}) {
+  const explicit = Number(operation.startupDeadlineAtMs);
+  if (Number.isSafeInteger(explicit)) return explicit;
+  const phaseStartedAtMs = Number(operation.phaseStartedAtMs);
+  if (operation.phase === "health" && Number.isSafeInteger(phaseStartedAtMs)) {
+    return phaseStartedAtMs + STARTUP_DEADLINE_MS;
+  }
+  return null;
+}
+function retryBackoffMs(attempt) {
+  const count = Number.isSafeInteger(Number(attempt)) && Number(attempt) > 0 ? Number(attempt) : 1;
+  return Math.min(RETRY_BACKOFF_MAX_MS, RETRY_BACKOFF_BASE_MS * (2 ** Math.min(count - 1, 10)));
+}
+module.exports = {
+  createVmLifecycleService,
+  OPERATIONS,
+  CLAIM_MS,
+  RETRY_BACKOFF_BASE_MS,
+  RETRY_BACKOFF_MAX_MS,
+  STARTUP_DEADLINE_MS,
+  startupDeadlineForOperation,
+  retryBackoffMs,
+};

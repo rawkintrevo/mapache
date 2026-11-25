@@ -1,0 +1,29 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.vm-canary
+      - --build-arg
+      - BASE_IMAGE=${_BASE_IMAGE}
+      - -t
+      - ${_IMAGE}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        docker run -d --name vm-canary-smoke \
+          -e MAPACHE_AGENT_UI_VERSION=pi-web-ui-v1 \
+          -e MAPACHE_STARTUP_SMOKE=1 \
+          -e MAPACHE_AGENT_RUNTIME_GENERATION=smoke \
+          -e MAPACHE_PI_MODEL_CATALOG_REFRESH=false \
+          -e RUNNER_CAPABILITIES='{"terminal":false,"preview":false,"chrome":false}' \
+          -e SESSION_ID=pi-web-ui-smoke \
+          -e SESSION_BROWSER_TOKEN_SECRET=pi-web-ui-smoke-secret \
+          '${_IMAGE}'
+        trap 'docker rm -f vm-canary-smoke >/dev/null 2>&1 || true' EXIT
+        docker exec vm-canary-smoke node /app/bin/pi-web-ui-smoke.js
+images:
+  - ${_IMAGE}

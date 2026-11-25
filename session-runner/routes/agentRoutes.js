@@ -1,6 +1,6 @@
 "use strict";
 
-function registerAgentRoutes({app, hasRunnerAccess, piWebUi, workspace}) {
+function registerAgentRoutes({app, automationExecution, hasRunnerAccess, piWebUi, workspace}) {
   async function handleAuthMaterialize(req, res) {
     if (!hasRunnerAccess(req)) {
       res.status(404).json({error: "not_found"});
@@ -85,6 +85,68 @@ function registerAgentRoutes({app, hasRunnerAccess, piWebUi, workspace}) {
   app.get("/workspace/models", handleWorkspaceRequestModels);
   app.get("/workspace/requests/:runId", handleWorkspaceRequestStatus);
   app.post("/workspace/requests/:runId/cancel", handleWorkspaceRequestCancel);
+
+  async function handleAutomationStart(req, res) {
+    if (!hasRunnerAccess(req)) {
+      res.status(404).json({error: "not_found"});
+      return;
+    }
+    try {
+      const result = await automationExecution?.startRun?.(req.body?.runId);
+      if (result?.error === "automation_run_busy") {
+        res.status(409).json(result);
+        return;
+      }
+      res.json(result || {ok: false, error: "automation_execution_unavailable"});
+    } catch (error) {
+      console.error("VM automation start failed", error);
+      res.status(500).json({error: error.publicMessage || "automation_start_failed"});
+    }
+  }
+
+  async function handleAutomationStatus(req, res) {
+    if (!hasRunnerAccess(req)) {
+      res.status(404).json({error: "not_found"});
+      return;
+    }
+    try {
+      const result = await automationExecution?.statusFor?.(req.params.runId);
+      if (result?.error === "automation_run_not_found") {
+        res.status(404).json(result);
+        return;
+      }
+      res.json(result || {ok: false, error: "automation_execution_unavailable"});
+    } catch (error) {
+      console.error("VM automation status failed", error);
+      res.status(500).json({error: error.publicMessage || "automation_status_failed"});
+    }
+  }
+
+  async function handleAutomationCancel(req, res) {
+    if (!hasRunnerAccess(req)) {
+      res.status(404).json({error: "not_found"});
+      return;
+    }
+    try {
+      const result = await automationExecution?.cancelRun?.(req.params.runId);
+      if (result?.error === "automation_run_busy") {
+        res.status(409).json(result);
+        return;
+      }
+      if (result?.error === "automation_run_not_found") {
+        res.status(404).json(result);
+        return;
+      }
+      res.json(result || {ok: false, error: "automation_execution_unavailable"});
+    } catch (error) {
+      console.error("VM automation cancellation failed", error);
+      res.status(500).json({error: error.publicMessage || "automation_cancel_failed"});
+    }
+  }
+
+  app.post("/automation/runs", handleAutomationStart);
+  app.get("/automation/runs/:runId", handleAutomationStatus);
+  app.post("/automation/runs/:runId/cancel", handleAutomationCancel);
 }
 
 module.exports = {registerAgentRoutes};
