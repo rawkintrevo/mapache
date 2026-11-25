@@ -769,3 +769,10 @@ report-shaping coverage passes 3/3. The command was then run against the real
 the report with source generation 2, 568 stable Storage objects, and the
 `legacy_persistent_home_archive_missing` blocker. No migration fence, VM,
 disk, authority, or source data was changed.
+
+The refreshed read-only registry inventory on the same date found 86 legacy
+workspace records: 25 inactive, 58 never-started, 2 active, and 1 SSH-excluded.
+It found 0 records ready for cutover. All records still carry at least the
+mandatory source-completeness/live-state and cost/downtime blockers, so no
+real canary source is currently eligible for an authority switch. The VM
+authority path remains disabled while those records are reconciled.
