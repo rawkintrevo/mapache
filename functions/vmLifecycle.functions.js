@@ -8,10 +8,43 @@ const {OPERATIONS, startupDeadlineForOperation} = require("./vmLifecycle.service
 const logger = require("firebase-functions/logger");
 const {reconcileIdleVmWorkspaces} = require("./vmIdleReconcile.service");
 const serviceAccount = "mapache-api@pi-agents-cloud.iam.gserviceaccount.com";
-const service = createVmLifecycleAdapter({db});
 const RECONCILE_PAGE_SIZE = 100;
 const RECONCILE_MAX_PAGES = 10;
 const RECONCILE_BATCH_SIZE = 4;
+const QA_CRASH_CONFIRMATION = "vm-lifecycle-worker-proof-v1";
+const qaCrashWorkspaceId = process.env.VM_LIFECYCLE_QA_CRASH_WORKSPACE_ID || "";
+const qaCrashBoundaries = new Set((process.env.VM_LIFECYCLE_QA_CRASH_BOUNDARIES || "")
+    .split(",").map(value => value.trim()).filter(Boolean));
+const qaCrashEnabled = process.env.VM_LIFECYCLE_QA_CRASH_CONFIRM === QA_CRASH_CONFIRMATION &&
+  /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(qaCrashWorkspaceId) && qaCrashBoundaries.size > 0;
+const qaClaimMs = qaCrashEnabled ? Number(process.env.VM_LIFECYCLE_QA_CLAIM_MS) : NaN;
+
+/**
+ * Deliberately terminate one real worker invocation after an external effect.
+ * This is unreachable in normal deployments: it requires a fixed confirmation
+ * value, an explicit workspace, and a non-empty boundary list supplied only by
+ * an operator during disposable live proof. The marker is committed first so
+ * the same operation is not killed again when the scheduler retries it.
+ */
+async function qaCrashAfterEffect(operation, boundary) {
+  if (!qaCrashEnabled || operation.workspaceId !== qaCrashWorkspaceId || !qaCrashBoundaries.has(boundary)) return;
+  const ref = db.collection(OPERATIONS).doc(operation.operationId);
+  const shouldCrash = await db.runTransaction(async tx => {
+    const snapshot = await tx.get(ref);
+    const current = snapshot.data();
+    if (!current || current.qaCrashInjectedBoundary === boundary) return false;
+    tx.update(ref, {qaCrashInjectedBoundary: boundary, qaCrashInjectedAtMs: Date.now()});
+    return true;
+  });
+  if (!shouldCrash) return;
+  logger.warn("VM lifecycle QA worker crash injection", {workspaceId: operation.workspaceId, operationId: operation.operationId, boundary});
+  process.kill(process.pid, "SIGKILL");
+}
+
+const service = createVmLifecycleAdapter({db,
+  claimMs: Number.isSafeInteger(qaClaimMs) && qaClaimMs >= 1000 ? qaClaimMs : undefined,
+  afterEffect: qaCrashAfterEffect,
+});
 
 /**
  * Find a bounded batch of pending operations, walking past claimed or delayed

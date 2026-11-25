@@ -566,8 +566,13 @@ through the Firestore worker handler, kills a real child process after each
 lifecycle effect at the quiesce, pause, resize, start, route, and health
 boundaries, then resumes the persisted operation from the parent. It verifies
 claim retention and idempotent destructive effects against a file-backed
-Firestore/Compute fixture; it is not a substitute for the same matrix through
-the deployed Functions worker and scheduler.
+Firestore/Compute fixture. A separate, operator-only live proof temporarily
+enabled a workspace-scoped crash hook and short claim lease on the deployed
+Functions worker/reconciler; it crashed and scheduler-reclaimed the same
+boundaries on `vm-proof-605`, including a real 64-to-65 GiB post-detach resize.
+The hook and short lease were removed before the clean revisions were
+deployed. The live proof is evidence for worker/scheduler recovery, not a
+release substitute for the broader migration and browser acceptance matrix.
 The VM bootstrap also injects the Functions-owned automation-agent token and
 API URLs. Token minting joins the nested VM session with its separate
 credential record and validates the current generation, boot ID, lease, and
@@ -2143,7 +2148,7 @@ The deployed proof infrastructure in `pi-agents-cloud` is:
 | Router `mapache-vm-v2-router` | `us-central1`, on the proof VPC |
 | NAT `mapache-vm-v2-egress` | Auto-allocated external addresses; only the proof subnet |
 | Firewall `mapache-vm-v2-iap-ssh` | TCP 22 from IAP `35.235.240.0/20`, tag `mapache-vm-v2` |
-| Custom role `mapacheVmProvisionerV2` | Instance create/delete/get/start/metadata/service-account/tags/labels; disk create/get/use/labels; subnet use; zone-operation get; image use-read-only |
+| Custom role `mapacheVmProvisionerV2` | Instance create/delete/get/start/metadata/service-account/tags/labels; disk create/get/resize/use/labels; subnet use; zone-operation get; image use-read-only |
 
 Only `mapache-api` receives the custom provisioning role. Existing
 `iam.serviceAccountUser` on `mapache-runner` supplies actAs; the runner retains
@@ -2201,7 +2206,7 @@ legacy Firestore triggers cannot claim the same work.
 On 2026-11-23 the isolated preflight deployed successfully under
 `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`: unauthenticated requests
 returned 403 and an authenticated operator request returned 200. The deployed
-identity initially lacked all eight checked Compute permissions. After the
+identity initially lacked all nine checked Compute permissions. After the
 dedicated infrastructure grants, preflight reported no missing checked permissions.
 Gateway configuration remains absent and admission disabled. Next gates include
 authenticated gateway routing and verified canary migration. No existing

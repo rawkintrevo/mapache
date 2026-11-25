@@ -30,6 +30,8 @@ function fixture() {
   const effects = [];
   const creates = [];
   const resizes = [];
+  let dataDiskSizeGb = 64;
+  let dataDiskAttached = false;
   const cloud = new Set();
   let crashPhase;
   let ready = true;
@@ -39,9 +41,11 @@ function fixture() {
     return value;
   }
   const dependencies = {db, now: () => time, compute: {
+    inspect: async () => ({disk: {sizeGb: dataDiskSizeGb, users: dataDiskAttached ? ["instance"] : []}}),
     pause: async () => effect("delete"),
     resizeDataDisk: async (descriptor, options) => {
       resizes.push({descriptor, options});
+      dataDiskSizeGb = options.sizeGb;
       return {resized: true, sizeGb: options.sizeGb};
     },
     start: async (descriptor, options) => {
@@ -51,12 +55,14 @@ function fixture() {
       const ws = docs.get("vmRuntimes_v2/workspace");
       Object.assign(ws, {state: "active", bootId: "new-boot", leaseExpiresAt: Number.MAX_SAFE_INTEGER});
       Object.assign(docs.get(`vmRuntimes_v2/workspace/sessions/${ws.currentSessionId}`), {state: "active", bootId: "new-boot", leaseExpiresAt: Number.MAX_SAFE_INTEGER});
+      dataDiskAttached = true;
       return effect("provision");
     },
   }, quiesce: async () => effect("quiesce", {ok: true}), publishRoute: async () => effect("route"), health: async () => effect("health", ready)};
   const service = createVmLifecycleService(dependencies);
   return {service, dependencies, docs, effects, cloud, creates, resizes,
     advance: () => { time += CLAIM_MS + 1; }, crash: phase => { crashPhase = phase; }, ready: value => { ready = value; },
+    dataDisk: () => ({sizeGb: dataDiskSizeGb, attached: dataDiskAttached}),
     request: (overrides = {}) => service.request({workspaceId: "workspace", ownerUid: "owner", requestId: "request", action: "replace", expectedGeneration: 6, ...overrides}),
     op: id => docs.get(`${OPERATIONS}/${id}`), ws: () => docs.get("vmRuntimes_v2/workspace"),
   };
@@ -144,6 +150,21 @@ test("desired data-disk growth runs after pause and before replacement start", a
   assert.deepEqual(f.resizes[0].options, {sizeGb: 128, operationId: `${operationId}-resize`, timeoutMs: 240000});
   assert.deepEqual(f.effects, ["quiesce", "delete", "provision", "route", "health"]);
   assert.equal(f.creates.length, 1);
+});
+
+test("a worker loss after start does not replay an already completed disk resize", async () => {
+  const f = fixture();
+  f.ws().machineConfig = {desiredVersion: 3, appliedVersion: 2, state: "pending-restart",
+    desired: {diskSizeGb: 128}};
+  const {operationId} = await f.request();
+  while (f.op(operationId).phase !== "provision") await f.service.step(operationId);
+  f.crash("provision");
+  await assert.rejects(f.service.step(operationId), /worker_died_after_effect/);
+  assert.deepEqual(f.dataDisk(), {sizeGb: 128, attached: true});
+  f.advance();
+  await f.service.step(operationId);
+  assert.equal(f.resizes.length, 1);
+  assert.equal(f.creates.length, 2);
 });
 
 test("desired VM resources map to the replacement machine type", async () => {

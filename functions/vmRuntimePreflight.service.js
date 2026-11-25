@@ -2,7 +2,7 @@
 
 const COMPUTE_PERMISSIONS = [
   "compute.instances.create", "compute.instances.delete", "compute.instances.get",
-  "compute.disks.create", "compute.disks.get", "compute.disks.use",
+  "compute.disks.create", "compute.disks.get", "compute.disks.resize", "compute.disks.use",
   "compute.subnetworks.use", "compute.zoneOperations.get",
 ];
 

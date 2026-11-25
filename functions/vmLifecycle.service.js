@@ -17,7 +17,8 @@ const RETRY_BACKOFF_MAX_MS = CLAIM_MS;
 // retry before failing a boot that never becomes healthy.
 const STARTUP_DEADLINE_MS = 30 * 60 * 1000;
 const RETRYABLE_PHASES = new Set(["disk", "quiesce", "delete", "reserve", "provision", "route", "health"]);
-function createVmLifecycleService({db, compute, quiesce, publishRoute, health, now = Date.now}) {
+function createVmLifecycleService({db, compute, quiesce, publishRoute, health, now = Date.now,
+  claimMs = CLAIM_MS, afterEffect = async () => {}}) {
   const workspaceRef = id => db.collection("vmRuntimes_v2").doc(identifier(id));
   const opRef = id => db.collection(OPERATIONS).doc(identifier(id));
   async function request({workspaceId, ownerUid, requestId, action, expectedGeneration, requireApiAdmission = false}) {
@@ -104,7 +105,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
           lastError: "vm_startup_deadline_exceeded", lastErrorAtMs: failedAtMs, updatedAtMs: failedAtMs});
         return {...op, operationId, deadlineExceeded: true};
       }
-      tx.update(ref, {claim: {id: claimId, expiresAt: now() + CLAIM_MS}, updatedAtMs: now()});
+      tx.update(ref, {claim: {id: claimId, expiresAt: now() + claimMs}, updatedAtMs: now()});
       return {...op, operationId};
     });
     if (!operation) return {claimed: false};
@@ -159,12 +160,15 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         const ws = (await wr.get()).data();
         if (ws?.initialOperationId !== operationId || ws.bootId) throw httpError(409, "vm_initial_disk_authority_missing");
         await compute.ensureDataDisk(operation.descriptor, {operationId: `${operationId}-create`, allowCreateDisk: true, requireCreationMatch: true, timeoutMs: 240000});
+        await afterEffect(operation, "disk");
         await commit("provision");
       } else if (operation.phase === "quiesce") {
         const result = await quiesce(operation);
+        await afterEffect(operation, "quiesce");
         await commit("delete", {quiesceResult: result});
       } else if (operation.phase === "delete") {
         await compute.pause(operation.descriptor, {operationId: `${operationId}-delete`, timeoutMs: 240000});
+        await afterEffect(operation, "pause");
         if (operation.action === "pause") {
           await commit("complete", {status: "succeeded", completedAtMs: now()},
               {state: "stopped", activeOperationId: null, leaseExpiresAt: 0, bootId: null});
@@ -213,8 +217,15 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         const environment = await resolveVmEnvironment({db, ownerUid: operation.ownerUid, entryIds: session.environmentEntryIds || []});
         if (operation.desiredDiskSizeGb !== null && operation.desiredDiskSizeGb !== undefined) {
           if (typeof compute.resizeDataDisk !== "function") throw httpError(409, "vm_data_disk_resize_unavailable");
-          await compute.resizeDataDisk(operation.descriptor, {sizeGb: operation.desiredDiskSizeGb,
-            operationId: `${operationId}-resize`, timeoutMs: 240000});
+          // A worker can die after the provider resize and after the new VM
+          // starts. Inspect first so retrying that same provision phase does
+          // not attempt to resize an already-attached disk a second time.
+          const observed = typeof compute.inspect === "function" ? await compute.inspect(operation.descriptor) : null;
+          if (!(Number(observed?.disk?.sizeGb) >= operation.desiredDiskSizeGb)) {
+            await compute.resizeDataDisk(operation.descriptor, {sizeGb: operation.desiredDiskSizeGb,
+              operationId: `${operationId}-resize`, timeoutMs: 240000});
+            await afterEffect(operation, "resize");
+          }
         }
         await compute.start(operation.descriptor, {operationId: `${operationId}-create`, timeoutMs: 240000,
           allowCreateDisk: false, expectedSizeGb: operation.desiredDiskSizeGb || undefined,
@@ -229,12 +240,15 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
             SESSION_BROWSER_TOKEN_SECRET: credentials.browserToken, SESSION_SHUTDOWN_TOKEN: credentials.shutdownToken,
             MAPACHE_PI_MODEL_CATALOG_REFRESH: "false",
             RUNNER_CAPABILITIES: JSON.stringify({terminal: true, preview: true, chrome: false, previewQa: false, functions: false})}});
+        await afterEffect(operation, "start");
         await commit("route");
       } else if (operation.phase === "route") {
         await publishRoute(operation);
+        await afterEffect(operation, "route");
         await commit("health", {startupDeadlineAtMs: now() + STARTUP_DEADLINE_MS});
       } else if (operation.phase === "health") {
         const ready = await health(operation);
+        await afterEffect(operation, "health");
         if (ready) await commit("complete", {status: "succeeded", completedAtMs: now()}, {activeOperationId: null, lifecycleReadyGeneration: operation.descriptor.generation});
         else await commit("health", {nextAttemptAtMs: now() + 15000});
       } else throw httpError(409, "vm_operation_phase_invalid");

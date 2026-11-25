@@ -48,8 +48,8 @@ function createVmLifecycleEffects({db, compute, fetchImpl = fetch}) {
     },
   };
 }
-function createVmLifecycleAdapter({db}) {
+function createVmLifecycleAdapter({db, claimMs, afterEffect}) {
   const compute = createComputeEngineService({projectId: "pi-agents-cloud"});
-  return createVmLifecycleService({db, compute, ...createVmLifecycleEffects({db, compute})});
+  return createVmLifecycleService({db, compute, claimMs, afterEffect, ...createVmLifecycleEffects({db, compute})});
 }
 module.exports = {createVmLifecycleAdapter, createVmLifecycleEffects};
