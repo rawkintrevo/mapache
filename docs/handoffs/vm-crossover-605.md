@@ -139,7 +139,7 @@ Fully evidenced original acceptance criteria: 1.
 
 Evidence: Persisted reservation/quiesce/delete/provision/route/health phases, stable request IDs, generation fencing, worker claims and a scheduler operate on the fixture. Pause confirms compute deletion/disk detachment; start reuses that disk.
 
-Remaining: Kill real workers at every cloud-operation/commit boundary; finish startup deadlines, stuck-operation repair, quota/attachment failure recovery and resource-change coordination. Lifecycle reconciliation now walks a bounded ten-page document-ID cursor and selects eligible work past claimed or delayed records; file-import SIGKILL tests do not satisfy worker-crash tests.
+Remaining: Kill real workers at every cloud-operation/commit boundary; finish quota/attachment failure recovery and resource-change coordination. Lifecycle reconciliation now walks a bounded ten-page document-ID cursor and selects eligible work past claimed or delayed records. The health phase now has a 30-minute deadline and an IAM-private same-operation retry for explicit stuck startup failures; file-import SIGKILL tests do not satisfy worker-crash tests.
 
 Fully evidenced original acceptance criteria: 3.
 

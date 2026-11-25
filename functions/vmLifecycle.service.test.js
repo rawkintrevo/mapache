@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {createVmLifecycleService, CLAIM_MS, OPERATIONS} = require("./vmLifecycle.service");
+const {createVmLifecycleService, CLAIM_MS, OPERATIONS, STARTUP_DEADLINE_MS} = require("./vmLifecycle.service");
 const {createRuntimeDescriptor} = require("./runtimeProvider.helpers");
 
 function fixture() {
@@ -209,6 +209,32 @@ test("Compute success without healthy agent stays pending and retains the operat
   assert.equal(f.ws().activeOperationId, operationId);
   assert.equal(f.ws().lifecycleReadyGeneration, undefined);
   f.advance(); f.ready(true); await finish(f, operationId);
+});
+
+test("startup deadline fails closed and an operator retry reuses the same operation", async () => {
+  const f = fixture(); f.ready(false);
+  const {operationId} = await f.request();
+  while (f.op(operationId).phase !== "health") await f.service.step(operationId);
+  assert.equal(f.op(operationId).startupDeadlineAtMs, 1000 + STARTUP_DEADLINE_MS);
+  f.advance();
+  f.advance();
+  const deadline = await f.service.step(operationId);
+  assert.deepEqual(deadline, {claimed: false, failed: true, reason: "vm_startup_deadline_exceeded"});
+  assert.equal(f.op(operationId).status, "failed");
+  assert.equal(f.op(operationId).phase, "failed");
+  assert.equal(f.op(operationId).failedPhase, "health");
+  assert.equal(f.op(operationId).lastError, "vm_startup_deadline_exceeded");
+  assert.equal(f.ws().activeOperationId, operationId);
+  await assert.rejects(
+      f.service.retry({workspaceId: "workspace", ownerUid: "foreign", operationId}),
+      /not_found/,
+  );
+  const retried = await f.service.retry({workspaceId: "workspace", ownerUid: "owner", operationId});
+  assert.deepEqual(retried, {operationId, status: "pending", phase: "health"});
+  assert.equal(f.op(operationId).retryCount, 1);
+  f.ready(true);
+  await finish(f, operationId);
+  assert.equal(f.op(operationId).status, "succeeded");
 });
 
 test("pause confirms deletion before stopped; start then reserves a fresh generation", async () => {

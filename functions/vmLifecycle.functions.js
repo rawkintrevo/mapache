@@ -4,7 +4,7 @@ const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {db} = require("./backendContext");
 const {createVmLifecycleAdapter} = require("./vmLifecycle.adapter");
-const {OPERATIONS} = require("./vmLifecycle.service");
+const {OPERATIONS, startupDeadlineForOperation} = require("./vmLifecycle.service");
 const logger = require("firebase-functions/logger");
 const serviceAccount = "mapache-api@pi-agents-cloud.iam.gserviceaccount.com";
 const service = createVmLifecycleAdapter({db});
@@ -79,7 +79,13 @@ exports.vmLifecycle_v2 = onRequest({invoker: "private", serviceAccount, timeoutS
       const op = (await db.collection(OPERATIONS).doc(id).get()).data();
       if (!op) { res.status(404).json({error: "not_found"}); return; }
       res.json({operationId: id, workspaceId: op.workspaceId, status: op.status, phase: op.phase,
-        generation: op.descriptor.generation, lastError: op.lastError || null, quiesceResult: op.quiesceResult || null});
+        generation: op.descriptor.generation, failedPhase: op.failedPhase || null,
+        startupDeadlineAtMs: startupDeadlineForOperation(op), lastError: op.lastError || null,
+        quiesceResult: op.quiesceResult || null});
+      return;
+    }
+    if (req.body?.action === "retry") {
+      res.json(await service.retry(req.body || {}));
       return;
     }
     res.status(202).json(await service.request(req.body || {}));

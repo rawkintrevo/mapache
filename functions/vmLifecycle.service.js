@@ -10,6 +10,10 @@ const OPERATIONS = "vmLifecycleOperations_v2";
 // Workers have a hard 540-second platform timeout. Do not reclaim an uncertain
 // cloud operation until that invocation is necessarily gone, plus a margin.
 const CLAIM_MS = 15 * 60 * 1000;
+// Leave room for one uncertain 15-minute claim plus a bounded reconciliation
+// retry before failing a boot that never becomes healthy.
+const STARTUP_DEADLINE_MS = 30 * 60 * 1000;
+const RETRYABLE_PHASES = new Set(["disk", "quiesce", "delete", "reserve", "provision", "route", "health"]);
 function createVmLifecycleService({db, compute, quiesce, publishRoute, health, now = Date.now}) {
   const workspaceRef = id => db.collection("vmRuntimes_v2").doc(identifier(id));
   const opRef = id => db.collection(OPERATIONS).doc(identifier(id));
@@ -53,6 +57,34 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       return {operationId: id, status: "pending"};
     });
   }
+  async function retry({workspaceId, ownerUid, operationId}) {
+    identifier(workspaceId); identifier(ownerUid); operationIdentifier(operationId);
+    const wr = workspaceRef(workspaceId);
+    const ref = opRef(operationId);
+    return db.runTransaction(async tx => {
+      const [w, existing] = await Promise.all([tx.get(wr), tx.get(ref)]);
+      const ws = w.data();
+      const operation = existing.data();
+      if (!ws || ws.ownerUid !== ownerUid || !operation || operation.workspaceId !== workspaceId ||
+          operation.ownerUid !== ownerUid) throw httpError(404, "not_found");
+      if (ws.activeOperationId !== operationId || operation.status !== "failed" || operation.phase !== "failed" ||
+          !RETRYABLE_PHASES.has(operation.failedPhase)) throw httpError(409, "vm_operation_not_retryable");
+      if (ws.generation !== operation.descriptor.generation) throw httpError(409, "vm_operation_authority_lost");
+      const retriedAtMs = now();
+      tx.update(ref, {
+        status: "pending",
+        phase: operation.failedPhase,
+        claim: null,
+        nextAttemptAtMs: null,
+        startupDeadlineAtMs: operation.failedPhase === "health" ? retriedAtMs + STARTUP_DEADLINE_MS : null,
+        lastError: null,
+        lastErrorAtMs: null,
+        retryCount: Number(operation.retryCount || 0) + 1,
+        updatedAtMs: retriedAtMs,
+      });
+      return {operationId, status: "pending", phase: operation.failedPhase};
+    });
+  }
   async function step(operationId) {
     const ref = opRef(operationId);
     const claimId = randomUUID();
@@ -62,10 +94,18 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       if (!op || op.status !== "pending" || op.claim?.expiresAt > now() || op.nextAttemptAtMs > now()) return null;
       const ws = (await tx.get(workspaceRef(op.workspaceId))).data();
       assertOperation(ws, op, operationId);
+      const startupDeadlineAtMs = startupDeadlineForOperation(op);
+      if (op.phase === "health" && startupDeadlineAtMs !== null && startupDeadlineAtMs <= now()) {
+        const failedAtMs = now();
+        tx.update(ref, {status: "failed", phase: "failed", claim: null, failedPhase: "health",
+          lastError: "vm_startup_deadline_exceeded", lastErrorAtMs: failedAtMs, updatedAtMs: failedAtMs});
+        return {...op, operationId, deadlineExceeded: true};
+      }
       tx.update(ref, {claim: {id: claimId, expiresAt: now() + CLAIM_MS}, updatedAtMs: now()});
       return {...op, operationId};
     });
     if (!operation) return {claimed: false};
+    if (operation.deadlineExceeded) return {claimed: false, failed: true, reason: "vm_startup_deadline_exceeded"};
     const wr = workspaceRef(operation.workspaceId);
     const commit = async (nextPhase, fields = {}, workspaceFields = {}) => db.runTransaction(async tx => {
       const [snapshot, w] = await Promise.all([tx.get(ref), tx.get(wr)]);
@@ -179,7 +219,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         await commit("route");
       } else if (operation.phase === "route") {
         await publishRoute(operation);
-        await commit("health");
+        await commit("health", {startupDeadlineAtMs: now() + STARTUP_DEADLINE_MS});
       } else if (operation.phase === "health") {
         const ready = await health(operation);
         if (ready) await commit("complete", {status: "succeeded", completedAtMs: now()}, {activeOperationId: null, lifecycleReadyGeneration: operation.descriptor.generation});
@@ -200,7 +240,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       throw error;
     }
   }
-  return {request, step};
+  return {request, retry, step};
 }
 
 function recordPhaseTiming(operation, completedAtMs) {
@@ -219,4 +259,17 @@ function identifier(value) {
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value)) throw httpError(400, "invalid_identity");
   return value;
 }
-module.exports = {createVmLifecycleService, OPERATIONS, CLAIM_MS};
+function operationIdentifier(value) {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) throw httpError(400, "invalid_operation_id");
+  return value;
+}
+function startupDeadlineForOperation(operation = {}) {
+  const explicit = Number(operation.startupDeadlineAtMs);
+  if (Number.isSafeInteger(explicit)) return explicit;
+  const phaseStartedAtMs = Number(operation.phaseStartedAtMs);
+  if (operation.phase === "health" && Number.isSafeInteger(phaseStartedAtMs)) {
+    return phaseStartedAtMs + STARTUP_DEADLINE_MS;
+  }
+  return null;
+}
+module.exports = {createVmLifecycleService, OPERATIONS, CLAIM_MS, STARTUP_DEADLINE_MS, startupDeadlineForOperation};

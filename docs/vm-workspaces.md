@@ -288,6 +288,12 @@ Each lifecycle operation also records `phaseStartedAtMs`, bounded
 projection exposes only those sanitized diagnostics. Operators can identify the
 failed phase and its recovery state before retrying; a failed operation is not
 treated as a reason to blindly start another VM.
+The health phase has a 30-minute startup deadline after routing. If the runner
+never becomes ready, the operation fails closed while retaining
+`activeOperationId` and writer admission. The IAM-private lifecycle endpoint's
+`retry` action reopens only that same failed operation and phase, after checking
+owner, workspace authority and the recorded failure; provider operation IDs are
+reused rather than creating a second VM.
 
 `functions/vmEnvironment.service.js` resolves only those selected environment
 entries from the owner's private store at provisioning time. Values are injected
@@ -322,13 +328,15 @@ workspace admission. Reconciliation waits until that invocation cannot still
 be running, then retries the same phase and operation ID. Stale completion
 callbacks cannot overwrite a newer claim. The worker never logs raw Google API
 error objects, which can contain bootstrap credentials. Health-not-ready retries
-wait at least 15 seconds and are picked up by the minute scheduler.
+wait at least 15 seconds and are picked up by the minute scheduler; after the
+30-minute startup deadline, the operation becomes an explicitly retryable
+failure instead of polling forever.
 
 The first controller is deliberately limited to admitted canaries: reconciliation
 scans pages of up to 100 pending operations, walking by document-ID cursor across
 at most ten pages until it finds four eligible operations, and runs those four at
 a time. A page cap keeps the minute-trigger invocation bounded; a later tick can
-continue through the remaining cohort. Operator repair/UI flows, resource
+continue through the remaining cohort. UI flows, resource
 resizing, richer machine properties/capabilities and end-to-end worker
 termination tests remain required before broad rollout. Unit tests inject loss
 after each external phase and verify stable operation/instance IDs, admission,
