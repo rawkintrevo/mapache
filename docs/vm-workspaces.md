@@ -1708,6 +1708,13 @@ selected-source import, not a complete legacy cutover: the source stages do not
 share one coordinator capture, full HOME/private-Git/live-only reconciliation
 remains open, and no source authority was changed.
 
+The imported tree also passed the runner's retained-storage bootstrap twice in
+an isolated local copy seeded with the authoritative disk marker. All 495
+selected entries remained byte-identical, while the expected `credentials`,
+`uploads` and `caches` runtime directories were created idempotently. This is
+storage/bootstrap evidence for the real imported state; it is not application
+acceptance or a production VM authority switch.
+
 The same 2026-11-25 read-only source audit narrows the `vm-test`-specific
 reconciliation boundary: its Firestore source is explicitly `blank` with blank
 sync policy and no repository, installation, branch or commit configured. Its
