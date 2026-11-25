@@ -351,6 +351,7 @@ function createVmBackupRecoveryRuntimeService({
       MAPACHE_VM_CONTROL_URL: context.controlUrl,
       MAPACHE_VM_CONTROL_TOKEN: credentials.controlToken,
       MAPACHE_AGENT_UI_VERSION: "pi-web-ui-v1",
+      MAPACHE_RECOVERY_ONLY: "true",
       SESSION_ID: context.sessionId,
       SESSION_BROWSER_TOKEN_SECRET: credentials.browserToken,
       SESSION_SHUTDOWN_TOKEN: credentials.shutdownToken,

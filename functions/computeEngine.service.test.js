@@ -146,6 +146,37 @@ test("VM startup waits for eventual instance visibility after insert", async () 
   assert.ok(missingInstanceReads < 0);
 });
 
+test("recovery VM startup does not restart a failed runner container", async () => {
+  let instanceRequest;
+  let instanceCreated = false;
+  const d = descriptor();
+  const label = value => createHash("sha256").update(value).digest("hex").slice(0, 63);
+  const service = createComputeEngineService({
+    request: async (request) => {
+      if (request.method === "GET" && request.url.includes("/disks/")) {
+        return {data: {name: d.dataDiskName, status: "READY", sizeGb: 64, users: [], labels: {
+          "mapache-owner-uid": label(d.ownerUid), "mapache-workspace-id": label(d.workspaceId), "mapache-runtime-provider": "compute-engine",
+        }}};
+      }
+      if (request.method === "POST" && request.url.endsWith("/instances")) {
+        instanceRequest = request;
+        instanceCreated = true;
+        return {data: {status: "DONE"}};
+      }
+      if (request.method === "GET" && request.url.includes("/instances/")) {
+        if (!instanceCreated) throw Object.assign(new Error("missing"), {response: {status: 404}});
+        return {data: {name: d.instanceName, status: "RUNNING", labels: {
+          "mapache-owner-uid": label(d.ownerUid), "mapache-workspace-id": label(d.workspaceId), "mapache-runtime-provider": "compute-engine",
+        }, disks: instanceRequest?.data.disks || []}};
+      }
+      throw new Error(`unexpected ${request.method} ${request.url}`);
+    },
+  });
+  await service.start(d, {operationId: "recovery", runnerImage: "pinned", env: {MAPACHE_RECOVERY_ONLY: "true"}});
+  const script = instanceRequest.data.metadata.items.find((item) => item.key === "startup-script").value;
+  assert.match(script, /docker run -d --restart=no /);
+});
+
 test("failed Compute operations normalize attachment conflicts before lifecycle retry", async () => {
   const d = descriptor();
   const service = createComputeEngineService({

@@ -154,10 +154,23 @@ async function main() {
       diskName: targetDiskName, operationId});
     const providerRestoreMs = Date.now() - restoreStartedAtMs;
     const digestExpected = record.verification?.fileDigest;
-    const runtimeEvidence = await recoveryRuntime.verify(receipt, {
-      operationId, workspaceId: options.workspace, ownerUid: options.owner,
-      descriptor: source, backupRecord: record,
-    });
+    let runtimeEvidence;
+    try {
+      runtimeEvidence = await recoveryRuntime.verify(receipt, {
+        operationId, workspaceId: options.workspace, ownerUid: options.owner,
+        descriptor: source, backupRecord: record,
+      });
+    } catch (error) {
+      const sessionId = `vm-backup-${createHash("sha256").update(operationId).digest("hex").slice(0, 24)}`;
+      const failureSession = await db.collection("vmBackupRecoveryRuntimes_v2").doc(options.workspace)
+          .collection("sessions").doc(sessionId).get().catch(() => null);
+      process.stderr.write(`${JSON.stringify({
+        recoveryError: String(error?.code || error?.message || "recovery_failed"),
+        controlFailure: failureSession?.exists ? failureSession.data()?.lastError || null : null,
+        controlRuntimeState: failureSession?.exists ? failureSession.data()?.runtimeState || null : null,
+      })}\n`);
+      throw error;
+    }
     const observedAtMs = Date.now();
     const rpoMs = Math.max(0, startedAtMs - Date.parse(record.capturedAt || ""));
     const rtoMs = observedAtMs - restoreStartedAtMs;

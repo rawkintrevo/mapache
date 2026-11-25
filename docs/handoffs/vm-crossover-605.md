@@ -462,3 +462,18 @@ remains, and the source snapshot and source runtime are retained. The next
 attempt must wait for the provider window and then demonstrate fresh-disk,
 fresh-VM runtime/file verification plus measured RPO/RTO. This is still a
 synthetic-fixture proof and does not establish user-workspace migration.
+
+The recovery adapter now retries transient gateway 5xx responses, waits for
+eventual instance visibility and disk detachment, accepts Compute's omitted
+`users` field for a confirmed detached disk, and marks recovery-only runner
+containers `--restart=no`. The latter keeps a disposable failed runner
+inspectable and leaves retry/cleanup ownership with the recovery controller;
+ordinary VM containers retain `--restart=unless-stopped`. Focused recovery,
+Compute, and proof tests pass. A fresh live proof using the newer pinned image
+`sha256:f1c9c897c270870760e5142b15c33e1802e142df93ec174f3017f1d6acc521a1`
+still failed before authenticated health: the first runner acquired the
+isolated lease and then exited before reporting a lifecycle failure, while the
+old restart policy produced fenced `vm_boot_conflict` retries. The run cleaned
+the VM, disk, route, lease, and credentials exactly. The next attempt must use
+the no-restart behavior after the backup reconciler is deployed and capture the
+first runner failure or successful health/digest evidence.
