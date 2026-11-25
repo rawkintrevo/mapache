@@ -1728,13 +1728,19 @@ closes interruption/resume and real capacity-failure evidence for the selected
 source set, but not application behavior.
 
 The same selected tree was then installed on a labeled retained disk and
-started with the pinned runner image through the Compute provider path. The
-runner reached authority acquisition, workspace-source, checkpoint-restore and
-browser-seed/profile-restore stages, but Chromium exited on both supervised
-attempts at `chrome_start`; the runner therefore did not reach `/runner/health`.
-The exact runner VM, maintenance VM, disk and temporary registry records were
-removed. This is a real imported-state application blocker, not evidence that
-the source import or disk-resume path failed.
+started with the new pinned runner image through the Compute provider path.
+The first two attempts exposed two retained-disk browser defects: the VM
+container needed `CHROME_DISABLE_SANDBOX=true` because it starts as root, and
+the runtime readiness check incorrectly required the optional taskbar even in
+minimal mode. The fixed image
+`sha256:b3bf1eac5fe03a6db9a6e79046c9b71fa0f394ecbf9247e1264202a4708f5741`
+completed every startup stage; `chrome_start` took 1.096 seconds. Authenticated
+`/runner/health` and `/browser/status` both returned 200, with the agent ready,
+CDP ready, VNC ready, `taskbar=false`, zero browser restarts and no process
+errors. The exact runner VM and temporary registry records were removed; the
+imported disk was left detached and READY for the separately authorized proof
+fixture. This is real selected-source application/runtime evidence, not a
+complete legacy cutover or source-authority switch.
 
 The same 2026-11-25 read-only source audit narrows the `vm-test`-specific
 reconciliation boundary: its Firestore source is explicitly `blank` with blank

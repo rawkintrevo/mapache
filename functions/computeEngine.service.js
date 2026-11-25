@@ -784,6 +784,10 @@ function createComputeEngineService(dependencies = {}) {
     const functionBase = `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net`;
     const env = {
       RUNTIME_PROVIDER: COMPUTE_ENGINE_BACKEND,
+      // The VM container currently starts as root. Chromium's Linux sandbox
+      // cannot initialize in that configuration; isolation comes from the
+      // unprivileged Docker container and private VM/gateway boundary.
+      CHROME_DISABLE_SANDBOX: "true",
       MAPACHE_RETAINED_DISK_ROOT: "/var/lib/mapache/workspace",
       MAPACHE_DATA_DISK_NAME: descriptor.dataDiskName,
       MAPACHE_ALLOW_FORMAT_NEW_DISK: options.allowNewDisk === true ? "true" : "false",

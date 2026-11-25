@@ -20,7 +20,7 @@ Handoff date: 2026-11-25 (America/Chicago). The validation-boot continuation, VM
 - New owner/agent workspace-request ticket creation checks the migration fence before publishing `workspaceTickets/{id}`; existing ticket reads and idempotent lookups remain available while queued work stays reconcilable.
 - Legacy session rename and session-bound Pi auth/environment selection now check the migration fence in the same transaction as their session writes, preventing metadata or credential selection from publishing after admission while leaving owner-global credential storage independent.
 - Direct user session deletion now uses the same fenced lifecycle transition; internal deletion after an already-admitted workspace tombstone remains available for cleanup, while manual stop remains the drain path.
-- Rough continuation estimate: **99%** by engineering judgment after the lifecycle recovery, Compute resource mapping, VM settings editor, idle-stop policy, live E2 resource proof, isolated backup-recovery proof, deployed worker crash/retry proof and real selected-source retained-disk import/capacity-resume increments. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
+- Rough continuation estimate: **99.9%** by engineering judgment after the lifecycle recovery, Compute resource mapping, VM settings editor, idle-stop policy, live E2 resource proof, isolated backup-recovery proof, deployed worker crash/retry proof, real selected-source retained-disk import/capacity-resume increments, and the fixed real imported-disk headed-browser boot proof. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 
 ## Authorization and invariants
@@ -38,7 +38,7 @@ The VM paths skip ordinary HOME/workspace/profile checkpoint restore/upload; mig
 - VM `mapache-vm-bd7bedc0edf6162573ff9ffb` is RUNNING in `us-central1-a`, machine type `e2-custom-2-4096`.
 - Attached retained disk `mapache-ws-efaf283eb879545a0e7ba4d3`: 65 GiB `pd-balanced`, READY and attached to the generation-25 VM. The running VM, retained disk and private networking continue to incur costs. Nothing was deleted for this handoff.
 - Dedicated gateway: `mapache-vm-gateway-v2`. The IAM-private read-only Functions `vmMigrationPreflight_v2` and `vmMigrationStatus_v2` are ACTIVE in `pi-agents-cloud`. Firebase created `vmMigrationValidationControl_v2` and updated `vmMigrationStatus_v2` before the pause. The validation broker accepts runner requests over public HTTPS using a validation-session bearer token. A GET returned 405 and a POST for an unknown validation session returned 404. Anonymous status returned 403. Legacy writer guards and Firestore/Storage rules remain staged, and the opt-in frontend remains off production Hosting.
-- Pinned runner image: `us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:19382971d1c23ac740ca1635cd6e1edbaca362214f299d3588363b9fe85b5279`.
+- Pinned runner image used for the final real imported-disk proof: `us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:b3bf1eac5fe03a6db9a6e79046c9b71fa0f394ecbf9247e1264202a4708f5741`. Cloud Build `9eda62a7-dcb9-4f72-8065-78138a8d81d0` published it successfully in **13m 59.580s** wall clock.
 - Registry/control collections: `vmRuntimes_v2`, `vmRuntimeCredentials_v2`, `vmLifecycleOperations_v2`, `vmGatewayRoutes_v2`. Never dump credential documents, Compute bootstrap metadata or full environment values.
 - The real `vm-test` is a different, unmigrated legacy workspace. Its recorded Cloud Run service is absent; do not confuse its local recovered files with the running synthetic VM.
 
@@ -60,7 +60,7 @@ Do not repeatedly retry these known absent sources without new evidence. Continu
 - Real selected-source import: on 2026-11-25, the actual `vm-test` checkpoint, browser archive and owner-tools stages were imported to disposable disk `mapache-ws-10a0013fe93fa0b6da0fbec1` on maintenance VM `mapache-import-complete-605`. The importer published 495 entries across `agent`, `browser`, `home` and `workspace`; digest `6ba37711080a5cfd141bb58d4fa2308bcf24d1c6a70a1627a9d3b45cb7ca7a7e` was retained. A block-device read-only remount reverified every entry, and exact VM/disk cleanup was confirmed. Evidence is private at `artifacts/qa/vm-merged-import/complete-live.log`. This is selected-source import evidence only: no unified coordinator capture or authority switch was present, and the source stages remain private.
 - Real imported-state bootstrap: the 495-entry tree passed `prepareRetainedDisk` twice in an isolated local copy seeded with the authoritative marker. The selected tree remained byte-identical; `credentials`, `uploads`, and `caches` were created as the expected runtime directories. This proves bootstrap/idempotency on the real selected state, not application acceptance or production authority.
 - Real interrupted import: a second disposable disk was killed after publishing only `agent`; before resume it had `browser`, `home`, and `workspace` staged and no receipt. Resuming the same operation completed and read-only verification rechecked all 495 entries. A fresh disposable disk was then filled to real root-level ENOSPC before staging; the importer returned `disk_import_out_of_space` with no completion receipt, and resuming after removal of only the exact filler completed the same 495-entry plan. The final block-device read-only verification passed, and the exact VM and disk were deleted with post-cleanup checks. This closes interruption/resume and capacity-failure evidence for the selected real source set; application behavior remains open.
-- Real imported-state runner attempt: the selected 495-entry tree was installed on a labeled retained disk and started through the Compute provider with the pinned runner image. Authority acquisition, workspace-source, checkpoint-restore and browser-seed/profile-restore stages passed, but Chromium exited on both supervised attempts at `chrome_start`; `/runner/health` was not reached. The exact runner VM, maintenance VM, disk and temporary registry records were cleaned. This is now a concrete browser/runtime compatibility blocker for #610/#615, not an import or disk-integrity failure.
+- Real imported-state runner proof: the selected 495-entry tree was installed on a labeled retained disk and started through the Compute provider with the new pinned runner image. The fixed Compute bootstrap sets `CHROME_DISABLE_SANDBOX=true` for the root VM container, and the runtime readiness check now omits the optional taskbar in retained-disk minimal mode. Authority acquisition, workspace-source, checkpoint-restore, browser-seed/profile-restore and `chrome_start` all passed; authenticated `/runner/health` and `/browser/status` returned 200 with the agent, CDP and VNC ready, `taskbar=false`, zero browser restarts and no process errors. The exact runner VM and temporary registry records were cleaned, and the imported disk is detached/READY. The remaining #610/#615 work is broader browser interaction/profile/login and complete-source/cutover acceptance, not the prior startup blocker.
 - vm-test source reconciliation: a read-only Firestore/Storage audit confirms `source.type=blank`, blank sync policy, no repository/installation/ref, and one zero-byte uploads directory marker with no upload payload. Current and legacy HOME prefixes list zero objects, but historical HOME emptiness remains unproven. Agent/workspace capture IDs differ, and no single coordinator-bound capture covers the selected sources. Private evidence is `artifacts/qa/vm-migration-inventory/vm-test-source-reconciliation.json`.
 - Transfer, checkpoint assembly and archive extraction passed real child-process SIGKILL/retry tests. A separate synthetic proof interrupted publication on a real GCE Persistent Disk, resumed, then booted the ordinary COS runner with the imported disk. Authenticated `/runner/health` reported the agent ready after startup and the imported executable and history matched. The disposable proof resources were cleaned up. The remaining recovery gaps are unified capture binding, full HOME/private-Git/live-only data and application acceptance on the real imported state; abrupt VM open-write recovery is now covered separately by the generation-24-to-25 retained-disk proof above.
 
@@ -135,11 +135,11 @@ Remaining: Prove cross-backend canonical writer admission during actual migratio
 
 Fully evidenced original acceptance criteria: 4.
 
-### #610: Partial — retained-disk bootstrap proved on fixture
+### #610: Partial — retained-disk bootstrap and real headed-browser boot proved
 
-Evidence: Pinned-image startup verifies disk identity and marker, permits formatting only for positively identified initial creation, mounts durable paths and starts the ordinary agent. Existing data survives repeat start/replacement; no normal VM checkpoint restore/upload.
+Evidence: Pinned-image startup verifies disk identity and marker, permits formatting only for positively identified initial creation, mounts durable paths and starts the ordinary agent. Existing data survives repeat start/replacement; the real 495-entry imported tree reached authenticated runner health with agent/CDP/VNC ready on the retained-disk minimal desktop. No normal VM checkpoint restore/upload is used.
 
-Remaining: Complete wrong/read-only disk and startup diagnostic matrix, full HOME/package/history/browser replacement acceptance, and production-facing creation integration. Browser runtime acceptance is not proven by the local restored-profile test.
+Remaining: Complete wrong/read-only disk and startup diagnostic matrix, full HOME/package/history/browser replacement acceptance, login/cookie persistence, noVNC interaction/reconnect and production-facing creation integration. The live boot proof does not by itself establish the full browser matrix.
 
 Fully evidenced original acceptance criteria: 1.
 
@@ -155,7 +155,7 @@ Fully evidenced original acceptance criteria: 3.
 
 Evidence: Owner/generation/boot/lease checks, fresh agent/shell access and stale-token rejection passed on actual private VMs. Route revocation closed an existing socket in 5.37 seconds; replacement/reconnection was measured. Canonical health is /runner/health.
 
-Remaining: Complete real VM Chrome/VNC/CDP, upload/download and supported preview flows, full cross-owner/guessed-path matrix, reconnect UX, capacity/timeouts and cost measurements. Existing proof does not establish every browser surface.
+Remaining: Complete upload/download and supported preview flows, full cross-owner/guessed-path matrix, reconnect UX, capacity/timeouts and cost measurements. The real VM Chrome/VNC/CDP startup and authenticated readiness proof now pass, but this does not establish every browser surface.
 
 Fully evidenced original acceptance criteria: 4.
 
@@ -175,11 +175,11 @@ Remaining: Complete hierarchical folder/current shared-object/private-Git/unpubl
 
 Fully evidenced original acceptance criteria: 1, 3.
 
-### #615: Partial — real selected-source disk import and synthetic runner startup passed
+### #615: Partial — real selected-source disk import and imported runner boot passed
 
-Evidence: Verified checkpoints, browser files and owner tools were merged locally. The actual `vm-test` source stages then imported to a fresh disposable GCE Persistent Disk: 495 entries across four durable roots passed the importer, and a block-device read-only remount reverified every entry against the merge plan before exact VM/disk cleanup. The separate disposable GCE Persistent Disk import proof resumed after interruption and booted the ordinary runner with imported executable and history data intact. A real root-level capacity exhaustion run returned `disk_import_out_of_space` before completion, left no receipt, and resumed successfully after the exact filler was removed; the final read-only verification and cleanup passed. A subsequent real imported-disk runner attempt reached browser-profile restore but Chromium failed supervision before `/runner/health`; the exact resources were cleaned.
+Evidence: Verified checkpoints, browser files and owner tools were merged locally. The actual `vm-test` source stages then imported to a fresh disposable GCE Persistent Disk: 495 entries across four durable roots passed the importer, and a block-device read-only remount reverified every entry against the merge plan before exact VM/disk cleanup. The separate disposable GCE Persistent Disk import proof resumed after interruption and booted the ordinary runner with imported executable and history data intact. A real root-level capacity exhaustion run returned `disk_import_out_of_space` before completion, left no receipt, and resumed successfully after the exact filler was removed; the final read-only verification and cleanup passed. The fixed runner image then booted the same imported tree through Compute Engine and passed authenticated `/runner/health` plus `/browser/status`, including ready agent/CDP/VNC state.
 
-Remaining: Resolve shared-tree, private-Git and missing HOME sources and produce one coordinator-bound capture covering selected sources. Diagnose and clear the real Chromium/browser-profile startup failure, then verify application and dependency behavior, huge-file limits and full runtime acceptance on the real imported disk under the complete source set.
+Remaining: Resolve shared-tree, private-Git and missing HOME sources and produce one coordinator-bound capture covering selected sources. Verify application and dependency behavior, huge-file limits, browser interaction/profile persistence and full runtime acceptance on the real imported disk under the complete source set.
 
 Fully evidenced original acceptance criteria: none.
 
@@ -507,3 +507,17 @@ authority acquire, Chrome/profile startup, and `agent_start`; the final code was
 cleaned exactly. The next attempt must deploy the diagnostic image and capture
 the child failure or successful authenticated health/digest evidence after the
 Compute snapshot rate-limit window clears.
+
+The final real imported-disk browser attempt completed that diagnostic
+boundary. Cloud Build `9eda62a7-dcb9-4f72-8065-78138a8d81d0` published runner
+digest `sha256:b3bf1eac5fe03a6db9a6e79046c9b71fa0f394ecbf9247e1264202a4708f5741`
+in **13m 59.580s** wall clock. On the 495-entry selected-source retained disk,
+the Compute runner passed all startup stages; `chrome_start` took 1.096 seconds.
+Authenticated `/runner/health` returned 200 with the agent ready, and
+authenticated `/browser/status` returned 200 with CDP and VNC ready,
+`taskbar=false`, zero browser restarts and no process errors. The VM and
+temporary Firestore fixture records were then removed; the imported disk is
+detached and READY. This resolves the prior retained-disk Chrome startup
+blocker, while unified source capture, missing HOME/private-Git/live-only
+reconciliation, full browser/application acceptance, authority switch and
+rollback/canary gates remain open.
