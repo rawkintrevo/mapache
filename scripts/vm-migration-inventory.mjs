@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -19,7 +20,7 @@ async function main() {
   const args = process.argv.slice(2);
   const options = {};
   for (let i = 0; i < args.length; i += 2) {
-    if (!['--project', '--output', '--workspace', '--verify-bytes', '--list-objects', '--default-bucket', '--tools-bucket', '--verify-archive-bytes', '--archive-expanded-bytes'].includes(args[i]) || !args[i + 1] || options[args[i]]) throw Error('invalid_arguments');
+    if (!['--project', '--output', '--workspace', '--verify-bytes', '--verify-flat-prefix-bytes', '--list-objects', '--default-bucket', '--tools-bucket', '--verify-archive-bytes', '--archive-expanded-bytes'].includes(args[i]) || !args[i + 1] || options[args[i]]) throw Error('invalid_arguments');
     options[args[i]] = args[i + 1];
   }
   if (options['--project'] !== 'pi-agents-cloud') throw Error('explicit_project_required');
@@ -28,6 +29,10 @@ async function main() {
   if (options['--verify-bytes'] && (!options['--workspace'] || !Number.isSafeInteger(budget.remaining) || budget.remaining < 1)) throw Error('payload_verification_requires_workspace_and_byte_budget');
   const maxObjects = Number(options['--list-objects'] || 0);
   if (options['--list-objects'] && (!options['--workspace'] || !Number.isSafeInteger(maxObjects) || maxObjects < 1 || maxObjects > 100000)) throw Error('storage_inventory_requires_workspace_and_object_budget');
+  const flatPrefixBudget = {remaining: Number(options['--verify-flat-prefix-bytes'] || 0)};
+  if (options['--verify-flat-prefix-bytes'] && (!maxObjects || !options['--workspace'] || !Number.isSafeInteger(flatPrefixBudget.remaining) || flatPrefixBudget.remaining < 1)) {
+    throw Error('flat_prefix_verification_requires_listing_and_byte_budget');
+  }
   let archiveBudget = Number(options['--verify-archive-bytes'] || 0);
   const maxExpandedBytes = Number(options['--archive-expanded-bytes'] || 0);
   if ((options['--verify-archive-bytes'] || options['--archive-expanded-bytes']) && (!maxObjects || !Number.isSafeInteger(archiveBudget) || archiveBudget < 1 ||
@@ -63,12 +68,33 @@ async function main() {
     try {
       const [metadata] = await storage.bucket(ref.bucketName).file(ref.objectPath).getMetadata();
       if (Number(metadata.size) !== ref.byteLength) throw Error('payload_size_mismatch');
+      if (ref.objectGeneration && String(metadata.generation) !== String(ref.objectGeneration)) throw Error('payload_generation_changed');
       return {generation: metadata.generation, stream: storage.bucket(ref.bucketName).file(ref.objectPath, {generation: metadata.generation}).createReadStream()};
     } catch (error) {
       if (Number(error.code) === 404) throw Error('payload_object_not_found');
       if ([401, 403].includes(Number(error.code))) throw Error('payload_access_denied');
-      if (error.message === 'payload_size_mismatch') throw error;
+      if (['payload_size_mismatch', 'payload_generation_changed'].includes(error.message)) throw error;
       throw Error('payload_unavailable');
+    }
+  }
+  async function verifyFlatPrefixObject({candidate, object}) {
+    const byteLength = Number(object.size);
+    if (byteLength > flatPrefixBudget.remaining) return {status: 'blocked', reason: 'flat_prefix_payload_budget_exceeded'};
+    try {
+      const pinned = await openObject({bucketName: candidate.bucketName, objectPath: object.name,
+        byteLength, objectGeneration: object.generation});
+      const hash = createHash('sha256'); let readBytes = 0;
+      for await (const chunk of pinned.stream) {
+        readBytes += chunk.length;
+        if (readBytes > byteLength || readBytes > flatPrefixBudget.remaining) throw Error('flat_prefix_payload_budget_exceeded');
+        hash.update(chunk);
+      }
+      if (readBytes !== byteLength) throw Error('flat_prefix_payload_unavailable');
+      flatPrefixBudget.remaining -= readBytes;
+      return {status: 'verified', byteLength: readBytes, sha256: hash.digest('hex')};
+    } catch (error) {
+      if (['flat_prefix_payload_budget_exceeded', 'payload_generation_changed'].includes(error.message)) return {status: 'blocked', reason: error.message};
+      return {status: 'blocked', reason: 'flat_prefix_payload_unavailable'};
     }
   }
   const workspaces = options['--workspace'] ? (await db.collection('workspaces')
@@ -111,6 +137,7 @@ async function main() {
         const [files, next] = await storage.bucket(bucketName).getFiles({prefix, pageToken, maxResults: limit, autoPaginate: false});
         return {objects: files.map(file => file.metadata), nextPageToken: next?.pageToken || null};
       },
+      verifyObject: options['--verify-flat-prefix-bytes'] ? verifyFlatPrefixObject : undefined,
       inspectBrowserSeed: ({bucketName, prefix}) => inspectBrowserSeedMetadata({workspaceId: doc.id,
         workspacePrefix: doc.data().storagePrefix || doc.data().workspaceStoragePrefix, bucketName,
         readPointer: async () => {

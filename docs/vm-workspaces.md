@@ -765,6 +765,15 @@ this option. Current browser pointers are read within a 64 KiB bound and checked
 with the runner's descriptor validator against the workspace, bucket and pinned
 archive metadata; this is not archive hash or extraction validation.
 
+For a legacy flat-prefix source, `--verify-flat-prefix-bytes <total-budget>`
+may be added alongside `--list-objects`. It streams every object in the
+workspace candidate at the generation returned by the listing, checks the
+actual byte count, hashes the content, and records only an aggregate payload
+digest/count/byte result. The explicit byte budget is separate from the object
+listing limit; a changed generation, stream mismatch, access failure, or
+budget exhaustion blocks verification. This proves content for the observed
+prefix but does not pause writers or authorize a migration fence.
+
 The 2026-11-23 `vm-test` scan completed 584 listing entries across overlapping
 sources within a 10,000-entry limit. Its workspace prefix contained 568 objects;
 the owner-tools source contained three non-marker files totaling 65,988 bytes.

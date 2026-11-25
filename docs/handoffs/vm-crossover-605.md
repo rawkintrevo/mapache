@@ -845,3 +845,24 @@ creating the migration and Storage fences; stale, missing, blocked, or
 scope-mismatched audits fail closed. Focused source-audit coverage passes 4/4,
 and the coordinator gate is covered by the Firestore emulator test. No real
 workspace has a ready audit or has been reserved through this new gate yet.
+
+## Continuation implementation — flat-prefix payload verification
+
+The read-only inventory now accepts `--verify-flat-prefix-bytes` alongside
+`--list-objects`. It streams the workspace candidate at each listed Storage
+generation, verifies the actual byte count within a separate total budget, and
+records only an aggregate content digest/count/byte result. Changed
+generations, stream mismatches, access failures, and budget exhaustion remain
+blocked. This strengthens source-completeness evidence for legacy flat
+prefixes without pausing writers or authorizing a fence. Focused metadata
+coverage passes 9/9; no production source was downloaded or changed.
+
+The new verifier was run read-only against inactive blank workspace
+`Fl09y597EgcvMPxGp3io` (owner `KyOcBZ4bAZMaI8VE0SNbQXN4sFY2`). It verified all
+10 workspace-prefix objects, totaling 5,389 bytes, with aggregate payload
+evidence digest
+`f003aeddb591bb17575f1d0bf6926a99ab83538f685985f05b463da8a994df7b`; the
+Storage preflight remained stable at 10 objects and Compute discovery remained
+clear. The source still is not a canary: source/live-state reconciliation and
+approved cost/downtime proof remain open, and no fence, VM, disk, authority
+switch, or source deletion occurred.

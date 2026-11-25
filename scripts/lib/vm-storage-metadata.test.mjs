@@ -40,6 +40,28 @@ test('paginated metadata classifies both internal spellings without exposing nam
   assert.equal(result.sourceTotalsMayOverlap, true);
 });
 
+test('optional workspace payload verification records a bounded content digest', async () => {
+  const seen = [];
+  const result = await inventoryStorageMetadata({candidates: [candidate], unresolved: [], maxObjects: 10,
+    listPage: async () => ({objects: [object(`${candidate.prefix}/one`, 4), object(`${candidate.prefix}/two`, 6)], nextPageToken: null}),
+    verifyObject: async ({candidate: actualCandidate, object: actualObject}) => {
+      seen.push([actualCandidate.bucketName, actualObject.name, actualObject.generation]);
+      return {status: 'verified', byteLength: Number(actualObject.size), sha256: 'a'.repeat(64)};
+    }});
+  assert.deepEqual(seen, [[candidate.bucketName, `${candidate.prefix}/one`, '123'], [candidate.bucketName, `${candidate.prefix}/two`, '123']]);
+  assert.deepEqual(result.sources[0].payloadVerification, {
+    status: 'verified', objects: 2, storedBytes: 10, evidenceSha256: 'de4c5baece8876edf22cc130e1e1c95da25f931e08f3988093d7d89b1fa8154e',
+  });
+});
+
+test('workspace payload verification stops at its explicit byte budget', async () => {
+  const result = await inventoryStorageMetadata({candidates: [candidate], unresolved: [], maxObjects: 10,
+    listPage: async () => ({objects: [object(`${candidate.prefix}/too-large`, 11)], nextPageToken: null}),
+    verifyObject: async () => ({status: 'blocked', reason: 'flat_prefix_payload_budget_exceeded'})});
+  assert.equal(result.sources[0].status, 'blocked');
+  assert.equal(result.sources[0].reason, 'flat_prefix_payload_budget_exceeded');
+});
+
 test('object limits report truncation and do not silently scan another source', async () => {
   let calls = 0;
   const result = await inventoryStorageMetadata({candidates: [candidate, {...candidate, prefix: 'second'}], unresolved: [], maxObjects: 1,

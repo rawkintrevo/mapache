@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 const require = createRequire(import.meta.url);
 const {validateDescriptor} = require('../../session-runner/lib/chromeProfileSeed.service.js');
+const DIGEST = /^[a-f0-9]{64}$/;
 const safePrefix = value => typeof value === 'string' && value.length > 0 && !/[\\\0\r\n]/.test(value) && !value.split('/').some(p => !p || p === '.' || p === '..');
 const safeBucket = value => typeof value === 'string' && /^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$/.test(value);
 
@@ -62,7 +63,7 @@ function category(name, roles) {
   return internal ? 'other-internal' : 'workspace-or-tool-object';
 }
 
-export async function inventoryStorageMetadata({candidates, unresolved, listPage, maxObjects, inspectBrowserSeed}) {
+export async function inventoryStorageMetadata({candidates, unresolved, listPage, maxObjects, inspectBrowserSeed, verifyObject}) {
   if (!Number.isSafeInteger(maxObjects) || maxObjects < 1) throw Error('invalid_metadata_budget');
   let remaining = maxObjects;
   const sources = [];
@@ -72,6 +73,8 @@ export async function inventoryStorageMetadata({candidates, unresolved, listPage
       status: 'not-scanned', objects: 0, storedBytes: 0, categories: {}, legacyInternalObjects: 0};
     sources.push(source);
     const evidence = createHash('sha256'); const seenTokens = new Set();
+    const payloadEvidence = verifyObject && candidate.roles.includes('workspace') ? createHash('sha256') : null;
+    let verifiedPayloadObjects = 0; let verifiedPayloadBytes = 0;
     let pageToken;
     try {
       do {
@@ -88,6 +91,14 @@ export async function inventoryStorageMetadata({candidates, unresolved, listPage
           aggregate.objects++; aggregate.storedBytes += Number(object.size);
           source.objects++; source.storedBytes += Number(object.size); remaining--;
           if (!Number.isSafeInteger(source.storedBytes)) throw Error('invalid_object_metadata');
+          if (payloadEvidence) {
+            const verified = await verifyObject({candidate, object});
+            if (!verified || verified.status !== 'verified' || !DIGEST.test(String(verified.sha256 || '')) ||
+                verified.byteLength !== Number(object.size)) throw Error(verified?.reason || 'flat_prefix_payload_unavailable');
+            payloadEvidence.update(JSON.stringify([object.name, String(object.generation), String(object.size), verified.sha256]));
+            verifiedPayloadObjects++; verifiedPayloadBytes += Number(object.size);
+            if (!Number.isSafeInteger(verifiedPayloadBytes)) throw Error('flat_prefix_payload_unavailable');
+          }
           if (/(?:^|\/)(?:\.mapache-internal|\.mapahce-internal)\//.test(object.name)) source.legacyInternalObjects++;
           evidence.update(JSON.stringify([object.name, String(object.generation), String(object.size), object.crc32c || null, object.md5Hash || null]));
         }
@@ -97,13 +108,16 @@ export async function inventoryStorageMetadata({candidates, unresolved, listPage
         if (!pageToken) source.status = 'listed-payloads-unverified';
       } while (pageToken);
       source.metadataEvidenceSha256 = evidence.digest('hex');
+      if (payloadEvidence) source.payloadVerification = {status: 'verified', objects: verifiedPayloadObjects,
+        storedBytes: verifiedPayloadBytes, evidenceSha256: payloadEvidence.digest('hex')};
       if (source.status === 'listed-payloads-unverified' && candidate.roles.includes('browser-seed') && source.categories['browser-seed-pointer'] && inspectBrowserSeed) {
         source.currentSeed = await inspectBrowserSeed(candidate);
       }
     } catch (error) {
       source.status = 'blocked';
       source.reason = [401, 403].includes(Number(error.code)) ? 'storage_access_denied' : Number(error.code) === 404 ? 'storage_source_not_found' :
-        ['invalid_metadata_page', 'invalid_object_metadata', 'metadata_pagination_stalled'].includes(error.message) ? error.message : 'storage_listing_unavailable';
+        ['invalid_metadata_page', 'invalid_object_metadata', 'metadata_pagination_stalled', 'flat_prefix_payload_budget_exceeded',
+          'flat_prefix_payload_generation_changed', 'flat_prefix_payload_unavailable'].includes(error.message) ? error.message : 'storage_listing_unavailable';
     }
   }
   return {sources, unresolved, maxObjects, listedObjects: maxObjects - remaining, sourceTotalsMayOverlap: true,

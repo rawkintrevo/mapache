@@ -12,7 +12,8 @@ const base = () => ({
     storage: {stable: true, blockers: [], firstSha256: digest('c'), secondSha256: digest('c')}},
   inventory: {workspaceId: 'workspace', ownerUid: 'owner', formats: []},
   storageMetadata: {unresolved: [], sourceTotalsMayOverlap: true, listedObjects: 3, maxObjects: 10, sources: [
-    {roles: ['workspace'], prefixSha256: digest('d'), status: 'listed-payloads-unverified', objects: 1, storedBytes: 4, metadataEvidenceSha256: digest('e')},
+    {roles: ['workspace'], prefixSha256: digest('d'), status: 'listed-payloads-unverified', objects: 1, storedBytes: 4, metadataEvidenceSha256: digest('e'),
+      payloadVerification: {status: 'verified', objects: 1, storedBytes: 4, evidenceSha256: digest('a')}},
     {roles: ['browser-seed'], prefixSha256: digest('f'), status: 'listed-empty', objects: 0, storedBytes: 0, metadataEvidenceSha256: digest('0')},
     {roles: ['uploads'], prefixSha256: digest('1'), status: 'listed-empty', objects: 0, storedBytes: 0, metadataEvidenceSha256: digest('2')},
     {roles: ['owner-tools'], prefixSha256: digest('3'), status: 'listed-payloads-unverified', objects: 2, storedBytes: 8, metadataEvidenceSha256: digest('4')},
@@ -60,6 +61,12 @@ test('source blockers and unstable provider evidence cannot become ready', () =>
   assert.throws(() => assertReadySourceAudit(audit, {workspaceId: 'workspace', ownerUid: 'owner', sourceGeneration: 4,
     observationSha256: digest('a'),
     sourceObservationSha256: digest('b'), scope: {bucket: 'bucket', prefix: 'workspaces/owner/workspace', workspaceKey: 'workspace'}}), {message: 'source_audit_not_ready'});
+});
+
+test('metadata-only non-empty workspace storage cannot become audit-ready', () => {
+  const input = base();
+  delete input.storageMetadata.sources[0].payloadVerification;
+  assert.throws(() => buildSourceAudit(input), {message: 'source_audit_storage_payload_unverified'});
 });
 
 test('a changed source observation invalidates a ready audit', () => {

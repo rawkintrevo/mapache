@@ -89,8 +89,17 @@ function normalizeStorage(storageMetadata) {
         !DIGEST.test(String(source.prefixSha256 || '')) || !['listed-payloads-unverified', 'listed-empty'].includes(source.status) ||
         !Number.isSafeInteger(source.objects) || source.objects < 0 || !Number.isSafeInteger(source.storedBytes) || source.storedBytes < 0 ||
         !DIGEST.test(String(source.metadataEvidenceSha256 || ''))) fail('source_audit_storage_source_incomplete');
+    let payloadVerification;
+    if (source.objects > 0 && source.roles.includes('workspace')) {
+      if (!source.payloadVerification || source.payloadVerification.status !== 'verified' ||
+          source.payloadVerification.objects !== source.objects || source.payloadVerification.storedBytes !== source.storedBytes ||
+          !DIGEST.test(String(source.payloadVerification.evidenceSha256 || ''))) fail('source_audit_storage_payload_unverified');
+      payloadVerification = {status: 'verified', objects: source.payloadVerification.objects,
+        storedBytes: source.payloadVerification.storedBytes, evidenceSha256: source.payloadVerification.evidenceSha256};
+    }
     return {roles: [...new Set(source.roles)].sort(), prefixSha256: source.prefixSha256, status: source.status,
-      objects: source.objects, storedBytes: source.storedBytes, metadataEvidenceSha256: source.metadataEvidenceSha256};
+      objects: source.objects, storedBytes: source.storedBytes, metadataEvidenceSha256: source.metadataEvidenceSha256,
+      ...(payloadVerification ? {payloadVerification} : {})};
   });
   return {sources, listedObjects: boundedInteger(storageMetadata.listedObjects, 'source_audit_listed_objects'), maxObjects: boundedInteger(storageMetadata.maxObjects, 'source_audit_max_objects')};
 }
