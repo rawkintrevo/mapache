@@ -114,6 +114,12 @@ Run slower checks when a change touches the related subsystem:
   fixture through the real pi-web-ui server, gateway, WebSocket, terminal, Goal, checkpoint,
   and restart paths; it does not require paid model or cloud credentials. This is local
   integration coverage, not hosted/browser QA.
+- Remote-libvirt guest-image changes: run `python3 -m unittest discover -s
+  scripts/remote-vm-guest -p 'test_*.py'` and
+  `scripts/remote-vm-guest/build-image.py --dry-run`. A real build additionally
+  requires the pinned Ubuntu artifact, an immutable `gcp-runner` payload,
+  `qemu-img`, and `virt-customize`; an isolated KVM boot/readiness/reboot proof
+  is reserved for the #643 rollout gate.
 - Runner image cache changes: provision the private `pi-agents-cloud-build-cache` bucket as
   described in [Deployment](./deployment.md), then run three Cloud Builds with the same
   source inputs. The first build is the cold miss; a second build submitted from a fresh
