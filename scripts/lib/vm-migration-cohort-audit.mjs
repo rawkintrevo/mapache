@@ -1,5 +1,6 @@
 const EXCLUDED_CLASSIFICATIONS = new Set(['excluded-ssh', 'excluded-n64']);
 const TERMINAL_VM_STATES = new Set(['active', 'stopped']);
+const DIGEST = /^[a-f0-9]{64}$/;
 
 function invalid() {
   throw Error('migration_cohort_report_invalid');
@@ -8,7 +9,11 @@ function invalid() {
 function isSourceRetainedBlocked(record) {
   const report = record?.blockedReport;
   return report?.state === 'blocked' && report.decision === 'source-retained' &&
-    report.sourceRetained === true && Array.isArray(report.blockers) && report.blockers.length > 0;
+    report.sourceRetained === true && Array.isArray(report.blockers) && report.blockers.length > 0 &&
+    DIGEST.test(String(record.sourceObservationSha256 || '')) &&
+    report.sourceObservationSha256 === record.sourceObservationSha256 &&
+    (record.sourceGeneration === null || Number.isSafeInteger(record.sourceGeneration)) &&
+    report.sourceGeneration === record.sourceGeneration;
 }
 
 function isMigratedRuntime(runtime, record) {

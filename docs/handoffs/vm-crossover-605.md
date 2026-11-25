@@ -866,6 +866,24 @@ stale inventory report rather than combining old source metadata with a fresh
 preflight. The inventory remains read-only and no production source was
 rewritten.
 
+The cohort completion audit now applies the same binding to durable blocked
+reports: a stale source-retained report is unaccounted rather than satisfying
+the parent completion gate. Focused cohort coverage passes 7/7.
+
+The explicit blocked-source operator command now refreshes an existing
+same-owner blocked/source-retained report when a fresh source observation is
+available. It still refuses non-blocked records and never releases fences or
+changes source authority.
+
+Live refresh evidence: the reports for `vm-test`
+(`1yIPKCPpk5O8s6RfAd0n`) and inactive workspace
+`83t09pcpJ44mRs9RkILg` were updated from fresh read-only preflights. A new
+bound inventory/cohort audit now reports 86 legacy records as 1 excluded, 2
+explicitly blocked/source-retained, 0 migrated and 83 unaccounted, with no
+orphaned VM-authority records. Both blocked sources still carry
+`legacy_persistent_home_archive_missing`; no fence, VM, disk, authority switch
+or source deletion was performed.
+
 ## Continuation implementation — flat-prefix payload verification
 
 The read-only inventory now accepts `--verify-flat-prefix-bytes` alongside

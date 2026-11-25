@@ -61,16 +61,15 @@ try {
           current.sourceGeneration !== report.sourceGeneration) throw Error("blocked_source_observation_changed");
       if (existing.exists) {
         const prior = existing.data();
-        if (prior.ownerUid !== ownerUid || prior.sourceObservationSha256 !== report.sourceObservationSha256 ||
-            JSON.stringify(prior.blockers || []) !== JSON.stringify(report.blockers)) {
-          throw Error("blocked_source_report_conflict");
-        }
-        return {created: false, report: prior};
+        if (prior.ownerUid !== ownerUid || prior.state !== "blocked" || prior.decision !== "source-retained" ||
+            prior.sourceRetained !== true) throw Error("blocked_source_report_conflict");
+        transaction.update(reportRef, report);
+        return {created: false, updated: true, report};
       }
       transaction.create(reportRef, report);
-      return {created: true, report};
+      return {created: true, updated: false, report};
     });
-    console.log(JSON.stringify({...result.report, created: result.created}));
+    console.log(JSON.stringify({...result.report, created: result.created, updated: result.updated === true}));
   } finally {
     await app.delete();
   }

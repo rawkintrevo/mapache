@@ -727,7 +727,8 @@ node scripts/vm-migration-cohort-audit.mjs \
 The audit requires every eligible legacy workspace to be either backed by an
 active or stopped VM record with `migrationAuthority=compute-engine` and the
 API/lifecycle admissions enabled, or represented by a durable
-`blocked`/`source-retained` report. SSH and N64 records are explicitly outside
+`blocked`/`source-retained` report whose source generation and observation digest
+match the same inventory record. SSH and N64 records are explicitly outside
 automatic migration. It also reports orphaned VM-authority records. A
 `readyForCompletion` result is only a reconciliation result; it does not
 reserve a workspace, create a fence, switch authority, or delete legacy data.
@@ -1193,6 +1194,11 @@ compares the source generation and source-observation digest before creating
 codes, counts and evidence digests; it never records provider addresses,
 object names or credentials. The report is idempotent for the same source
 observation and refuses an active migration fence or a changed source.
+
+If the source observation changes while the same source remains blocked, rerun
+the command with the fresh preflight digest. It refreshes only an existing
+same-owner `blocked`/`source-retained` report; it cannot overwrite a non-blocked
+report or release a migration fence.
 
 This report means `state: "blocked"`, `decision: "source-retained"`, and
 `sourceRetained: true`. It is a release-audit outcome, not a recovery decision

@@ -6,11 +6,15 @@ const base = (overrides = {}) => ({schemaVersion: 1, readOnly: true, workspaces:
 const workspace = (id, overrides = {}) => ({workspaceId: id, ownerUid: `owner-${id}`, classification: 'inactive', blockers: ['source_not_terminal'], ...overrides});
 const migrated = (id, overrides = {}) => ({workspaceId: id, ownerUid: `owner-${id}`, backend: 'compute-engine',
   migrationAuthority: 'compute-engine', apiEnabled: true, lifecycleEnabled: true, state: 'stopped', ...overrides});
+const digest = value => value.repeat(64);
 
 test('cohort audit accepts excluded and explicitly source-retained records', () => {
   const result = auditMigrationCohort(base({workspaces: [
     workspace('ssh', {classification: 'excluded-ssh'}),
-    workspace('blocked', {blockedReport: {state: 'blocked', decision: 'source-retained', sourceRetained: true, blockers: ['home_missing']}}),
+    workspace('blocked', {sourceGeneration: 2, sourceObservationSha256: digest('a'), blockedReport: {
+      state: 'blocked', decision: 'source-retained', sourceGeneration: 2,
+      sourceObservationSha256: digest('a'), sourceRetained: true, blockers: ['home_missing'],
+    }}),
   ]}), {now: 123});
   assert.equal(result.readyForCompletion, true);
   assert.deepEqual(result.counts, {excluded: 1, blocked: 1, migrated: 0, unaccounted: 0});
@@ -28,6 +32,17 @@ test('cohort audit keeps a pending source unaccounted', () => {
   assert.equal(result.readyForCompletion, false);
   assert.deepEqual(result.workspaces[0].blockers, ['source_not_terminal']);
   assert.equal(result.counts.unaccounted, 1);
+});
+
+test('cohort audit does not count a stale blocked report as complete', () => {
+  const result = auditMigrationCohort(base({workspaces: [workspace('stale', {
+    blockers: ['source_observation_changed'], sourceGeneration: 2, sourceObservationSha256: digest('a'),
+    blockedReport: {state: 'blocked', decision: 'source-retained', sourceGeneration: 2,
+      sourceObservationSha256: digest('b'), sourceRetained: true, blockers: ['home_missing']},
+  })]}));
+  assert.equal(result.readyForCompletion, false);
+  assert.equal(result.workspaces[0].status, 'unaccounted');
+  assert.deepEqual(result.workspaces[0].blockers, ['source_observation_changed']);
 });
 
 test('cohort audit rejects an incomplete VM authority record', () => {
