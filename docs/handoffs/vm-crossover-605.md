@@ -17,7 +17,7 @@ Handoff date: 2026-11-24 (America/Chicago). The validation-boot continuation and
 - New owner/agent workspace-request ticket creation checks the migration fence before publishing `workspaceTickets/{id}`; existing ticket reads and idempotent lookups remain available while queued work stays reconcilable.
 - Legacy session rename and session-bound Pi auth/environment selection now check the migration fence in the same transaction as their session writes, preventing metadata or credential selection from publishing after admission while leaving owner-global credential storage independent.
 - Direct user session deletion now uses the same fenced lifecycle transition; internal deletion after an already-admitted workspace tombstone remains available for cleanup, while manual stop remains the drain path.
-- Rough overall estimate: **80%** by engineering judgment after the lifecycle recovery, Compute resource mapping, VM settings editor, idle-stop policy, and live E2 resource proof increments. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
+- Rough continuation estimate: **90%** by engineering judgment after the lifecycle recovery, Compute resource mapping, VM settings editor, idle-stop policy, live E2 resource proof, and isolated backup-recovery proof increments. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 
 ## Authorization and invariants
@@ -299,12 +299,13 @@ unknown.
 
 Continuation update (2026-11-25 UTC): the dedicated gateway host is configured
 and the recovery reconciler is active at revision
-`vmbackupreconcile-v2-00022-roc` with immutable runner image
-`us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:19ea69b31ea511febe87cdf49303cef95a0cb512903804a7fb527d31a4863d21`.
-The diagnostic image build for the next attempt succeeded in 12m20.061106s
-wall-clock (Docker build step 8m06.504169s), with the pi-web-ui cache hit and
-startup smoke test passing. Its digest is
-`us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:19ea69b31ea511febe87cdf49303cef95a0cb512903804a7fb527d31a4863d21`.
+`vmbackupreconcile-v2-00023-yan` with immutable runner image
+`us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:083f1c7f4b7d167a7ef4324abb680c1221a20cc8211537df44f5cd21496f6e50`.
+The diagnostic image build succeeded in 13m19.508270s wall-clock (Docker build
+step 8m41.881640s), with the pi-web-ui cache hit and startup smoke test
+passing. The preceding diagnostic build identified the stale snapshot lock;
+the deployed recovery-only process now permits replacement of that lock while
+normal runners retain the upstream single-kernel guard.
 Recovery-only runner containers use Docker `--restart=no`, while ordinary VMs
 retain `unless-stopped`, so a failed recovery runner remains inspectable instead
 of creating a restart loop. A proof with the previously deployed `f4cc...` image
@@ -312,18 +313,23 @@ reached a running VM but never acquired the lease because that stale image did
 not expose the current runner health route; its VM, disk and isolated records
 were cleaned up. Fresh-image proofs reached an active lease and restored the
 disk, but the latest runner exited with status 1 during `agent_start` after
-2,680 ms with `pi_web_ui_process_exited`. The new image was deployed and the
-next proof pulled that exact digest and completed the host startup script, but
-the proof still failed with `vm_backup_recovery_health_unavailable`; Cloud
-Logging exposed no Docker-container stdout after cleanup. The next attempt
-therefore needs a live IAP watcher to capture `docker logs mapache-runner`
-before the controller removes the disposable VM. No proof has yet reported
-successful runtime/file digest verification or measured RPO/RTO.
+2,680 ms with `pi_web_ui_process_exited`; a live IAP watcher captured the
+cause as a stale source-VM kernel lock in the restored disk. The lock-fix image
+then completed the isolated fresh-disk/fresh-VM proof: authenticated health and
+recovery digest matched the source file digest
+`sha256:2fe7e047ab49adf80163858d074a916f57cbd39645e616d840b0bcdc125a944` and
+runtime-state digest
+`sha256:1534949e6b0e7b2cb2e1503400bc862e5709c60a46cb40bfa65a423c55f341d2`.
+Provider restore took 20,916 ms; boot/lease 15,297 ms; health 8,342 ms; and
+digest 646 ms, with total proof time 176,023 ms. RPO was 10,869,867 ms and RTO
+174,870 ms, both within the 24-hour/one-hour fixture targets. The VM, restored
+disk, route, lease, runtime and credentials were then cleaned exactly; post-run
+checks found no recovery VM/disk, route/runtime record, or credential record.
 
-Remaining: Rerun the isolated fresh-disk/fresh-VM file and runtime verification
-after the Compute snapshot rate limit clears, with measured RPO/RTO;
-surface backup/runtime startup, attach, and mount timings and actual measured
-costs; and provide a current billing-backed worksheet. The read-only inventory now enumerates owned
+Remaining: Keep the successful result scoped to the synthetic fixture; extend
+the proof to representative complete source data, crash/open-write and
+capacity/zone-loss cases, surface actual measured costs, and provide a current
+billing-backed worksheet. The read-only inventory now enumerates owned
 Compute instances/disks before any future cleanup. The fail-closed
 disk-full/zone-loss procedure is now in
 `docs/runbooks/vm-disk-recovery.md`, but its resize and fresh-VM recovery

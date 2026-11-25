@@ -489,6 +489,11 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     delete childEnv.GOOGLE_MCP_TOKEN_REFRESH_URL;
     delete childEnv.GOOGLE_MCP_CONNECTION_ID;
     delete childEnv.GOOGLE_MCP_TOKEN_SOCKET_PATH;
+    // A snapshot can preserve the upstream kernel lock from the source VM,
+    // but a recovery-only VM cannot preserve that process. Permit the
+    // isolated recovery child to replace that stale lock; normal runners keep
+    // the upstream one-kernel-per-data-directory guard.
+    delete childEnv.PI_WEB_ALLOW_MULTI_INSTANCE;
     return {
       ...childEnv,
       HOME: config.homeDir || environment.HOME || "/root",
@@ -505,6 +510,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
       PI_WEB_PKG_ROOT: config.piWebUiRoot,
       PI_WEB_PORT: String(config.piWebUiPort || 8787),
       PI_WEB_TOKEN: token,
+      ...(environment.MAPACHE_RECOVERY_ONLY === "true" ? {PI_WEB_ALLOW_MULTI_INSTANCE: "1"} : {}),
       ...(config.githubTokenSocketPath ? {MAPACHE_GITHUB_TOKEN_SOCKET: config.githubTokenSocketPath} : {}),
       ...(config.googleMcpTokenSocketPath ? {GOOGLE_MCP_TOKEN_SOCKET: config.googleMcpTokenSocketPath} : {}),
       MAPACHE_AUTOMATION_AGENT_SOCKET: config.automationAgentSocketPath || "",
