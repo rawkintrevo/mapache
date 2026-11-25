@@ -600,3 +600,35 @@ temporary VM and registry records were removed, and the imported disk remained
 detached/READY. This is an ingress-path limitation, not upload acceptance
 evidence; the live replacement and disk-full tests still need a reachable
 disposable gateway/tunnel.
+
+## Continuation evidence — 2026-11-25 live upload ingress and VM replacement
+
+The fixed synthetic workspace `vm-proof-605` was replaced from generation 25 to
+26 with the publish-recovery image, then routed through the deployed gateway.
+The authenticated gateway proof uploaded a file through the real VM ingress,
+returned a resumable `308` probe before data, committed the file with HTTP 200,
+returned HTTP 200 for the committed-operation probe, canceled the operation with
+HTTP 204, and removed the exact file through the authenticated shell WebSocket.
+No existing workspace or production authority was changed.
+
+The follow-up in-flight replacement proof started on generation 26, switched the
+same synthetic workspace to generation 27 with the immutable image digest
+`sha256:316aa2c0cce4d6f6d2dd7be8af6614dc4125a61e5ac9a188a5f0bb462e23e1cb`,
+and routed the gateway to the new session. The old upload was interrupted; the
+first probe during VM startup returned 503, as expected for an unavailable
+replacement. After the new runner reached authenticated `/runner/health`, the
+same operation returned HTTP 308, resumed successfully with HTTP 200, returned
+HTTP 200 for the committed probe, canceled with HTTP 204, and the exact test
+file was removed through the live shell path. This proves generation-pinned
+reauthorization and no-data-loss continuation across replacement for the tested
+operation. The interruption occurred before the first chunk was acknowledged,
+so a non-zero partial-prefix retention case remains a separate live test; the
+runner's partial-prefix and publish-crash windows remain covered by focused
+tests. A deliberate 512 KiB-prefix retry from generation 27 to 28 confirmed
+that boundary is currently an ingress-fixture limitation: the replacement VM
+was RUNNING with the runner listening on port 8080, but the gateway continued
+to return 503/timeouts for the new private address and no partial file reached
+the runner. The two exact synthetic test files were removed through the
+disposable VM and the retained disk was preserved. This live subcase remains
+unclaimed until gateway-to-private-VM convergence is repaired; it does not
+invalidate the successful generation-26/27 ingress and resume proof above.
