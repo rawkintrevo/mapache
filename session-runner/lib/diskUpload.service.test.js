@@ -26,6 +26,41 @@ test("disk uploads resume with bounded chunks and publish atomically", async () 
   assert.deepEqual(probeResponse.body, {ok: true, path: "/uploads/large.bin"});
 });
 
+test("recovers a publish interrupted after the destination rename", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-upload-"));
+  const uploads = path.join(root, "uploads");
+  const state = path.join(root, "state");
+  const service = createDiskUploadService({config: {workspaceDir: root, retainedDiskPaths: {uploads, caches: state}}});
+  const operation = await service.begin({operationId: "operation-publish", name: "recovered.bin", size: 6});
+  await fs.writeFile(path.join(uploads, ".operation-publish.part"), "abcdef");
+  await fs.rename(path.join(uploads, ".operation-publish.part"), path.join(uploads, "recovered.bin"));
+  await fs.writeFile(path.join(state, "operation-publish.json"), `${JSON.stringify({...operation, state: "publishing", digest: ""})}\n`);
+
+  const response = {};
+  await service.handle({method: "PUT", params: {operationId: operation.operationId}, query: {name: "recovered.bin", size: "6"}, get: () => "bytes */6"}, {
+    json: body => { response.body = body; },
+  });
+  assert.deepEqual(response.body, {ok: true, path: "/uploads/recovered.bin"});
+  assert.equal(JSON.parse(await fs.readFile(path.join(state, "operation-publish.json"))).state, "committed");
+});
+
+test("finishes a publish interrupted before the destination rename", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-upload-"));
+  const uploads = path.join(root, "uploads");
+  const state = path.join(root, "state");
+  const service = createDiskUploadService({config: {workspaceDir: root, retainedDiskPaths: {uploads, caches: state}}});
+  const operation = await service.begin({operationId: "operation-publish2", name: "recovered.bin", size: 6});
+  await fs.writeFile(path.join(uploads, ".operation-publish2.part"), "abcdef");
+  await fs.writeFile(path.join(state, "operation-publish2.json"), `${JSON.stringify({...operation, state: "publishing", digest: ""})}\n`);
+
+  const response = {};
+  await service.handle({method: "PUT", params: {operationId: operation.operationId}, query: {name: "recovered.bin", size: "6"}, get: () => "bytes */6"}, {
+    json: body => { response.body = body; },
+  });
+  assert.deepEqual(response.body, {ok: true, path: "/uploads/recovered.bin"});
+  assert.equal(await fs.readFile(path.join(uploads, "recovered.bin"), "utf8"), "abcdef");
+});
+
 test("upload paths and ranges reject traversal", () => {
   assert.throws(() => parseContentRange("bytes 2-1/3"), /upload_range_invalid/);
 });

@@ -45,7 +45,10 @@ gateway URL, then the runner streams bounded chunks directly into the retained
 `/uploads` directory. Per-operation state is stored under the retained cache
 directory; temporary files use an operation-specific `.part` name, same-operation
 writes are serialized, temporary paths reject symlinks, and completed files are
-checksum-verified before an atomic rename. Duplicate destinations are rejected,
+checksum-verified before an atomic rename. A `publishing` state is recorded
+before that rename so a probe can finish or confirm publication after a process
+loss between the rename and the final `committed` state write. Duplicate
+destinations are rejected,
 cancellation removes the temporary state, and `ENOSPC` is reported as the
 explicit `upload_storage_full` response while preserving any valid prefix for a
 probe or retry.

@@ -64,7 +64,7 @@ function createDiskUploadService({config, fsImpl = fs, maxBytes = MAX_UPLOAD_BYT
       const existing = await readJson(statePath);
       if (existing) {
         if (existing.name !== normalizedName || Number(existing.size) !== total) throw uploadError("upload_operation_conflict");
-        return existing;
+        return recoverOperation(existing);
       }
       const operation = {
         operationId: id,
@@ -123,16 +123,15 @@ function createDiskUploadService({config, fsImpl = fs, maxBytes = MAX_UPLOAD_BYT
       }
       const digest = await sha256(operation.temporaryPath);
       if (operation.expectedSha256 && digest !== operation.expectedSha256) throw uploadError("upload_checksum_mismatch");
-      try {
-        await fsImpl.promises.access(operation.destinationPath);
-        throw uploadError("upload_filename_already_exists_rename_file", 412);
-      } catch (error) {
-        if (error.publicMessage) throw error;
-        if (error.code !== "ENOENT") throw error;
-      }
-      await fsImpl.promises.rename(operation.temporaryPath, operation.destinationPath);
-      await writeJson(statePathFor(operation), {...operation, state: "committed", digest, committedAt: now(), updatedAt: now()});
-      return {complete: true, offset: nextOffset};
+      return withOperationLock(`destination:${operation.destinationPath}`, async () => {
+        await assertDestinationAbsent(operation.destinationPath);
+        // Mark the transaction before the rename so a process loss between the
+        // publish and the final state write can be recovered on the next probe.
+        await writeJson(statePathFor(operation), {...operation, state: "publishing", digest, updatedAt: now()});
+        await fsImpl.promises.rename(operation.temporaryPath, operation.destinationPath);
+        await writeJson(statePathFor(operation), {...operation, state: "committed", digest, committedAt: now(), updatedAt: now()});
+        return {complete: true, offset: nextOffset};
+      });
     });
   }
 
@@ -148,7 +147,56 @@ function createDiskUploadService({config, fsImpl = fs, maxBytes = MAX_UPLOAD_BYT
   async function requireOperation(operationId) {
     const operation = await readJson(statePathForId(operationId));
     if (!operation) throw uploadError("upload_expired", 404);
-    return operation;
+    return recoverOperation(operation);
+  }
+
+  async function recoverOperation(operation) {
+    if (operation.state !== "publishing") return operation;
+    return withOperationLock(`destination:${operation.destinationPath}`, async () => {
+      const destination = await pathInfo(operation.destinationPath);
+      const temporary = await pathInfo(operation.temporaryPath);
+      if (destination && temporary) {
+        throw uploadError("upload_filename_already_exists_rename_file", 412);
+      }
+      if (destination) {
+        if (!destination.isFile() || destination.size !== operation.size) {
+          throw uploadError("upload_filename_already_exists_rename_file", 412);
+        }
+        const digest = await sha256(operation.destinationPath);
+        if ((operation.expectedSha256 && digest !== operation.expectedSha256) || (operation.digest && digest !== operation.digest)) {
+          throw uploadError("upload_filename_already_exists_rename_file", 412);
+        }
+        const committed = {...operation, state: "committed", digest, committedAt: operation.committedAt || now(), updatedAt: now()};
+        await writeJson(statePathFor(operation), committed);
+        return committed;
+      }
+      if (temporary && !temporary.isFile()) {
+        await fsImpl.promises.rm(operation.temporaryPath, {force: true});
+      } else if (temporary && temporary.size === operation.size) {
+        const digest = await sha256(operation.temporaryPath);
+        if ((!operation.expectedSha256 || digest === operation.expectedSha256) && (!operation.digest || digest === operation.digest)) {
+          await fsImpl.promises.rename(operation.temporaryPath, operation.destinationPath);
+          const committed = {...operation, state: "committed", digest, committedAt: now(), updatedAt: now()};
+          await writeJson(statePathFor(operation), committed);
+          return committed;
+        }
+        await fsImpl.promises.rm(operation.temporaryPath, {force: true});
+      }
+      const receiving = {...operation, state: "receiving", updatedAt: now()};
+      await writeJson(statePathFor(operation), receiving);
+      return receiving;
+    });
+  }
+
+  async function assertDestinationAbsent(target) {
+    if (await pathInfo(target)) throw uploadError("upload_filename_already_exists_rename_file", 412);
+  }
+
+  async function pathInfo(target) {
+    try { return await fsImpl.promises.lstat(target); } catch (error) {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    }
   }
 
   async function currentOffset(operation) {
