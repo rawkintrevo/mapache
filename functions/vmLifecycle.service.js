@@ -5,6 +5,7 @@ const {tokenHash} = require("./vmRuntimeControl.service");
 const {httpError} = require("./backendUtils.helpers");
 const {resolveVmEnvironment} = require("./vmEnvironment.service");
 const {recordVmUsageInTransaction} = require("./vmUsage.service");
+const {vmMachineTypeForResources} = require("./vmMachineResources.helpers");
 
 const OPERATIONS = "vmLifecycleOperations_v2";
 // Workers have a hard 540-second platform timeout. Do not reclaim an uncertain
@@ -189,6 +190,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
           const selected = config?.desired || saved;
           const configVersion = config?.desiredVersion || 0;
           const desiredDiskSizeGb = selected?.diskSizeGb == null ? null : Number(selected.diskSizeGb);
+          const desiredMachineType = config?.desired?.resources ? vmMachineTypeForResources(config.desired.resources) : null;
           tx.set(cr, secrets);
           tx.set(sr, {ownerUid: operation.ownerUid, generation, state: "reserved", runtimeProvider: descriptor,
             authSelection: selected.authSelection || {harness: "pi", providers: {}}, piScopedModels: saved.piScopedModels || [],
@@ -197,7 +199,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
           tx.update(wr, {generation, currentSessionId: sessionId, state: "reserved", bootId: null, leaseExpiresAt: 0});
           const committedAtMs = now();
           tx.update(ref, {phase: "provision", descriptor, sessionId, configVersion, claim: null,
-            desiredDiskSizeGb,
+            desiredDiskSizeGb, desiredMachineType,
             phaseStartedAtMs: committedAtMs, phaseTimingsMs: recordPhaseTiming(op, committedAtMs),
             lastError: null, lastErrorAtMs: null, updatedAtMs: committedAtMs});
         });
@@ -216,6 +218,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         }
         await compute.start(operation.descriptor, {operationId: `${operationId}-create`, timeoutMs: 240000,
           allowCreateDisk: false, expectedSizeGb: operation.desiredDiskSizeGb || undefined,
+          machineType: operation.desiredMachineType || undefined,
           allowInitializeDisk: operation.action === "create" && operation.descriptor.generation === 1 &&
             currentWorkspace.initialOperationId === operationId && !currentWorkspace.bootId,
           runnerImage: operation.runnerImage,

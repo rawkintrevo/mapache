@@ -47,7 +47,7 @@ function fixture() {
     start: async (descriptor, options) => {
       assert.equal(options.allowCreateDisk, false);
       assert.ok(options.env.MAPACHE_VM_CONTROL_TOKEN.length >= 32);
-      creates.push({operationId: options.operationId, instanceName: descriptor.instanceName, env: options.env});
+      creates.push({operationId: options.operationId, instanceName: descriptor.instanceName, machineType: options.machineType, env: options.env});
       const ws = docs.get("vmRuntimes_v2/workspace");
       Object.assign(ws, {state: "active", bootId: "new-boot", leaseExpiresAt: Number.MAX_SAFE_INTEGER});
       Object.assign(docs.get(`vmRuntimes_v2/workspace/sessions/${ws.currentSessionId}`), {state: "active", bootId: "new-boot", leaseExpiresAt: Number.MAX_SAFE_INTEGER});
@@ -144,6 +144,15 @@ test("desired data-disk growth runs after pause and before replacement start", a
   assert.deepEqual(f.resizes[0].options, {sizeGb: 128, operationId: `${operationId}-resize`, timeoutMs: 240000});
   assert.deepEqual(f.effects, ["quiesce", "delete", "provision", "route", "health"]);
   assert.equal(f.creates.length, 1);
+});
+
+test("desired VM resources map to the replacement machine type", async () => {
+  const f = fixture();
+  f.ws().machineConfig = {desiredVersion: 3, appliedVersion: 2, state: "pending-restart",
+    desired: {resources: {cpu: "4", memory: "8Gi"}}};
+  const {operationId} = await f.request();
+  await finish(f, operationId);
+  assert.equal(f.creates[0].machineType, "e2-custom-4-8192");
 });
 
 test("duplicate requests share one operation and competing requests cannot acquire the machine", async () => {

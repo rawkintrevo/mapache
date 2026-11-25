@@ -630,10 +630,14 @@ failure remains in the provision phase with writer admission held and is
 retried using the lifecycle backoff, so an uncertain resize is not silently
 reissued under a new operation. The Compute adapter normalizes provider quota
 and attachment-conflict responses to stable retry codes rather than persisting
-raw provider errors. CPU/memory resource presets still have no documented
-Compute machine-type mapping and are not applied by this path; explicit VM
-resource changes therefore fail closed at configuration save time instead of
-being reported as applied without changing the VM.
+raw provider errors. CPU/memory resource presets map to validated E2 custom
+machine types during the replacement start: even-vCPU shapes use
+`e2-custom-{vcpus}-{memoryMb}`, while the 1-vCPU shape uses the E2 shared-core
+`medium` form. Unsupported shapes fail closed before Compute. Custom machine
+types carry the provider's custom-pricing premium and still require live quota
+and startup verification. See [Compute Engine custom machine types](https://docs.cloud.google.com/compute/docs/instances/creating-instance-with-custom-machine-type)
+and [E2 machine-type limits](https://docs.cloud.google.com/compute/docs/general-purpose-machines#custom_machine_types)
+for the provider contract.
 
 The VM workspace editor now supports provider/environment selections and
 pending/applied/conflict status; see [Frontend architecture](./frontend-architecture.md).

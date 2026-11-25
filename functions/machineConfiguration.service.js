@@ -38,15 +38,6 @@ function createMachineConfigurationService(dependencies = {}) {
         throw httpError(409, "machine_configuration_conflict");
       }
       const desired = normalizeDesiredConfiguration(payload, current.desired);
-      if (workspace.backend === "compute-engine" && payload.resources !== undefined) {
-        const currentResources = workspace.resources && {
-          cpu: String(workspace.resources.cpu || "").trim(),
-          memory: String(workspace.resources.memory || "").trim(),
-        };
-        if (JSON.stringify(desired.resources) !== JSON.stringify(currentResources)) {
-          throw httpError(409, "vm_resource_change_unsupported");
-        }
-      }
       const desiredVersion = current.desiredVersion + 1;
       const active = await hasActiveSession(transaction, ref);
       const restartChanged = JSON.stringify(desired.resources) !== JSON.stringify(current.desired.resources) ||

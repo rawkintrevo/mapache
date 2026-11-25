@@ -361,7 +361,7 @@ Fully evidenced original acceptance criteria: none; partial evidence does not sa
 
 Evidence: Owner-scoped auth/environment selection APIs and the opt-in VM modal support stale-save rejection and pending/applied revisions. A paused-save/start live backend proof reached generation 11/config version 1; synthetic editor QA passed without secret disclosure.
 
-Remaining: Finish defaults/inheritance across two machines, full Pi config/MCP/Google/gateway bindings, Compute resource/machine-type mapping, metadata/disk growth/idle/schedules/cost UX, revocation/disk-restore semantics and full authenticated modal/reconnect QA. Explicit VM CPU/memory changes now fail closed until their mapping exists; current tests cover only the selected auth/environment subset.
+Remaining: Finish defaults/inheritance across two machines, full Pi config/MCP/Google/gateway bindings, resource cost/quota UX, metadata/disk growth/idle/schedules, revocation/disk-restore semantics and full authenticated modal/reconnect QA. The current lifecycle maps catalog CPU/memory selections to validated E2 custom machine types during replacement, but live quota/cost/startup evidence and the broader machine-property matrix remain open; current tests cover only the selected auth/environment subset.
 
 Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
 

@@ -699,9 +699,13 @@ function createComputeEngineService(dependencies = {}) {
 
   function instanceBody(descriptor, disk, options) {
     const labels = {...ownershipLabels(descriptor, options), ...(options.validationOnly ? {"mapache-validation-only": "true"} : {})};
+    const selectedMachineType = String(options.machineType || machineType).trim();
+    if (!/^[a-z][a-z0-9-]{0,62}$/.test(selectedMachineType)) {
+      throw computeError("runtime_machine_type_invalid", "VM machine type is invalid");
+    }
     return {
       name: descriptor.instanceName,
-      machineType: `${zoneUrl(descriptor)}/machineTypes/${options.machineType || machineType}`,
+      machineType: `${zoneUrl(descriptor)}/machineTypes/${selectedMachineType}`,
       labels,
       disks: [
         {boot: true, autoDelete: true, type: "PERSISTENT", initializeParams: {sourceImage: options.bootImage || "projects/cos-cloud/global/images/family/cos-stable"}},

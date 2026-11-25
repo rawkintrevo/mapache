@@ -58,16 +58,15 @@ test("stale configuration writes are rejected", async () => {
   await assert.rejects(service.updateConfiguration("owner-1", "workspace-1", {expectedVersion: 0}), /machine_configuration_conflict/);
 });
 
-test("Compute VM resource changes fail closed until a machine-type mapping exists", async () => {
+test("Compute VM resource changes remain versioned for lifecycle application", async () => {
   const {db, service} = setup();
   db.data.set("workspaces/workspace-1", {
     ownerUid: "owner-1", backend: "compute-engine", resources: {cpu: "1", memory: "2Gi"},
   });
-  await assert.rejects(
-      service.updateConfiguration("owner-1", "workspace-1", {resources: {cpu: "2", memory: "4Gi"}}),
-      {publicMessage: "vm_resource_change_unsupported"},
-  );
-  assert.equal(db.data.get("workspaces/workspace-1").machineConfig, undefined);
+  const result = await service.updateConfiguration("owner-1", "workspace-1", {resources: {cpu: "2", memory: "4Gi"}});
+  assert.deepEqual(result.desired.resources, {cpu: "2", memory: "4Gi"});
+  assert.equal(result.state, "pending");
+  assert.equal(db.data.get("workspaces/workspace-1").machineConfig.desiredVersion, 1);
 });
 
 test("a migration fence blocks desired changes and applied callbacks", async () => {

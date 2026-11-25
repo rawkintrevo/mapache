@@ -85,6 +85,34 @@ test("Compute quota responses become actionable retry codes", async () => {
     error.code === "runtime_compute_quota_exhausted" && /lifecycle retry/.test(error.message));
 });
 
+test("VM startup accepts a validated custom machine type", async () => {
+  let disk;
+  let instanceRequest;
+  const service = createComputeEngineService({
+    request: async (request) => {
+      if (request.method === "GET" && request.url.includes("/disks/")) {
+        if (!disk) throw Object.assign(new Error("missing"), {response: {status: 404}});
+        return {data: disk};
+      }
+      if (request.method === "GET" && request.url.includes("/instances/")) {
+        if (!instanceRequest) throw Object.assign(new Error("missing"), {response: {status: 404}});
+        return {data: instanceRequest};
+      }
+      if (request.method === "POST" && request.url.endsWith("/disks")) {
+        disk = {name: request.data.name, selfLink: `${request.url}/${request.data.name}`, status: "READY", sizeGb: 64, labels: request.data.labels};
+        return {data: {status: "DONE"}};
+      }
+      if (request.method === "POST" && request.url.endsWith("/instances")) {
+        instanceRequest = {name: request.data.name, status: "RUNNING", labels: request.data.labels, disks: request.data.disks, machineType: request.data.machineType};
+        return {data: {status: "DONE"}};
+      }
+      throw new Error(`unexpected ${request.method} ${request.url}`);
+    },
+  });
+  await service.start(descriptor(), {allowCreateDisk: true, machineType: "e2-custom-4-8192", runnerImage: "pinned-image"});
+  assert.match(instanceRequest.machineType, /\/machineTypes\/e2-custom-4-8192$/);
+});
+
 test("failed Compute operations normalize attachment conflicts before lifecycle retry", async () => {
   const d = descriptor();
   const service = createComputeEngineService({
