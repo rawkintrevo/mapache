@@ -574,6 +574,23 @@ an in-flight upload, live disk-full recovery, paused-machine UX, and automation
 input compatibility remain unproven #622 acceptance criteria; no production
 authority switch or existing workspace was changed.
 
+## Continuation evidence — 2026-11-25 upload publish recovery
+
+Commit `b7effd2` records a durable `publishing` state before a retained-disk
+upload is renamed into its destination. A same-operation probe now verifies the
+recorded digest and completes the operation if the process was lost after the
+rename, or publishes the complete temporary file if the loss happened before
+the rename. Focused runner upload tests pass **8/8**; `npm run check:fast` passes
+**103 Functions tests + 59 runner tests**, with docs, syntax, and diff checks
+green.
+
+Full Cloud Build `c96c7ef1-9230-4528-b116-2f35a7084fab` succeeded in
+**12m51.410s** wall clock and published the unpromoted image with digest
+`sha256:316aa2c0cce4d6f6d2dd7be8af6614dc4125a61e5ac9a188a5f0bb462e23e1cb`.
+The exact-head hosted PR checks also passed: Firebase Preview, change
+detection, and hosted `Build gcp-runner` (**13m14s**). No production authority
+switch or existing workspace was changed.
+
 The follow-up disposable imported-disk boot was started with the reauthorization
 image and the exact retained disk, but its private runner could not be reached
 through the available IAP SSH tunnel: Compute returned `4047 Failed to lookup
