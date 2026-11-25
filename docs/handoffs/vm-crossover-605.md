@@ -742,3 +742,12 @@ and Storage-prefix fences after the coordinator confirms unchanged source
 authority and completed validation/imported-disk cleanup. It is idempotent,
 refuses after destination authority exists, and never deletes source data. No
 production workspace invoked it.
+
+## Continuation implementation — 2026-11-25 migration preflight CLI
+
+The complete operator start sequence now has a read-only first step:
+`scripts/vm-migration-preflight.mjs` performs the bounded Firestore, Compute,
+and Storage observations used by the coordinator and prints the exact
+`observationSha256` required by `vm-migration-reserve.mjs`. It creates no
+operation, fence, VM, or disk and returns sanitized blocked/status JSON. No
+production workspace invoked it.

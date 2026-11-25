@@ -1257,6 +1257,18 @@ begin the bounded workflow with the checked-in CLI below; each command requires
 an explicit confirmation token and the reserve action must use the exact
 observation digest returned by the read-only preflight:
 
+Obtain that digest with the read-only operator command:
+
+```bash
+node scripts/vm-migration-preflight.mjs \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID
+```
+
+The command performs the same bounded Firestore, Compute, and Storage
+observations used by reservation and prints sanitized JSON. It does not create
+an operation, fence, VM, or destination disk. Pass its `observationSha256`
+unchanged to `reserve`:
+
 ```bash
 node scripts/vm-migration-reserve.mjs reserve \
   --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
