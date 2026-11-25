@@ -17,7 +17,7 @@ const base = 'https://us-central1-pi-agents-cloud.cloudfunctions.net';
 const uids = ['vm-proof-owner', 'vm-proof-outsider'];
 
 async function main() {
-  assert.ok(['probe', 'cycle', 'create', 'shell', 'configuration'].includes(mode));
+  assert.ok(['probe', 'cycle', 'create', 'shell', 'configuration', 'restore'].includes(mode));
   admin.initializeApp({projectId: project});
   const db = admin.firestore(); const auth = admin.auth();
   const preexistingUsers = new Set();
@@ -39,7 +39,7 @@ async function main() {
   const setup = await db.runTransaction(async tx => {
     const [w, a] = await Promise.all([tx.get(wr), tx.get(accessRef)]);
     const ws = w.data(); const access = a.data() || {};
-    assert.equal(ws?.ownerUid, uids[0]); assert.equal(ws?.state, 'active');
+    assert.equal(ws?.ownerUid, uids[0]); assert.ok(['active', 'stopped'].includes(ws?.state));
     assert.ok(!ws.activeOperationId && !ws.apiQaRunId);
     const added = uids.filter(uid => !isFirebaseTokenAllowed({uid}, access));
     const allowed = [...parseAppAllowList(access.allowedUids).map(entry => entry.value), ...added];
@@ -86,7 +86,7 @@ async function main() {
     assert.equal(currentSessions.body.sessions.length, 1);
     assert.equal(currentSessions.body.sessions[0].id, currentSessions.body.workspace.canonicalSessionId);
     assert.equal(currentSessions.body.sessions[0].generation, setup.generation);
-    assert.equal(currentSessions.body.sessions[0].status, 'running');
+    assert.equal(currentSessions.body.sessions[0].status, mode === 'restore' ? 'stopped' : 'running');
     assert.equal((await call('vm-proof-605/sessions', 'GET', undefined, tokens.outsider)).status, 404);
     for (const field of ['controlToken', 'browserToken', 'shutdownToken', 'privateAddress', 'runnerImage']) {
       assert.ok(!JSON.stringify([listed.body, currentSessions.body]).includes(`"${field}"`));
@@ -98,29 +98,33 @@ async function main() {
     assert.equal((await call('vm-proof-605/replace', 'POST', {expectedGeneration: setup.generation, requestId: nonce, ownerUid: uids[1]})).status, 400);
     assert.equal((await call('vm-proof-605/access', 'POST', {expectedGeneration: setup.generation - 1})).status, 409);
     let generation = setup.generation;
+    async function lifecycle(action) {
+      const request = {expectedGeneration: generation, requestId: `${action}-${nonce}`};
+      const first = await call(`vm-proof-605/${action}`, 'POST', request);
+      const second = await call(`vm-proof-605/${action}`, 'POST', request);
+      assert.equal(first.status, 202); assert.equal(second.status, 202);
+      assert.equal(first.body.operationId, second.body.operationId);
+      const id = first.body.operationId;
+      assert.equal((await call(`vm-proof-605/operations/${id}`, 'GET', undefined, tokens.outsider)).status, 404);
+      let lastPhase;
+      for (let attempt = 0; attempt < 120; attempt++) {
+        const current = await call(`vm-proof-605/operations/${id}`);
+        assert.equal(current.status, 200);
+        if (lastPhase !== current.body.phase) console.log(JSON.stringify({phase: current.body.phase, action, operationId: id}));
+        lastPhase = current.body.phase;
+        if (current.body.status === 'succeeded') return current.body;
+        assert.equal(current.body.status, 'pending');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+      throw new Error(`owner_api_${action}_still_pending`);
+    }
+    if (mode === 'restore' && (await call('vm-proof-605')).body.workspace.state === 'stopped') {
+      const started = await lifecycle('start'); generation = started.generation;
+      result.restoreOperationId = started.operationId;
+    }
     if (mode === 'shell') result.shell = await liveShellProof({customToken: ownerCustomToken});
     if (mode === 'create') result.creation = await proveOwnerCreation({db, call, outsiderToken: tokens.outsider, nonce});
     if (mode === 'cycle' || mode === 'configuration') {
-      async function lifecycle(action) {
-        const request = {expectedGeneration: generation, requestId: `${action}-${nonce}`};
-        const first = await call(`vm-proof-605/${action}`, 'POST', request);
-        const second = await call(`vm-proof-605/${action}`, 'POST', request);
-        assert.equal(first.status, 202); assert.equal(second.status, 202);
-        assert.equal(first.body.operationId, second.body.operationId);
-        const id = first.body.operationId;
-        assert.equal((await call(`vm-proof-605/operations/${id}`, 'GET', undefined, tokens.outsider)).status, 404);
-        let lastPhase;
-        for (let attempt = 0; attempt < 120; attempt++) {
-          const current = await call(`vm-proof-605/operations/${id}`);
-          assert.equal(current.status, 200);
-          if (lastPhase !== current.body.phase) console.log(JSON.stringify({phase: current.body.phase, action, operationId: id}));
-          lastPhase = current.body.phase;
-          if (current.body.status === 'succeeded') return current.body;
-          assert.equal(current.body.status, 'pending');
-          await new Promise(resolve => setTimeout(resolve, 5000));
-        }
-        throw new Error(`owner_api_${action}_still_pending`);
-      }
       const paused = await lifecycle('pause');
       assert.equal((await call('vm-proof-605')).body.workspace.state, 'stopped');
       assert.equal((await call('vm-proof-605/access', 'POST', {expectedGeneration: generation})).status, 409);
@@ -132,7 +136,8 @@ async function main() {
         assert.deepEqual(before.body.desired, {authSelection: {harness: 'pi', providers: {}}, environmentEntryIds: [], resources: null, diskSizeGb: null, description: '', idleStopMinutes: null});
         assert.equal((await call('vm-proof-605/configuration', 'GET', undefined, tokens.outsider)).status, 404);
         const patch = {expectedGeneration: generation, expectedVersion: before.body.desiredVersion,
-          authSelection: {harness: 'pi', providers: {}}, environmentEntryIds: []};
+          authSelection: {harness: 'pi', providers: {}}, environmentEntryIds: [],
+          resources: {cpu: '2', memory: '4Gi'}};
         const saved = await call('vm-proof-605/configuration', 'PATCH', patch);
         assert.equal(saved.status, 200);
         savedConfiguration = saved.body;
@@ -140,6 +145,7 @@ async function main() {
         assert.equal(saved.body.appliedVersion, before.body.appliedVersion);
         assert.equal(saved.body.state, 'pending-restart');
         assert.equal(saved.body.restartRequired, true);
+        assert.deepEqual(saved.body.desired.resources, {cpu: '2', memory: '4Gi'});
         assert.equal((await call('vm-proof-605/configuration', 'PATCH', patch)).status, 409);
         const stopped = (await call('vm-proof-605')).body.workspace;
         assert.equal(stopped.state, 'stopped');
@@ -156,7 +162,8 @@ async function main() {
         assert.equal(applied.body.state, 'applied');
         assert.equal(applied.body.restartRequired, false);
         result.configuration = {savedWhileStopped: true, staleSaveRejected: true,
-          crossOwnerDenied: true, appliedAfterStart: true, appliedVersion: applied.body.appliedVersion};
+          crossOwnerDenied: true, appliedAfterStart: true, resourceChangeApplied: true,
+          appliedVersion: applied.body.appliedVersion};
       }
     }
     const status = await call('vm-proof-605');

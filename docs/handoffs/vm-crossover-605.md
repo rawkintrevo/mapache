@@ -17,7 +17,7 @@ Handoff date: 2026-11-24 (America/Chicago). The validation-boot continuation and
 - New owner/agent workspace-request ticket creation checks the migration fence before publishing `workspaceTickets/{id}`; existing ticket reads and idempotent lookups remain available while queued work stays reconcilable.
 - Legacy session rename and session-bound Pi auth/environment selection now check the migration fence in the same transaction as their session writes, preventing metadata or credential selection from publishing after admission while leaving owner-global credential storage independent.
 - Direct user session deletion now uses the same fenced lifecycle transition; internal deletion after an already-admitted workspace tombstone remains available for cleanup, while manual stop remains the drain path.
-- Rough overall estimate: **80%** by engineering judgment after the lifecycle recovery, Compute resource mapping, and VM settings-editor increments. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
+- Rough overall estimate: **82%** by engineering judgment after the lifecycle recovery, Compute resource mapping, VM settings editor, idle-stop policy, and live E2 resource proof increments. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 
 ## Authorization and invariants
@@ -30,7 +30,7 @@ The VM paths skip ordinary HOME/workspace/profile checkpoint restore/upload; mig
 
 ## Live state rechecked at handoff
 
-- Synthetic workspace `vm-proof-605`, generation 19, registry state `active`, desired configuration version 1, no active operation. `apiEnabled=false`; `lifecycleEnabled=true`.
+- Synthetic workspace `vm-proof-605`, generation 21, registry state `active`, desired configuration version 3, no active operation. `apiEnabled=false`; `lifecycleEnabled=true`. The live owner proof paused generation 20, saved `{cpu: 2, memory: 4Gi}`, observed `e2-custom-2-4096`, replaced the VM successfully, reached authenticated readiness, and restored temporary API admission.
 - Current session: `vm-930595c51f3f45655e347977-g19`. Its current boot ID and lease were accepted by the live token/API probe; no temporary QA marker remains.
 - VM `mapache-vm-0d357714e0867ab67c057652` is RUNNING in `us-central1-a`, machine type `e2-standard-2`.
 - Attached retained disk `mapache-ws-efaf283eb879545a0e7ba4d3`: 64 GiB `pd-balanced`. The running VM, retained disk and private networking continue to incur costs. Nothing was stopped or deleted for this handoff.
@@ -357,11 +357,11 @@ Remaining: Implement authenticated resumable browser-to-disk uploads, offset/che
 
 Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
 
-### #623: Partial — auth/environment and Compute resource selection revisions implemented
+### #623: Partial — auth/environment, Compute resources, metadata, and idle policy implemented
 
 Evidence: Owner-scoped auth/environment selection APIs and the opt-in VM modal support stale-save rejection, pending/applied revisions, validated E2 custom machine-type presets, and monotonic durable-disk growth requests. A paused-save/start live backend proof reached generation 11/config version 1; synthetic editor QA passed without secret disclosure.
 
-Remaining: Finish defaults/inheritance across two machines, full Pi config/MCP/Google/gateway bindings, resource cost/quota UX, metadata/disk growth/idle/schedules, revocation/disk-restore semantics and full authenticated modal/reconnect QA. The current lifecycle maps catalog CPU/memory selections to validated E2 custom machine types during replacement, but live quota/cost/startup evidence and the broader machine-property matrix remain open; current tests cover only the selected auth/environment subset.
+Remaining: Finish defaults/inheritance across two machines, full Pi config/MCP/Google/gateway bindings, resource cost/quota UX, schedules, revocation/disk-restore semantics and full authenticated modal/reconnect QA. The current lifecycle maps catalog CPU/memory selections to validated E2 custom machine types during replacement; the fixed synthetic fixture now has live startup/readiness evidence for `e2-custom-2-4096`, but measured cost/quota behavior and the broader machine-property matrix remain open.
 
 Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
 
@@ -371,7 +371,7 @@ The PR's full-tested runner image `sha256:19382971d1c23ac740ca1635cd6e1edbaca362
 
 The owner-creation proof also passed after the documented temporary `create-proof` gateway revision tag was attached: duplicate suppression, owner-derived admission, forged infrastructure rejection, signed agent access, pause, and exact resource cleanup. The tag was removed immediately afterward; the creation workspace, admission, route, credentials and dedicated disk are absent. The browser `vm-live-shell` scenario produced a passing result with no console errors, a live VM Agent iframe, resource meters, signed VM API/access calls, and no legacy workspace listener. Its sanitized evidence remains under `artifacts/qa/vm-live-shell/`.
 
-The fixed fixture replacement harness now preserves existing admission/configuration fields and selected session references without carrying stale generation boot/lease state into a replacement. The environment proof now exercises versioned machine configuration so the deployed lifecycle worker resolves owner-private values at launch, then restores the prior configuration. These corrections are committed on PR #629. Remaining live evidence includes a real model turn, broader runner/browser/sandbox and backup/recovery matrices, migration writer drain and authority-switch rehearsal, and the release/canary gates; these proofs do not establish user-workspace cutover.
+The fixed fixture replacement harness now preserves existing admission/configuration fields and selected session references without carrying stale generation boot/lease state into a replacement. The environment proof now exercises versioned machine configuration so the deployed lifecycle worker resolves owner-private values at launch, then restores the prior configuration. The configuration proof also exercises a live E2 custom machine replacement and now includes a restore mode for interrupted disposable-fixture runs. These corrections are committed on PR #629. Remaining live evidence includes a real model turn, broader runner/browser/sandbox and backup/recovery matrices, migration writer drain and authority-switch rehearsal, and the release/canary gates; these proofs do not establish user-workspace cutover.
 
 The next executor increment is `ece9f72`: native automation now rechecks the
 durable terminal state after child startup and at the submission boundary, so a
