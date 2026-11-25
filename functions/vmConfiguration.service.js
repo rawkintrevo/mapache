@@ -7,6 +7,19 @@ const {resolveVmEnvironment} = require("./vmEnvironment.service");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
 
 function object(value) { return value && typeof value === "object" && !Array.isArray(value); }
+function normalizeVmDescription(value) {
+  if (value === undefined || value === null) return "";
+  if (typeof value !== "string") throw httpError(400, "invalid_vm_description");
+  return value.trim().slice(0, 1000);
+}
+function normalizeVmIdleStopMinutes(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const minutes = Number(value);
+  if (!Number.isSafeInteger(minutes) || minutes < 5 || minutes > 1440) {
+    throw httpError(400, "invalid_vm_idle_stop_minutes");
+  }
+  return minutes;
+}
 function selections(value = {}) {
   const auth = value.authSelection || {harness: "pi", providers: {}};
   const ids = value.environmentEntryIds || [];
@@ -21,8 +34,15 @@ function selections(value = {}) {
   if (diskSizeGb !== null && (!Number.isSafeInteger(diskSizeGb) || diskSizeGb < 10 || diskSizeGb > 4096)) {
     throw httpError(400, "invalid_vm_disk_size_gb");
   }
+  const description = normalizeVmDescription(value.description);
+  const idleStopMinutes = normalizeVmIdleStopMinutes(value.idleStopMinutes);
   return {authSelection: {harness: "pi", providers: {...auth.providers}}, environmentEntryIds: normalizeEnvironmentEntryIds(ids),
-    resources, diskSizeGb};
+    resources, diskSizeGb, description, idleStopMinutes};
+}
+
+function restartSensitiveConfiguration(value = {}) {
+  return JSON.stringify({authSelection: value.authSelection || {harness: "pi", providers: {}},
+    environmentEntryIds: value.environmentEntryIds || [], resources: value.resources || null, diskSizeGb: value.diskSizeGb ?? null});
 }
 
 function createVmConfigurationService({db, now = Date.now}) {
@@ -39,12 +59,13 @@ function createVmConfigurationService({db, now = Date.now}) {
       const desired = selections(existing?.desired || session);
       if (patch === undefined) return {generation: ws.generation, desiredVersion, appliedVersion, desired,
         state: existing?.state || "unversioned", restartRequired: desiredVersion !== appliedVersion};
-      if (!object(patch) || Object.keys(patch).some(k => !["expectedGeneration", "expectedVersion", "authSelection", "environmentEntryIds", "resources", "diskSizeGb"].includes(k)) ||
+      if (!object(patch) || Object.keys(patch).some(k => !["expectedGeneration", "expectedVersion", "authSelection", "environmentEntryIds", "resources", "diskSizeGb", "description", "idleStopMinutes"].includes(k)) ||
           !Number.isSafeInteger(patch.expectedGeneration) || !Number.isSafeInteger(patch.expectedVersion) || patch.expectedVersion < 0 ||
-          (!["authSelection", "environmentEntryIds", "resources", "diskSizeGb"].some(key => Object.hasOwn(patch, key))) ||
+          (!["authSelection", "environmentEntryIds", "resources", "diskSizeGb", "description", "idleStopMinutes"].some(key => Object.hasOwn(patch, key))) ||
           (Object.hasOwn(patch, "authSelection") && !object(patch.authSelection)) ||
           (Object.hasOwn(patch, "environmentEntryIds") && !Array.isArray(patch.environmentEntryIds)) ||
-          (Object.hasOwn(patch, "resources") && patch.resources !== null && !object(patch.resources))) throw httpError(400, "invalid_vm_configuration");
+          (Object.hasOwn(patch, "resources") && patch.resources !== null && !object(patch.resources)) ||
+          (Object.hasOwn(patch, "description") && patch.description !== null && typeof patch.description !== "string")) throw httpError(400, "invalid_vm_configuration");
       if (ws.generation !== patch.expectedGeneration) throw httpError(409, "vm_generation_mismatch");
       if (desiredVersion !== patch.expectedVersion) throw httpError(409, "vm_configuration_version_mismatch");
       if (desiredVersion >= Number.MAX_SAFE_INTEGER) throw httpError(409, "vm_configuration_version_exhausted");
@@ -60,13 +81,16 @@ function createVmConfigurationService({db, now = Date.now}) {
       const entries = normalizePiAuthEntries(auth.entries, normalizePiAuthProviders(auth.providers));
       const normalized = normalizePiAuthSelection(next.authSelection.providers, entries);
       if (Object.entries(next.authSelection.providers).some(([provider, id]) => normalized[provider] !== id)) throw httpError(409, "vm_auth_entry_unavailable");
-      const config = {desiredVersion: desiredVersion + 1, appliedVersion, desired: next,
-        state: "pending-restart", updatedAtMs: now()};
+      const nextVersion = desiredVersion + 1;
+      const restartRequired = restartSensitiveConfiguration(desired) !== restartSensitiveConfiguration(next);
+      const nextAppliedVersion = restartRequired ? appliedVersion : nextVersion;
+      const config = {desiredVersion: nextVersion, appliedVersion: nextAppliedVersion, desired: next,
+        state: restartRequired ? "pending-restart" : "applied", updatedAtMs: now()};
       tx.update(wr, {machineConfig: config});
-      return {generation: ws.generation, desiredVersion: config.desiredVersion, appliedVersion,
-        desired: next, state: config.state, restartRequired: true};
+      return {generation: ws.generation, desiredVersion: config.desiredVersion, appliedVersion: nextAppliedVersion,
+        desired: next, state: config.state, restartRequired};
     });
   };
 }
 
-module.exports = {createVmConfigurationService};
+module.exports = {createVmConfigurationService, normalizeVmDescription, normalizeVmIdleStopMinutes};

@@ -24,7 +24,8 @@ describe("VM workspace settings", () => {
     await f.user.click(screen.getByRole("button", {name: "Save settings"}));
     await screen.findByText("Saved. Restart required to apply saved settings.");
     expect(f.api.updateMachineConfiguration).toHaveBeenCalledWith("vm", {expectedGeneration: 11, expectedVersion: 2,
-      authSelection: {harness: "pi", providers: {openai: "key"}}, environmentEntryIds: ["env"]});
+      authSelection: {harness: "pi", providers: {openai: "key"}}, environmentEntryIds: ["env"],
+      description: "", idleStopMinutes: null});
   });
   it("keeps unsaved selections on conflict and reloads explicitly before retrying", async () => {
     const f = fixture();

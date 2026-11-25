@@ -6,6 +6,7 @@ const {db} = require("./backendContext");
 const {createVmLifecycleAdapter} = require("./vmLifecycle.adapter");
 const {OPERATIONS, startupDeadlineForOperation} = require("./vmLifecycle.service");
 const logger = require("firebase-functions/logger");
+const {reconcileIdleVmWorkspaces} = require("./vmIdleReconcile.service");
 const serviceAccount = "mapache-api@pi-agents-cloud.iam.gserviceaccount.com";
 const service = createVmLifecycleAdapter({db});
 const RECONCILE_PAGE_SIZE = 100;
@@ -127,6 +128,13 @@ exports.vmLifecycleReconcile_v2 = onSchedule({schedule: "every 1 minutes", servi
     selected: reconciliation.selected,
     succeeded: reconciliation.succeeded,
     failed: reconciliation.failed,
+  });
+  const idle = await reconcileIdleVmWorkspaces({firestore: db, lifecycle: service});
+  logger.info("VM idle reconciliation complete", {
+    scanned: idle.scanned,
+    requested: idle.requested,
+    skipped: idle.skipped,
+    failed: idle.failed,
   });
 });
 

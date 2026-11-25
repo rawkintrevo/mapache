@@ -600,17 +600,21 @@ about unknown retained-storage accounting rather than inventing a capacity.
 `functions/vmConfiguration.service.js` serves owner-authenticated
 `GET` and `PATCH /workspaces/{id}/configuration` through `vmApi_v2`.
 PATCH requires `expectedGeneration` and `expectedVersion`, plus at least one of
-`authSelection: {harness: "pi", providers: {provider: entryId}}` or
-`environmentEntryIds: [entryId]`. Only selected owner-private references are
-accepted; unknown fields, direct credentials, infrastructure overrides and
-stale saves are rejected. Partial saves retain the other selection; explicit
-empty selections clear them. Owner-default inheritance is not implemented yet.
+`authSelection: {harness: "pi", providers: {provider: entryId}}`,
+`environmentEntryIds: [entryId]`, `description`, or `idleStopMinutes`. Only
+selected owner-private references are accepted; unknown fields, direct
+credentials, infrastructure overrides and stale saves are rejected. Partial
+saves retain the other selection; explicit empty selections clear them.
+Description and idle policy changes are applied immediately without restarting
+the VM; auth/environment/resource/disk changes remain pending until the next
+start or replacement. Owner-default inheritance is not implemented yet.
 
 The backend-only workspace `machineConfig` stores `desiredVersion`,
 `appliedVersion`, `desired`, and `state`. Existing machines without this record
 return `unversioned` with their current session references. A save increments
-the desired version and returns `pending-restart`, without touching the current
-session or starting compute. Saves during lifecycle operations are rejected.
+the desired version without touching the current session or starting compute;
+restart-sensitive changes return `pending-restart`, while metadata-only changes
+are immediately `applied`. Saves during lifecycle operations are rejected.
 The next start/replacement copies desired references and `configVersion` into
 its new session. Healthy, generation/boot/lease-fenced lifecycle completion
 records that version as applied; an older completion never replaces newer
@@ -640,9 +644,13 @@ and [E2 machine-type limits](https://docs.cloud.google.com/compute/docs/general-
 for the provider contract.
 
 The VM workspace editor now supports provider/environment selections, validated
-Compute Engine resource presets, monotonic durable-disk growth, and
-pending/applied/conflict status; see [Frontend architecture](./frontend-architecture.md).
-Remaining machine properties, reusable defaults, hot application, and other central
+Compute Engine resource presets, monotonic durable-disk growth, description,
+validated idle-stop policy, and pending/applied/conflict status; see
+[Frontend architecture](./frontend-architecture.md). An explicit idle-stop policy
+is enforced by the bounded VM lifecycle reconciliation tick: it requests a pause
+only after the configured activity window has elapsed and no terminal/browser
+socket is open. A missing policy never pauses a VM automatically. Remaining
+machine properties, reusable defaults, schedules, hot application, and other central
 bindings below remain release work. `node scripts/vm-owner-api-proof.mjs
 configuration` checks stopped saves, stale/foreign rejection, pending status,
 and applied version after a real pause/start of the fixed synthetic fixture.

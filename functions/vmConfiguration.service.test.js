@@ -87,6 +87,24 @@ test("saves Compute Engine resources and only permits monotonic disk growth", as
   assert.equal(f.ws().machineConfig.desired.diskSizeGb, 128);
 });
 
+test("metadata and idle policy save without requiring a VM restart", async () => {
+  const f = fixture();
+  const saved = await f.call({expectedGeneration: 2, expectedVersion: 0,
+    description: "Primary machine", idleStopMinutes: 30});
+  assert.deepEqual(saved.body.desired, {authSelection: {harness: "pi", providers: {}}, environmentEntryIds: [],
+    resources: null, diskSizeGb: null, description: "Primary machine", idleStopMinutes: 30});
+  assert.equal(saved.body.appliedVersion, 1);
+  assert.equal(saved.body.restartRequired, false);
+  assert.equal(saved.body.state, "applied");
+});
+
+test("idle policy validation is bounded", async () => {
+  const f = fixture();
+  for (const value of [4, 1441, "not-a-number"]) {
+    await assert.rejects(f.call({expectedGeneration: 2, expectedVersion: 0, idleStopMinutes: value}), /invalid_vm_idle_stop_minutes/);
+  }
+});
+
 test("strict references reject secrets, infrastructure overrides and missing or mismatched credentials atomically", async () => {
   const f = fixture();
   const patch = {expectedGeneration: 2, expectedVersion: 0, environmentEntryIds: []};

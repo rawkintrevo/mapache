@@ -10,7 +10,7 @@ function message(error) {
   if (/vm_configuration_version_mismatch|vm_generation_mismatch/.test(error.message || "")) return "This workspace changed since you opened its settings. Reload saved settings before saving again.";
   if (/vm_operation_in_progress/.test(error.message || "")) return "The workspace is starting or stopping. Wait for it to finish, then reload saved settings.";
   if (/vm_auth_entry_unavailable|vm_environment_entry_unavailable/.test(error.message || "")) return "A selected credential or variable is no longer available. Reload saved settings and update your selections.";
-  if (/invalid_session_resources|invalid_vm_disk_size_gb/.test(error.message || "")) return "Choose a supported VM size and disk size, then save again.";
+  if (/invalid_session_resources|invalid_vm_disk_size_gb|invalid_vm_idle_stop_minutes|invalid_vm_description/.test(error.message || "")) return "Choose supported VM settings and save again.";
   if (/vm_disk_shrink_unsupported/.test(error.message || "")) return "Durable disk size can only grow. Reload saved settings and choose a larger size.";
   return "Could not load or save workspace settings. Please try again.";
 }
@@ -24,6 +24,8 @@ export function VmWorkspaceEditModal({workspace, api, onClose}) {
   const [resources, setResources] = useState(DEFAULT_VM_RESOURCES);
   const [resourcesChanged, setResourcesChanged] = useState(false);
   const [diskSizeGb, setDiskSizeGb] = useState("");
+  const [description, setDescription] = useState("");
+  const [idleStopMinutes, setIdleStopMinutes] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -38,6 +40,8 @@ export function VmWorkspaceEditModal({workspace, api, onClose}) {
       setEnvironmentIds([...next.desired.environmentEntryIds]);
       setResources(next.desired.resources || DEFAULT_VM_RESOURCES); setResourcesChanged(false);
       setDiskSizeGb(next.desired.diskSizeGb == null ? "" : String(next.desired.diskSizeGb));
+      setDescription(next.desired.description || "");
+      setIdleStopMinutes(next.desired.idleStopMinutes == null ? "" : String(next.desired.idleStopMinutes));
       const available = Object.entries(auth.entries || {}).map(([id, entry]) => ({id, providerKey: entry.providerKey, label: entry.label}));
       for (const providerKey of Object.keys(auth.providers || {})) {
         if (!available.some(entry => entry.providerKey === providerKey)) available.push({id: `legacy-${providerKey}`, providerKey, label: piAuthProviderLabel(providerKey)});
@@ -58,6 +62,8 @@ export function VmWorkspaceEditModal({workspace, api, onClose}) {
       const patch = {
         expectedGeneration: config.generation, expectedVersion: config.desiredVersion,
         authSelection: {harness: "pi", providers}, environmentEntryIds: environmentIds,
+        description: description.trim(),
+        idleStopMinutes: idleStopMinutes === "" ? null : Number(idleStopMinutes),
       };
       if (diskSizeGb !== "" || config.desired.diskSizeGb != null) patch.diskSizeGb = diskSizeGb === "" ? null : Number(diskSizeGb);
       if (resourcesChanged || config.desired.resources) patch.resources = resources;
@@ -78,6 +84,15 @@ export function VmWorkspaceEditModal({workspace, api, onClose}) {
       {config ? <p role="status">{saved ? "Saved. " : ""}{config.restartRequired ? "Restart required to apply saved settings." : config.state === "applied" ? "Saved settings are applied." : "Current settings have not been tracked as an applied revision yet."}</p> : null}
       {busy ? <p role="status">Working…</p> : null}
       {config ? <form className="modal-form" onSubmit={save}>
+        <fieldset disabled={busy}><legend>Machine details</legend>
+          <label><span>Description</span>
+            <textarea maxLength="1000" value={description} onChange={event => {setSaved(false); setDescription(event.target.value);}} />
+          </label>
+          <label><span>Idle stop minutes (5–1440)</span>
+            <input inputMode="numeric" min="5" max="1440" type="number" value={idleStopMinutes} onChange={event => {setSaved(false); setIdleStopMinutes(event.target.value);}} />
+          </label>
+          <p className="subtle">When set, an active VM pauses after this much activity-free time, provided no terminal or browser connection is open. The control-plane scheduler checks about once per minute.</p>
+        </fieldset>
         <fieldset disabled={busy}><legend>Compute Engine resources</legend>
           <SessionResourceSelector cpu={resources.cpu} memory={resources.memory} onChange={next => {
             setSaved(false); setResources(next); setResourcesChanged(true);
