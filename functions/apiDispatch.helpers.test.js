@@ -110,6 +110,13 @@ function createTestApiHandlers() {
     payload: {user: {handler: "updateUserTimezone", args: ["user-1", {timezone: "UTC"}]}},
   });
   assert.deepStrictEqual(await collectDispatch({
+    method: "GET",
+    route: {name: "remoteHosts"},
+  }), {
+    status: 200,
+    payload: {handler: "listRemoteHosts", args: ["user-1"]},
+  });
+  assert.deepStrictEqual(await collectDispatch({
     method: "POST",
     route: {name: "automationSchedulePreview"},
     body: {cron: "0 10 * * *", timezone: "UTC"},
@@ -147,6 +154,21 @@ function createTestApiHandlers() {
   }), {
     status: 200,
     payload: {gateway: {handler: "saveSshGatewayAssignments", args: ["user-1", "gateway-a", {workspaceIds: ["workspace-1"]}]}},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    method: "POST",
+    route: {name: "remoteHosts"},
+    body: {displayName: "Home", address: "home.example.com"},
+  }), {
+    status: 201,
+    payload: {host: {handler: "registerRemoteHost", args: ["user-1", {displayName: "Home", address: "home.example.com"}]}},
+  });
+  assert.deepStrictEqual(await collectDispatch({
+    method: "POST",
+    route: {name: "remoteHostTest", hostId: "host-1"},
+  }), {
+    status: 200,
+    payload: {handler: "testRemoteHost", args: ["user-1", "host-1"]},
   });
   assert.deepStrictEqual(await collectDispatch({
     method: "POST",

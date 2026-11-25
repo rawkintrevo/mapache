@@ -82,6 +82,9 @@ assertRoute("/api/ssh-gateways/gateway-a/assignments", {
   name: "sshGatewayAssignments",
   gatewayId: "gateway-a",
 });
+assertRoute("/api/remote-hosts", {name: "remoteHosts"});
+assertRoute("/api/remote-hosts/host-1", {name: "remoteHost", hostId: "host-1"});
+assertRoute("/api/remote-hosts/host-1/test", {name: "remoteHostTest", hostId: "host-1"});
 assertRoute("/api/automation-runs/run-1", {name: "automationRunDetail", runId: "run-1"});
 assertRoute("/api/automation-runs/run-1/events", {name: "automationRunEvents", runId: "run-1"});
 assertRoute("/api/agent/automations", {name: "automationAgent", resource: "definitions", action: "list"});

@@ -1,6 +1,6 @@
 "use strict";
 
-function createApiHandlers({activeInstancesService = {}, agentAuthService, automationCleanupService = {}, automationDefinitionsService = {}, automationHistoryService = {}, automationRunsService = {}, workspaceTicketsService = {}, workspaceRequestGrantsService = {}, browserEgressService = {}, environmentKeysService, openAiCodexAuthService, qaFaultHarnessService, workspaceService, machineConfigurationService = {}, githubService, googleWorkspaceService = {}, operations}) {
+function createApiHandlers({activeInstancesService = {}, agentAuthService, automationCleanupService = {}, automationDefinitionsService = {}, automationHistoryService = {}, automationRunsService = {}, workspaceTicketsService = {}, workspaceRequestGrantsService = {}, browserEgressService = {}, remoteHostService = {}, environmentKeysService, openAiCodexAuthService, qaFaultHarnessService, workspaceService, machineConfigurationService = {}, githubService, googleWorkspaceService = {}, operations}) {
   return Object.freeze({
     ...operations,
     getPiAuth: agentAuthService.getPiAuth,
@@ -38,6 +38,12 @@ function createApiHandlers({activeInstancesService = {}, agentAuthService, autom
     listSshGateways: browserEgressService.listGateways,
     saveSshGatewayAssignments: browserEgressService.saveAssignments,
     setWorkspaceSshGateway: browserEgressService.setWorkspaceGateway,
+    listRemoteHosts: remoteHostService.listRemoteHosts,
+    registerRemoteHost: remoteHostService.registerRemoteHost,
+    getRemoteHost: remoteHostService.getRemoteHost,
+    updateRemoteHost: remoteHostService.updateRemoteHost,
+    testRemoteHost: remoteHostService.testRemoteHost,
+    removeRemoteHost: remoteHostService.removeRemoteHost,
     prepareWorkspaceStorageMigration: workspaceService.prepareWorkspaceStorageMigration,
     saveSessionPiAuthSelection: agentAuthService.saveSessionPiAuthSelection,
     getSessionQaFaults: qaFaultHarnessService?.getStatus || (async () => { throw new Error("QA fault harness service is unavailable"); }),

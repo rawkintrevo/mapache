@@ -33,6 +33,22 @@ service cloud.firestore {
         resource.data.uid == request.auth.uid &&
         validUserDocument(userId);
       allow delete: if false;
+
+      match /private/{document=**} {
+        allow read, write: if false;
+      }
+    }
+
+    match /remoteHosts/{hostId} {
+      allow read, write: if false;
+    }
+
+    match /remoteVmOperations/{operationId} {
+      allow read, write: if false;
+    }
+
+    match /remoteVmRoutes/{routeId} {
+      allow read, write: if false;
     }
 
     match /workspaces/{workspaceId} {

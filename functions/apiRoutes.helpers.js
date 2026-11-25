@@ -96,6 +96,11 @@ function routeRequest(path) {
   if (parts.length === 3 && parts[0] === "ssh-gateways" && parts[2] === "assignments") {
     return {name: "sshGatewayAssignments", gatewayId: parts[1]};
   }
+  if (parts.length === 1 && parts[0] === "remote-hosts") return {name: "remoteHosts"};
+  if (parts.length === 2 && parts[0] === "remote-hosts") return {name: "remoteHost", hostId: parts[1]};
+  if (parts.length === 3 && parts[0] === "remote-hosts" && parts[2] === "test") {
+    return {name: "remoteHostTest", hostId: parts[1]};
+  }
   if (parts.length === 3 && parts[0] === "automation-runs" && parts[2] === "restart") {
     return {name: "automationRunRestart", runId: parts[1]};
   }
