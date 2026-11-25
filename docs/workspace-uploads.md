@@ -50,10 +50,13 @@ cancellation removes the temporary state, and `ENOSPC` is reported as the
 explicit `upload_storage_full` response while preserving any valid prefix for a
 probe or retry.
 
-This does not yet make an upload token valid across VM replacement: a browser
-must obtain a new authorized current-generation upload flow after replacement.
-Paused-machine UX, replacement/reauthorization behavior, and full real-ingress
-failure testing remain part of the #622 acceptance work.
+The browser retains the disk operation ID in memory. If a retained-disk gateway
+URL expires or belongs to a replaced generation, it asks the Compute API for a
+new current-generation URL with that same operation ID, probes the retained
+state, and resumes from the acknowledged offset. A committed-operation probe
+also recovers a lost final response without reuploading bytes. This contract is
+covered by focused tests; paused-machine UX, live replacement/reauthorization,
+and full real-ingress failure testing remain part of the #622 acceptance work.
 
 Deploy Functions with `firebase deploy --only functions --project pi-agents-cloud`
 and deploy the frontend through the normal Hosting release. The GCS-mounted

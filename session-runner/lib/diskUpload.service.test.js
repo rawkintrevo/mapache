@@ -15,6 +15,15 @@ test("disk uploads resume with bounded chunks and publish atomically", async () 
   assert.deepEqual(await service.append(operation.operationId, Readable.from([Buffer.from("abc")]), {start: 0, end: 2, total: 6}), {complete: false, offset: 3});
   assert.deepEqual(await service.append(operation.operationId, Readable.from([Buffer.from("def")]), {start: 3, end: 5, total: 6}), {complete: true, offset: 6});
   assert.equal(await fs.readFile(path.join(root, "uploads", "large.bin"), "utf8"), "abcdef");
+
+  const probeResponse = {};
+  await service.handle({
+    method: "PUT",
+    params: {operationId: operation.operationId},
+    query: {name: "large.bin", size: "6"},
+    get: () => "bytes */6",
+  }, {json: body => { probeResponse.body = body; }});
+  assert.deepEqual(probeResponse.body, {ok: true, path: "/uploads/large.bin"});
 });
 
 test("upload paths and ranges reject traversal", () => {

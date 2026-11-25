@@ -43,7 +43,7 @@ function createWorkspaceUploadsService({db, requireWorkspace, sessionCollection,
         const gateway = String(session?.serviceUrl || runtime.gateway?.baseUrl || "").trim();
         if (!gateway) throw httpError(409, "workspace_upload_gateway_unavailable");
         if (!session?.browserAccessTokenSecret) throw httpError(409, "workspace_upload_access_unavailable");
-        const operationId = crypto.randomUUID();
+        const operationId = normalizeUploadOperationId(body.operationId) || crypto.randomUUID();
         const token = signSessionBrowserAccessToken(session, Date.now() + browserAccessTtlMs);
         const uploadUrl = `${gateway.replace(/\/+$/, "")}/workspace/uploads/${operationId}?name=${encodeURIComponent(name)}&size=${size}&mapache_access=${encodeURIComponent(token)}`;
         return {uploadUrl, path: `/uploads/${name}`, size, mode: "retained-disk", operationId};
@@ -82,6 +82,14 @@ function createWorkspaceUploadsService({db, requireWorkspace, sessionCollection,
   }
 }
 
+function normalizeUploadOperationId(value) {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{8,128}$/.test(value.trim())) {
+    throw httpError(400, "invalid_upload_operation");
+  }
+  return value.trim();
+}
+
 async function buildUploadsStorageTemplate(workspace, storage) {
   const descriptor = uploadsForWorkspace(workspace);
   try {
@@ -102,4 +110,4 @@ async function buildUploadsStorageTemplate(workspace, storage) {
   };
 }
 
-module.exports = {MAX_UPLOAD_BYTES, validateUpload, uploadsForWorkspace, createWorkspaceUploadsService, buildUploadsStorageTemplate};
+module.exports = {MAX_UPLOAD_BYTES, validateUpload, normalizeUploadOperationId, uploadsForWorkspace, createWorkspaceUploadsService, buildUploadsStorageTemplate};

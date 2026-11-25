@@ -28,6 +28,10 @@ function createDiskUploadService({config, fsImpl = fs, maxBytes = MAX_UPLOAD_BYT
       const range = parseContentRange(req.get("content-range"));
       const operation = await begin({operationId, name, size, expectedSha256: req.get("x-upload-sha256") || ""});
       if (range.probe) {
+        if (operation.state === "committed") {
+          res.json({ok: true, path: `/uploads/${operation.name}`});
+          return;
+        }
         const offset = await currentOffset(operation);
         res.status(308).set("Range", offset ? `bytes=0-${offset - 1}` : "").send();
         return;

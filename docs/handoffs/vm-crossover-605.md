@@ -548,3 +548,28 @@ UX, upload-token reauthorization after VM replacement, disk-full recovery on a
 live retained disk, and automation/request input compatibility remain open
 #622 acceptance work. No production authority switch or existing workspace was
 changed.
+
+## Continuation evidence — 2026-11-25 upload reauthorization
+
+The retained-disk upload flow now carries a validated operation ID through the
+Compute upload-admission API. The browser refreshes the current-generation
+gateway URL after an expired/replaced-generation 404 or 410, reuses that
+operation ID, probes the retained state, and continues from the acknowledged
+offset. The runner returns a successful committed-operation probe after a lost
+final response, so a completed file is not reuploaded. Focused Functions,
+runner, and browser tests cover operation-ID validation, same-operation URL
+refresh, committed probes, and the 507 disk-full message. The full local gate,
+production main/community build, docs check, and diff checks pass.
+
+The changed Functions revision was deployed with
+`firebase deploy --only functions --project pi-agents-cloud`: **28 functions
+deployed, 0 errors**. The runner image passed full Cloud Build
+`0301b840-0e1c-4ad4-a332-bfd9451a46ca` in **15m14.672s** wall clock and was
+published under
+`us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner-pr-629-upload-reauth-20261125`
+with digest
+`sha256:023d4d6b7c411317f5cd230e0c9adda7afff055266d467c291a5ddd9dffa8840`.
+It is not production compatibility-tagged. Real VM-generation replacement with
+an in-flight upload, live disk-full recovery, paused-machine UX, and automation
+input compatibility remain unproven #622 acceptance criteria; no production
+authority switch or existing workspace was changed.

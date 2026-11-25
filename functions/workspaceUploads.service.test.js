@@ -1,7 +1,7 @@
 "use strict";
 const crypto = require("node:crypto");
 const assert = require("node:assert/strict");
-const {MAX_UPLOAD_BYTES, validateUpload, uploadsForWorkspace, createWorkspaceUploadsService, buildUploadsStorageTemplate} = require("./workspaceUploads.service");
+const {MAX_UPLOAD_BYTES, validateUpload, normalizeUploadOperationId, uploadsForWorkspace, createWorkspaceUploadsService, buildUploadsStorageTemplate} = require("./workspaceUploads.service");
 const {routeRequest} = require("./apiRoutes.helpers");
 const {dispatchApiRoute} = require("./apiDispatch.helpers");
 const {UPLOAD_HOLD_MS} = require("./vmLegacyUploadAdmission.service");
@@ -30,6 +30,9 @@ function uploadAdmissionFixture(workspace) {
   for (const size of [0, -1, 1.5, "20", MAX_UPLOAD_BYTES + 1]) {
     assert.throws(() => validateUpload({name: "a.csv", size}), /upload_size/);
   }
+  assert.equal(normalizeUploadOperationId("resume_123"), "resume_123");
+  assert.equal(normalizeUploadOperationId(), "");
+  assert.throws(() => normalizeUploadOperationId("bad operation"), /invalid_upload_operation/);
   assert.deepEqual(validateUpload({name: "résumé data.csv", size: MAX_UPLOAD_BYTES}), {name: "résumé data.csv", size: MAX_UPLOAD_BYTES});
   for (const storagePrefix of ["../a", "/a", "a,,b", "a//b"]) assert.throws(() => uploadsForWorkspace({storagePrefix}));
   let exists = false;
@@ -100,12 +103,13 @@ function uploadAdmissionFixture(workspace) {
     sessionCollection: () => ({doc: () => ({get: async () => ({exists: true, id: vmSession.id, data: () => vmSession})})}),
     storage,
   });
-  const vmUpload = await vmService.createUpload("u", "vm-workspace", {name: "vm.csv", size: 10});
+  const vmUpload = await vmService.createUpload("u", "vm-workspace", {name: "vm.csv", size: 10, operationId: "resume_123"});
   const vmUrl = new URL(vmUpload.uploadUrl);
   const [payload, signature] = vmUrl.searchParams.get("mapache_access").split(".");
   const expected = crypto.createHmac("sha256", vmSession.browserAccessTokenSecret).update(payload).digest("base64url");
   assert.equal(signature, expected);
   assert.equal(JSON.parse(Buffer.from(payload, "base64url").toString("utf8")).sid, vmSession.id);
-  assert.equal(vmUrl.pathname, "/workspace/uploads/" + vmUpload.operationId);
+  assert.equal(vmUpload.operationId, "resume_123");
+  assert.equal(vmUrl.pathname, "/workspace/uploads/resume_123");
   console.log("workspace uploads tests passed");
 })().catch((error) => {console.error(error); process.exitCode = 1;});
