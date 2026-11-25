@@ -44,7 +44,7 @@ The VM paths skip ordinary HOME/workspace/profile checkpoint restore/upload; mig
 
 ## Concrete recovery gaps
 
-1. `vm-test`: neither canonical nor historical HOME prefix has current, noncurrent or soft-deleted objects. Bucket versioning was disabled; soft-delete retention was seven days. The old Cloud Run service no longer exists. This leaves full HOME recovery unproven, not proof that HOME was empty or that every byte is lost. A checkpoint-publishing early return is a possible explanation, but the deleted service's deployed code was not verified; do not assert it as root cause.
+1. The legacy workspace displayed as `vm-test` is Firestore workspace `1yIPKCPpk5O8s6RfAd0n` (owner `lzbp4xahITXWWgtrWpmGgAvzzmU2`): neither canonical nor historical HOME prefix has current, noncurrent or soft-deleted objects. Bucket versioning was disabled; soft-delete retention was seven days. The old Cloud Run service no longer exists. This leaves full HOME recovery unproven, not proof that HOME was empty or that every byte is lost. A checkpoint-publishing early return is a possible explanation, but the deleted service's deployed code was not verified; do not assert it as root cause.
 2. Sole shared-tree record: its referenced bucket returns 404. The tested handoff inventory now records `shared_bucket_not_found`, rather than merely `not-read`. Do not recreate an empty bucket or reinterpret this as a successful empty migration.
 3. The full inventory had 15 missing manifest references, one schema/identity mismatch and one invalid reference. Other recoverable formats/live state still need reconciliation. The registry scan is not an atomic cutover snapshot.
 
@@ -53,7 +53,7 @@ Do not repeatedly retry these known absent sources without new evidence. Continu
 ## Verified recovery and evidence boundaries
 
 - Registry inventory: 85 legacy records with stable IDs/owners (27 inactive, 57 without sessions, one excluded SSH), plus one isolated VM fixture. No record cutover-ready.
-- `vm-test` checkpoint recovery: 36 agent files/objects (1,236,845 bytes), eight workspace files/objects (29,047 bytes); locally assembled/verified.
+- The authoritative `vm-test` inventory (`1yIPKCPpk5O8s6RfAd0n`) now passes bounded read-only payload verification for 36 agent files/objects and eight workspace files/objects, totaling 1,265,892 bytes; the current 48,086,059-byte browser-seed archive also passes descriptor and archive verification within explicit budgets. This removes the prior `checkpoint_payload_verification_required` blocker without changing Storage or Firestore. The source remains `readyForCutover=false` because HOME, live/unpublished/private-Git reconciliation, cost, and downtime evidence remain open.
 - Browser archive: 48,086,059 compressed bytes, 324 files, 119 archived directories plus one implied parent; locally restored and verified.
 - Disposable-copy Chrome proof: Chrome 148.0.7778.178 rendered a synthetic page in a network namespace with no external interfaces and exited zero. SQLite passed for 20 databases before/22 after. Source fingerprint unchanged; owned Chrome/profile cleaned. This is not headed VM/noVNC, sandbox, encrypted credential or external login evidence.
 - Owner tools: three files (65,988 bytes) and five directory markers assembled under `home/.local`. The four-source local candidate contains 371 files and 146 directories. Shared-owner writer reconciliation remains open.
