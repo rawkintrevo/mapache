@@ -1708,6 +1708,17 @@ selected-source import, not a complete legacy cutover: the source stages do not
 share one coordinator capture, full HOME/private-Git/live-only reconciliation
 remains open, and no source authority was changed.
 
+The same 2026-11-25 read-only source audit narrows the `vm-test`-specific
+reconciliation boundary: its Firestore source is explicitly `blank` with blank
+sync policy and no repository, installation, branch or commit configured. Its
+uploads prefix has one zero-byte directory marker and no payload objects. The
+current and historical HOME prefixes list zero objects, but that does not prove
+historical HOME emptiness because the old service and its writer history are
+unavailable. The agent and workspace checkpoints have different capture IDs,
+and the browser/archive and owner-tool stages are separate captures, so they
+cannot yet be represented as one coordinator-bound `prefixCapture`. Private
+read-only evidence is `artifacts/qa/vm-migration-inventory/vm-test-source-reconciliation.json`.
+
 ### Install selected sources on a retained disk
 
 `scripts/vm-import-retained-disk.mjs` provides the maintenance-host path
