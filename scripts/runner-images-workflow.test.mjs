@@ -33,6 +33,7 @@ test("runner image builds resolve and verify the pi-web-ui cache before packagin
 
 test("pull-request runner builds use the fast upstream test path while releases stay full", () => {
 	assert.match(dockerfile, /ARG MAPACHE_SKIP_UPSTREAM_TESTS=1/);
+	assert.match(dockerfile, /FROM mapache-base AS pi-web-ui-builder\nARG MAPACHE_BUILD_RESOLUTION_KEY/);
 	assert.match(dockerfile, /MAPACHE_SKIP_UPSTREAM_TESTS.*--skip-tests/s);
 	assert.match(cloudbuild, /_SKIP_UPSTREAM_TESTS: ["']1["']/);
 	assert.match(cloudbuild, /MAPACHE_SKIP_UPSTREAM_TESTS=\$\{_SKIP_UPSTREAM_TESTS\}/);

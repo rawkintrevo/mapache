@@ -21,6 +21,8 @@ RUN npm install -g chrome-devtools-mcp@1.6.0
 WORKDIR /app
 
 FROM mapache-base AS pi-web-ui-builder
+ARG MAPACHE_BUILD_RESOLUTION_KEY=local
+ARG MAPACHE_SKIP_UPSTREAM_TESTS=1
 COPY upstream ./upstream
 COPY pi-web-ui-build-inputs.json /app/pi-web-ui-build-inputs.json
 COPY pi-web-ui-cache.tar.gz /app/pi-web-ui-cache.tar.gz
