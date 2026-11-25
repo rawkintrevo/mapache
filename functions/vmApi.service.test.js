@@ -109,6 +109,31 @@ test("access URLs are compatible with both real runner verifiers and never inclu
   for (const secret of [f.credentials.browserToken, f.credentials.controlToken, f.credentials.shutdownToken, "10.90.0.12"]) assert.ok(!JSON.stringify(body).includes(secret));
 });
 
+test("uploads mint a current-generation retained-disk URL without exposing VM credentials", async () => {
+  const f = fixture();
+  const result = await f.call("/workspaces/workspace/uploads", {
+    name: "report.csv", size: 12, expectedGeneration: 7, operationId: "resume_123",
+  }, "POST");
+  assert.equal(result.status, 201);
+  assert.equal(result.body.mode, "retained-disk");
+  assert.equal(result.body.path, "/uploads/report.csv");
+  assert.equal(result.body.operationId, "resume_123");
+  const parsed = new URL(result.body.uploadUrl);
+  assert.equal(parsed.hostname, "fixture.example.com");
+  assert.equal(parsed.pathname, "/workspace/uploads/resume_123");
+  assert.equal(parsed.searchParams.get("name"), "report.csv");
+  assert.equal(parsed.searchParams.get("size"), "12");
+  const token = parsed.searchParams.get("mapache_access");
+  assert.equal(createBrowserAccessVerifier({secret: f.credentials.browserToken, sessionId: "session", now: () => f.time}).verify(token), true);
+  assert.ok(!JSON.stringify(result.body).includes("control-secret"));
+  await assert.rejects(f.call("/workspaces/workspace/uploads", {
+    name: "../secret", size: 12, expectedGeneration: 7,
+  }, "POST"), /invalid_upload_filename/);
+  await assert.rejects(f.call("/workspaces/workspace/uploads", {
+    name: "report.csv", size: 12, expectedGeneration: 6,
+  }, "POST"), /vm_generation_mismatch/);
+});
+
 test("stale generation, readiness, leases, ownership and route bindings cannot mint access", async () => {
   await assert.rejects(fixture().call(undefined, {expectedGeneration: 6}), /vm_generation_mismatch/);
   for (const change of [f => { f.ws.state = "stopping"; }, f => { f.ws.activeOperationId = "pause"; },

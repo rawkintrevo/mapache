@@ -475,6 +475,7 @@ address from the caller. All responses use `Cache-Control: no-store`.
 | `PATCH /workspaces/{id}/rename` | `{name, expectedGeneration}`; trims and validates the owner-scoped display name and refuses stale generations |
 | `GET /workspaces/{id}/runtime-policy` | Safe idle/keep-running/scheduled policy and bounded schedule status/next-event fields |
 | `PATCH /workspaces/{id}/runtime-policy` | `{expectedGeneration, mode, schedule}`; owner/generation/fence checked and scheduled changes reconcile immediately |
+| `POST /workspaces/{id}/uploads` | `{name, size, operationId?, expectedGeneration}`; mints a one-hour current-generation gateway URL for resumable retained-disk upload |
 
 Access credentials expire after 15 minutes. The same agent-audience/generation
 credential is used for Agent, Shell and Preview URLs so a sibling surface cannot

@@ -66,8 +66,8 @@ workspace selection skips the legacy workspace MCP/Google config reads for VM
 records. Global account credential management remains available; unsupported
 VM-scoped actions return an explicit unavailable error. This is temporary
 crossover coverage, not removal of the central configuration requirements.
-Creation UI, deletion, remaining configuration/automation/request/upload
-routing and full-shell creation/lifecycle acceptance remain unfinished. VM
+Creation UI, deletion, remaining configuration/automation/request routing and
+full-shell creation/lifecycle acceptance remain unfinished. VM
 scheduled-policy reconciliation is server-authoritative: the one-minute VM
 lifecycle reconciler starts stopped admitted machines inside a configured
 window and pauses active machines at the strict closing boundary. Builds
@@ -369,10 +369,12 @@ merely to inspect a past run.
 ## Local file uploads
 
 The navbar keeps its workspace and account actions in one labeled workspace
-actions menu at every viewport size. Its Upload file action sends local files directly to Cloud Storage using
-resumable transfers. Main and automation sessions mount their workspace inputs
-read-only at `/uploads`. See [Workspace uploads](./workspace-uploads.md) for
-ownership, lifecycle, restart requirements, and verification.
+actions menu at every viewport size. Its Upload file action sends legacy
+workspaces directly to Cloud Storage using resumable transfers, while admitted
+VM workspaces receive a short-lived gateway URL for resumable writes to the
+retained `/uploads` path. Main and automation sessions mount their workspace
+inputs read-only at `/uploads`. See [Workspace uploads](./workspace-uploads.md)
+for ownership, lifecycle, restart requirements, and verification.
 
 Named OpenAI-compatible connections use the existing Authentication modal and
 Pi auth workflow. `AuthModal` collects a stable `custom-…` ID and endpoint in

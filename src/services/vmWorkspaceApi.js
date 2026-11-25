@@ -38,6 +38,13 @@ export function withVmWorkspaces(legacy, request, {requestId = () => crypto.rand
       if (result.workspace) machines.set(id, {...data.workspace, ...result.workspace});
       return result;
     },
+    createWorkspaceUpload: async (id, file, operationId = "") => {
+      const data = await read(id);
+      return vmRequest(id, "/uploads", {method: "POST", body: {
+        name: file.name, size: file.size, expectedGeneration: data.workspace.generation,
+        ...(operationId ? {operationId} : {}),
+      }});
+    },
     setSessionLongRunning: async (id, sessionId, enabled) => {
       const data = await read(id);
       if (data.workspace.currentSessionId !== sessionId) throw new Error("The runtime changed. Refresh before trying again.");

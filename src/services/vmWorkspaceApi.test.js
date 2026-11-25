@@ -6,7 +6,7 @@ function fixture() {
   const legacy = {getWorkspaces: vi.fn(async () => ({workspaces: [{id: "old"}]})), getSessions: vi.fn(), renameWorkspace: vi.fn(),
     getMachineConfiguration: vi.fn(), updateMachineConfiguration: vi.fn(),
     getWorkspaceRuntimePolicy: vi.fn(), updateWorkspaceRuntimePolicy: vi.fn(), setSessionLongRunning: vi.fn(),
-    stopSession: vi.fn(), restartSession: vi.fn(), getSessionAccessUrls: vi.fn(), deleteWorkspace: vi.fn()};
+    stopSession: vi.fn(), restartSession: vi.fn(), getSessionAccessUrls: vi.fn(), createWorkspaceUpload: vi.fn(), deleteWorkspace: vi.fn()};
   const request = vi.fn(async (url, options) => {
     if (url.endsWith("/workspaces")) return {workspaces: [workspace], nextCursor: null};
     if (url.endsWith("/sessions")) return {workspace: {...workspace}, sessions: [{id: workspace.currentSessionId}]};
@@ -64,6 +64,16 @@ describe("VM frontend provider routing", () => {
       method: "PATCH", body: {mode: "keep-running", schedule: null, expectedGeneration: 8},
     });
     expect(f.legacy.updateWorkspaceRuntimePolicy).not.toHaveBeenCalled();
+  });
+  it("routes VM uploads with the current generation and keeps legacy uploads unchanged", async () => {
+    const f = fixture(); await f.api.getWorkspaces();
+    const file = {name: "report.csv", size: 12};
+    await f.api.createWorkspaceUpload("vm", file, "resume_123");
+    expect(f.request).toHaveBeenLastCalledWith(expect.stringMatching(/\/vm\/uploads$/), {
+      method: "POST", body: {name: "report.csv", size: 12, expectedGeneration: 8, operationId: "resume_123"},
+    });
+    await f.api.createWorkspaceUpload("old", file);
+    expect(f.legacy.createWorkspaceUpload).toHaveBeenCalledWith("old", file);
   });
   it("rejects provider collisions and pagination loops", async () => {
     const f = fixture(); f.legacy.getWorkspaces.mockResolvedValue({workspaces: [{id: "vm"}]});
