@@ -5,6 +5,11 @@ backend introduced by #605. Firebase Hosting, Auth, Firestore, Cloud Storage,
 and Cloud Functions remain the control plane. The VM feature is disabled until
 the isolated proof and release gates in this page have passed.
 
+Remote-host libvirt workspaces are a separate provider contract. See
+[Remote-host VM workspaces](./remote-vm-workspaces.md). The records and
+lifecycle described here for Compute Engine must not be applied to a remote
+host, and a remote-host error must not fall back to this provider.
+
 ## Decision summary
 
 Each managed workspace is one logical machine with a stable workspace ID and a
