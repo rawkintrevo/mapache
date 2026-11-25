@@ -1843,7 +1843,23 @@ Changing the capture during resume fails before further publication.
 These receipts record a verified local import. Cutover still requires
 independent destination identity, source authority and boot checks.
 
-The internal coordinator first calls `registerImportDisk` with the
+After the private import has created and detached the labeled destination
+disk, register its exact provider identity with the coordinator:
+
+```bash
+node scripts/vm-migration-register-disk.mjs \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --operation OPERATION_ID --zone us-central1-a --generation DESTINATION_GENERATION \
+  --destination-operation DISK_PROVISIONING_OPERATION_ID \
+  --confirm migration-register-disk
+```
+
+The command checks the operation's captured source and both fences, then uses
+the Compute observer to require the expected ownership labels, creation labels,
+disk readiness, and detachment before recording the provider disk ID. It is
+idempotent for the same identity and rejects adoption of another disk.
+
+The coordinator then uses `registerImportDisk` with the
 destination zone, provisioning operation and VM generation. The Compute
 observer checks ownership labels, creation labels, disk readiness and
 detachment, and reads the provider's numeric disk ID as a string. Once

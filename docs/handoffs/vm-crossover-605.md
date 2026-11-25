@@ -720,3 +720,15 @@ observations and writes only bounded private inventory chunks. It does not
 download payloads, switch authority, or delete the source. The existing
 checkpoint/archive import CLIs can consume the resulting coordinator-bound
 capture. No production workspace invoked this action.
+
+## Continuation implementation — 2026-11-25 destination-disk registration CLI
+
+The missing handoff between private retained-disk import and coordinator
+verification is now explicit in `scripts/vm-migration-register-disk.mjs`. The
+operator supplies the source operation, destination zone/generation, exact disk
+provisioning operation, and `--confirm migration-register-disk`. The command
+uses the Compute observer to require the operation-owned, ready, detached disk
+and records its provider identity through the existing fenced coordinator. It
+is idempotent for the same disk and rejects identity changes; no source,
+workspace authority, or destination runtime is changed. No production
+workspace invoked this action.
