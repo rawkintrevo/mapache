@@ -147,7 +147,10 @@ export function assertReadySourceAudit(audit, {workspaceId, ownerUid, sourceGene
       audit.workspaceId !== workspaceId || audit.ownerUid !== ownerUid || audit.sourceGeneration !== sourceGeneration ||
       audit.observationSha256 !== observationSha256 || audit.sourceObservationSha256 !== sourceObservationSha256 ||
       JSON.stringify(audit.scope) !== JSON.stringify(scope) ||
-      audit.sourceRetained !== true || !DIGEST.test(String(audit.evidenceSha256 || '')) ||
+      audit.sourceRetained !== true || !audit.completeness || !DIGEST.test(String(audit.evidenceSha256 || '')) ||
+      audit.evidenceSha256 !== createHash('sha256').update(JSON.stringify({workspaceId: audit.workspaceId, ownerUid: audit.ownerUid,
+        sourceGeneration: audit.sourceGeneration, sourceObservationSha256: audit.sourceObservationSha256, scope: audit.scope,
+        completeness: audit.completeness})).digest('hex') ||
       !Array.isArray(audit.blockers) || audit.blockers.length) fail('source_audit_not_ready');
   return audit;
 }

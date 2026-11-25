@@ -21,6 +21,7 @@ const {createWorkspaceStorageBackupService} = require("./workspaceStorageBackup.
 const {createWorkspaceRuntimeScheduleService} = require("./workspaceRuntimeSchedule.service");
 const {createSessionLifecycleService} = require("./sessionLifecycle.service");
 const {createVmMigrationStorageObserver} = require("./vmMigrationStorageObservation.service");
+const {sourceAuditEvidenceSha256} = require("./vmMigrationSourceAudit.helpers");
 
 test("operator reservation requires a current ready source audit", {
   skip: !process.env.FIRESTORE_EMULATOR_HOST,
@@ -39,14 +40,17 @@ test("operator reservation requires a current ready source audit", {
     const coordinator = createVmMigrationCoordinator({db, defaultBucket: bucket, requireSourceAudit: true,
       authorize: async () => true});
     await assert.rejects(coordinator.reserve(input), {publicMessage: "vm_migration_source_audit_required"});
-    await db.collection("vmMigrationSourceAudits_v2").doc(workspaceId).create({
+    const audit = {
       schemaVersion: 1, state: "ready", decision: "admit-reservation", workspaceId, ownerUid, sourceGeneration,
       observationSha256, sourceObservationSha256, scope: {bucket, prefix: `workspaces/${ownerUid}/staging`, workspaceKey: "staging"},
-      blockers: [], evidenceSha256: "a".repeat(64), sourceRetained: true,
-    });
+      completeness: {requiredCoverage: ["workspace", "liveState"], coverage: {}, storage: {}, costDowntime: {}},
+      blockers: [], sourceRetained: true,
+    };
+    audit.evidenceSha256 = sourceAuditEvidenceSha256(audit);
+    await db.collection("vmMigrationSourceAudits_v2").doc(workspaceId).create(audit);
     const reserved = await coordinator.reserve(input);
     assert.equal(reserved.phase, "reserved");
-    assert.equal(reserved.sourceAuditSha256, "a".repeat(64));
+    assert.equal(reserved.sourceAuditSha256, audit.evidenceSha256);
   } finally {
     await app.delete();
   }
