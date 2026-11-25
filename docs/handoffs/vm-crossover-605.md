@@ -83,7 +83,7 @@ These directories do **not** travel with Git. They can contain private restored 
 
 ## Checks and continuation
 
-At handoff, the Functions package suite, all seven existing coordinator Firestore emulator cases, lint and docs checks passed. Prior evidence includes 55 focused import and maintenance cases, 281 frontend tests, normal and VM-enabled builds, and synthetic Chrome DevTools routing and editor QA. The scoped live VM shell proof now passes through owner authentication, VM API polling, gateway access and the Agent iframe; full live authenticated frontend acceptance remains open.
+At handoff, the Functions package suite, all seven existing coordinator Firestore emulator cases, lint and docs checks passed. The current branch also passes `npm run check:fast` (103 focused Functions tests and 59 runner tests) plus the migration/import/recovery-focused gate (84 passed, 0 failed, 10 emulator-dependent cases skipped). Prior evidence includes 55 focused import and maintenance cases, 281 frontend tests, normal and VM-enabled builds, and synthetic Chrome DevTools routing and editor QA. The scoped live VM shell proof now passes through owner authentication, VM API polling, gateway access and the Agent iframe; full live authenticated frontend acceptance remains open.
 
 ```bash
 node --test functions/vm*.test.js functions/{sessionLifecycle,cloudRun,sessionCreation,workspaceUploads,sessionResize,workspaceSessionReservation,automationRuns,automationAdmission,automationProvisioning,workspaceRequestRuntime,workspaceAutomationDeletion}.service.test.js
