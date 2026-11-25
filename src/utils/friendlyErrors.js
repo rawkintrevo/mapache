@@ -23,6 +23,28 @@ export function friendlyGlobalError(error) {
   return message;
 }
 
+export function friendlyRemoteHostError(error) {
+  const message = error?.message || "Remote host request failed.";
+  const messages = {
+    remote_host_limit_reached: "Only one remote host can be configured in v1. Remove the existing host before adding another.",
+    remote_host_display_name_required: "Enter a name for this remote host.",
+    remote_host_address_invalid: "Enter a valid public hostname or IP address.",
+    remote_host_address_disallowed: "Use a public host address; loopback, private-network, and metadata addresses are not allowed.",
+    remote_host_port_invalid: "Enter an SSH port between 1 and 65535.",
+    remote_host_username_invalid: "Use the managed Linux account name created by the setup script.",
+    remote_host_host_key_required: "Verify the host fingerprint before testing the connection.",
+    remote_host_key_confirmation_required: "Confirm the SSH host fingerprint before saving it.",
+    remote_host_key_mismatch: "The host fingerprint changed. Verify the new fingerprint out of band, then remove and register this host again if the rotation was expected.",
+    remote_host_key_revoked: "The host access key was revoked. Register the host again to create a new key.",
+    remote_host_dns_failed: "The host name could not be resolved. Check DNS and try again.",
+    remote_host_unreachable: "SSH could not reach this host. Check port 22, the address, and the setup account/key.",
+    remote_host_connection_unavailable: "Remote host testing is temporarily unavailable. Try again shortly.",
+    remote_host_referenced: "This host is still referenced by a workspace or pending operation. Remove those references before deleting it.",
+    remote_host_not_found: "That remote host is no longer available. Refresh the host list.",
+  };
+  return messages[message] || message;
+}
+
 export function friendlyWorkspaceError(error) {
   const message = error.message || "Could not create workspace.";
   if (message === "missing_github_repo_url") return "Enter a GitHub repository URL.";

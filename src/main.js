@@ -31,6 +31,7 @@ import {createAutomationsController} from "./controllers/automationsController.j
 import {createInstancesController} from "./controllers/instancesController.js";
 import {createRequestGrantsController} from "./controllers/requestGrantsController.js";
 import {createSshGatewaysController} from "./controllers/sshGatewaysController.js";
+import {createRemoteHostsController} from "./controllers/remoteHostsController.js";
 import {
   connectGithubState,
   disconnectGithubState,
@@ -73,6 +74,7 @@ const automationsController = createAutomationsController({state, render});
 const instancesController = createInstancesController({state, render});
 const requestGrantsController = createRequestGrantsController({state, render});
 const sshGatewaysController = createSshGatewaysController({state, render});
+const remoteHostsController = createRemoteHostsController({state, render});
 const sessionSubscriptionController = createSessionSubscriptionController({
   state,
   dispatch,
@@ -109,6 +111,7 @@ const handlers = {
     signOut,
     showAutomationsHistory,
     showInstances,
+    showRemoteHosts,
     showSshGateways,
     showWorkspace,
     stopInstance,
@@ -141,6 +144,7 @@ const handlers = {
   automations: automationsController,
   instances: instancesController,
   requestGrants: requestGrantsController,
+  remoteHosts: remoteHostsController,
   sshGateways: sshGatewaysController,
   workspaces: {
     ...workspaceController,
@@ -168,6 +172,7 @@ async function start() {
       automationsController.setIdentity(user?.uid || "");
       instancesController.setIdentity(user?.uid || "");
       sshGatewaysController.setIdentity(user?.uid || "");
+      remoteHostsController.setIdentity(user?.uid || "");
       if (!user) {
         sessionSubscriptionController.detach();
         automationsController.clear();
@@ -237,6 +242,11 @@ async function showSshGateways() {
   await sshGatewaysController.load();
 }
 
+async function showRemoteHosts() {
+  dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "remote-hosts"});
+  await remoteHostsController.load();
+}
+
 function showAutomations() {
   dispatch({type: APP_ACTIONS.SET_ACTIVE_PAGE, page: "automations"});
 }
@@ -300,6 +310,7 @@ async function refreshAll() {
       await adminController.loadAdminUsers({cursor: state.admin.cursor, cursorStack: state.admin.cursorStack});
     }
     if (state.activePage === "ssh-gateways") await sshGatewaysController.load();
+    if (state.activePage === "remote-hosts") await remoteHostsController.load();
   }, "Working...", OPERATION_KEYS.APP_REFRESH);
 }
 

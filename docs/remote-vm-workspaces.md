@@ -18,6 +18,16 @@ Mapache marker (or the exact managed libvirt network definition), and reports
 readiness with `--check-only --json`. It refuses an unmanaged account, helper,
 SSH configuration or network definition instead of overwriting it.
 
+The authenticated `/app` host surface is implemented in
+`src/components/remoteHosts/RemoteHostsPage.jsx` and
+`src/controllers/remoteHostsController.js`. It is intentionally limited to
+one host in v1 and supports registration, copyable public-key/setup directions,
+readiness testing, explicit SSH fingerprint confirmation, retry after setup or
+connectivity failures, and safe removal. The controller fences requests by
+owner identity and clears state on sign-out. Workspace creation links to this
+surface, while the explicit remote VM provider option remains part of the
+follow-up workspace integration work.
+
 ## Product boundary
 
 The existing authenticated `/app` remains the entry point. Workspace creation

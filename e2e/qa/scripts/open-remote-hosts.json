@@ -1,0 +1,12 @@
+{
+  "id": "navigation.open-remote-hosts",
+  "title": "Open remote VM hosts from the user menu",
+  "steps": [
+    {"type": "click", "role": "button", "nameIncludes": "Mapache QA Agent"},
+    {"type": "click", "role": "menuitem", "name": "Remote VM hosts"},
+    {"type": "waitForSnapshotText", "text": "Remote hosts", "timeoutMs": 10000}
+  ],
+  "assertions": [
+    "The Remote hosts page is visible and has requested its owner-scoped host inventory"
+  ]
+}

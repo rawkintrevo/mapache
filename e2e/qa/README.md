@@ -75,6 +75,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/navigation-topbar.json`: Workspace, connection, account, and refresh controls in the top navigation.
 - `cases/running-instances.json`: Signed-in user-menu navigation to the Running Instances live inventory and settled loading state.
 - `cases/ssh-gateways-empty.json`: SSH gateway user-menu navigation, empty-state setup guidance, and inventory request.
+- `cases/remote-hosts-onboarding.json`: Remote VM host user-menu navigation, first-run setup guidance, and owner inventory request.
 - `cases/ssh-gateways-management.json`: Configured SSH gateway workspace assignment persistence and explicit restart semantics; requires a disposable QA gateway configuration.
 - `cases/ssh-gateways-forged-assignment.json`: Authenticated forged gateway assignment rejection.
 - `cases/runtime-schedule-policy.json`: Saves a weekday/timezone runtime schedule while leaving the workspace in Idle timeout mode; does not start a runner.

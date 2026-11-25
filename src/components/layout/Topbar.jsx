@@ -33,6 +33,7 @@ export function Topbar({
   onShowLogs,
   onShowUpload,
   onShowProfile,
+  onShowRemoteHosts,
   onShowSshGateways,
   onSignOut,
   onSetRuntimePolicy,
@@ -176,6 +177,7 @@ export function Topbar({
           onShowAdmin={onShowAdmin}
           onShowInstances={onShowInstances}
           onShowProfile={onShowProfile}
+          onShowRemoteHosts={onShowRemoteHosts}
           onShowSshGateways={onShowSshGateways}
           onSignOut={onSignOut}
         />

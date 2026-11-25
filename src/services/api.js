@@ -104,6 +104,23 @@ export function createApiClient(getToken) {
         `/api/workspaces/${encodeURIComponent(workspaceId)}/ssh-gateway`,
         {method: "PATCH", body: {enabled}},
     ),
+    getRemoteHosts: () => request(getToken, "/api/remote-hosts"),
+    registerRemoteHost: (body) => request(getToken, "/api/remote-hosts", {method: "POST", body}),
+    updateRemoteHost: (hostId, body) => request(
+        getToken,
+        `/api/remote-hosts/${encodeURIComponent(hostId)}`,
+        {method: "PATCH", body},
+    ),
+    testRemoteHost: (hostId) => request(
+        getToken,
+        `/api/remote-hosts/${encodeURIComponent(hostId)}/test`,
+        {method: "POST", body: {}},
+    ),
+    removeRemoteHost: (hostId) => request(
+        getToken,
+        `/api/remote-hosts/${encodeURIComponent(hostId)}`,
+        {method: "DELETE"},
+    ),
     getAdminUsers: ({cursor = "", pageSize = 25} = {}) => {
       const params = new URLSearchParams();
       params.set("pageSize", String(pageSize));
