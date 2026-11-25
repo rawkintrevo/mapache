@@ -341,6 +341,30 @@ test("imported-disk cleanup requires the exact detached operation-owned disk", a
   assert.equal(state.mutations.length, 1);
 });
 
+test("owned disk cleanup accepts Compute's omitted users field when detached", async () => {
+  const d = descriptor({generation: 3});
+  const label = value => createHash("sha256").update(String(value)).digest("hex").slice(0, 63);
+  const state = {disk: {name: d.dataDiskName, id: "123", status: "READY",
+    labels: {"mapache-owner-uid": label(d.ownerUid), "mapache-workspace-id": label(d.workspaceId),
+      "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND, "mapache-created-generation": "3",
+      "mapache-operation-id": label("recovery")}}, mutations: []};
+  const missing = () => Object.assign(new Error("missing"), {response: {status: 404}});
+  const service = createComputeEngineService({projectId: "pi-agents-cloud", request: async request => {
+    if (request.method === "GET") {
+      if (!state.disk) throw missing();
+      return {data: state.disk};
+    }
+    state.mutations.push(request);
+    if (request.method === "DELETE") {
+      state.disk = null;
+      return {data: {status: "DONE"}};
+    }
+    throw new Error(`unexpected ${request.method} ${request.url}`);
+  }});
+  assert.deepEqual(await service.deleteOwnedDisk(d, {operationId: "recovery"}), {diskDeleted: true});
+  assert.equal(state.mutations.length, 1);
+});
+
 test("migration runtime inspection binds the attached disk and private running instance", async () => {
   const d = descriptor({generation: 4});
   const label = value => createHash("sha256").update(String(value)).digest("hex").slice(0, 63);

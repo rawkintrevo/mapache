@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 import {createHash, randomBytes} from "node:crypto";
-import {execFile} from "node:child_process";
 import {createRequire} from "node:module";
-import {promisify} from "node:util";
 
 const require = createRequire(import.meta.url);
-const run = promisify(execFile);
 const PROJECT_ID = "pi-agents-cloud";
 const SUBNETWORK = "regions/us-central1/subnetworks/mapache-vm-v2-us-central1";
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
@@ -18,6 +15,7 @@ export function parseArgs(argv = []) {
   const aliases = new Map([
     ["project", "project"], ["workspace", "workspace"], ["owner", "owner"],
     ["backup", "backup"], ["runner-image", "runnerImage"], ["timeout-ms", "timeoutMs"],
+    ["gateway-host", "gatewayHost"],
   ]);
   const seen = new Set();
   for (let index = 0; index < argv.length; index += 1) {
@@ -102,6 +100,7 @@ async function main() {
   const admin = require("../functions/node_modules/firebase-admin");
   const {createComputeEngineBackupService} = require("../functions/computeEngineBackup.service.js");
   const {createComputeEngineService} = require("../functions/computeEngine.service.js");
+  const {createVmBackupRecoveryRuntimeService} = require("../functions/vmBackupRecoveryRuntime.service.js");
   const {COMPUTE_ENGINE_BACKEND, normalizeRuntimeDescriptor} = require("../functions/runtimeProvider.helpers.js");
   const app = admin.initializeApp({projectId: PROJECT_ID}, "vm-backup-recovery-proof");
   const db = app.firestore();
@@ -110,16 +109,18 @@ async function main() {
   const compute = createComputeEngineService({projectId: PROJECT_ID,
     request: async options => (await computeAuth.getClient()).request({...options, timeout: 30_000}),
   });
+  const gatewayHost = String(options.gatewayHost || process.env.VM_BACKUP_RECOVERY_GATEWAY_HOST || "").trim();
+  if (!gatewayHost) throw recoveryError("recovery_gateway_host_required");
+  const recoveryRuntime = createVmBackupRecoveryRuntimeService({db, compute,
+    gatewayHost, runnerImage: options.runnerImage});
   const startedAtMs = Date.now();
   // Compute request IDs remain idempotent after a completed operation. Each
   // disposable proof therefore needs a fresh operation identity after cleanup;
   // otherwise a rerun can receive the old insert operation instead of creating
   // its fresh VM.
   const operationId = createHash("sha256").update(`${options.workspace}:backup-recovery:${options.backup}:${randomBytes(16).toString("hex")}`).digest("hex");
-  const sessionId = `recovery-${operationId.slice(0, 24)}`;
-  const shutdownToken = randomBytes(32).toString("hex");
   let target;
-  let targetStarted = false;
+  let receipt;
   let cleanupError = null;
   try {
     const runtimeSnapshot = await db.collection("vmRuntimes_v2").doc(options.workspace).get();
@@ -149,41 +150,29 @@ async function main() {
     if (existing.disk || existing.instance) throw recoveryError("recovery_target_exists");
 
     const restoreStartedAtMs = Date.now();
-    const receipt = await backup.restoreSnapshot(source, {snapshotName: record.name,
+    receipt = await backup.restoreSnapshot(source, {snapshotName: record.name,
       diskName: targetDiskName, operationId});
     const providerRestoreMs = Date.now() - restoreStartedAtMs;
     const digestExpected = record.verification?.fileDigest;
-    const sessionSecret = randomBytes(32).toString("hex");
-    const startStartedAtMs = Date.now();
-    await compute.start(target, {
-      operationId,
-      runnerImage: options.runnerImage,
-      allowCreateDisk: false,
-      subnetwork: SUBNETWORK,
-      timeoutMs: Math.min(options.timeoutMs, 10 * 60 * 1000),
-      env: {
-        MAPACHE_AGENT_UI_VERSION: "pi-web-ui-v1",
-        MAPACHE_PI_MODEL_CATALOG_REFRESH: "false",
-        RUNNER_CAPABILITIES: JSON.stringify({terminal: true, preview: true, previewQa: true, functions: true, chrome: true}),
-        SESSION_ID: sessionId,
-        SESSION_BROWSER_TOKEN_SECRET: sessionSecret,
-        SESSION_SHUTDOWN_TOKEN: shutdownToken,
-      },
+    const runtimeEvidence = await recoveryRuntime.verify(receipt, {
+      operationId, workspaceId: options.workspace, ownerUid: options.owner,
+      descriptor: source, backupRecord: record,
     });
-    targetStarted = true;
-    const computeStartMs = Date.now() - startStartedAtMs;
-    const healthStartedAtMs = Date.now();
-    const remote = await remoteEvidence(target, sessionId, shutdownToken, options.timeoutMs - (Date.now() - startedAtMs));
-    const runnerHealthMs = Date.now() - healthStartedAtMs;
     const observedAtMs = Date.now();
     const rpoMs = Math.max(0, startedAtMs - Date.parse(record.capturedAt || ""));
     const rtoMs = observedAtMs - restoreStartedAtMs;
     const rpoTargetMs = Number(record.recoveryTargets?.rpoMs || record.recoveryTargets?.rpoTargetMs || 24 * 60 * 60 * 1000);
     const rtoTargetMs = Number(record.recoveryTargets?.rtoMs || record.recoveryTargets?.rtoTargetMs || 60 * 60 * 1000);
-    const fileDigestMatch = DIGEST.test(String(digestExpected || "")) && digestExpected === remote.fileDigest;
+    const runtimeDigestExpected = record.verification?.runtimeStateDigest;
+    const fileDigestMatch = DIGEST.test(String(digestExpected || "")) && digestExpected === runtimeEvidence.fileDigest;
+    const runtimeDigestMatch = DIGEST.test(String(runtimeDigestExpected || "")) && runtimeDigestExpected === runtimeEvidence.runtimeStateDigest;
     const sourceDigestCompared = DIGEST.test(String(digestExpected || ""));
-    const failureCode = !sourceDigestCompared ? "recovery_source_file_digest_missing" :
+    const sourceRuntimeDigestCompared = DIGEST.test(String(runtimeDigestExpected || ""));
+    const failureCode = !runtimeEvidence.runtimeReady ? "recovery_runtime_not_ready" :
+      !sourceDigestCompared ? "recovery_source_file_digest_missing" :
+      !sourceRuntimeDigestCompared ? "recovery_source_runtime_digest_missing" :
       !fileDigestMatch ? "recovery_file_digest_mismatch" :
+      !runtimeDigestMatch ? "recovery_runtime_state_mismatch" :
       rpoMs > rpoTargetMs ? "recovery_rpo_target_exceeded" : rtoMs > rtoTargetMs ? "recovery_rto_target_exceeded" : null;
     const result = {
       version: 1,
@@ -194,15 +183,16 @@ async function main() {
       backupId: options.backup,
       operationId,
       sourceGeneration: Number(record.sourceGeneration || source.generation),
-      targetDisk: target.dataDiskName,
-      targetInstance: target.instanceName,
+      targetDisk: receipt.targetDisk,
+      targetInstance: `mapache-recovery-vm-${createHash("sha256").update(operationId).digest("hex").slice(0, 24)}`,
       restoreReceipt: {state: receipt.state, targetDisk: receipt.targetDisk, targetZone: receipt.targetZone},
-      runtimeReady: remote.runtimeReady,
-      fileDigest: remote.fileDigest,
-      runtimeStateDigest: runtimeStateDigest(remote.health),
+      runtimeReady: runtimeEvidence.runtimeReady,
+      fileDigest: runtimeEvidence.fileDigest,
+      runtimeStateDigest: runtimeEvidence.runtimeStateDigest,
       sourceDigestCompared,
-      startupStageTimingsMs: {providerRestore: providerRestoreMs, computeStart: computeStartMs,
-        runnerHealth: runnerHealthMs, total: observedAtMs - startedAtMs},
+      sourceRuntimeDigestCompared,
+      startupStageTimingsMs: {providerRestore: providerRestoreMs, ...runtimeEvidence.startupStageTimingsMs,
+        total: observedAtMs - startedAtMs},
       rpoMs,
       rtoMs,
       rpoTargetMs,
@@ -215,18 +205,12 @@ async function main() {
     process.stdout.write(`${JSON.stringify(result)}\n`);
     if (failureCode) process.exitCode = 2;
   } finally {
-    if (target) {
+    if (receipt) {
       try {
-        const observed = await compute.inspect(target);
-        if (targetStarted || observed.instance) await compute.deleteOwnedInstance(target, {operationId, timeoutMs: 240000});
-        const detached = await compute.inspect(target);
-        if (!detached.instance && detached.disk && detached.disk.users.length === 0) {
-          await deleteDisk(target);
-          const removed = await compute.inspect(target);
-          if (removed.disk || removed.instance) throw recoveryError("recovery_cleanup_pending");
-        } else if (detached.disk || detached.instance) {
-          throw recoveryError("recovery_cleanup_not_safe");
-        }
+        await recoveryRuntime.cleanup(receipt, {
+          operationId, workspaceId: options.workspace, ownerUid: options.owner,
+          descriptor: target, backupRecord: undefined,
+        });
       } catch (error) {
         cleanupError = error;
       }
@@ -234,42 +218,6 @@ async function main() {
     await app.delete();
     if (cleanupError) throw cleanupError;
   }
-}
-
-async function remoteEvidence(descriptor, sessionId, shutdownToken, timeoutMs) {
-  const token = shellQuote(shutdownToken);
-  const command = [
-    "set -eu",
-    `TOKEN=${token}`,
-    "health=$(curl -fsS --max-time 10 -H \"x-shutdown-token: $TOKEN\" http://127.0.0.1:8080/runner/health 2>/dev/null)",
-    "digest=$(curl -fsS --max-time 30 -H \"x-shutdown-token: $TOKEN\" http://127.0.0.1:8080/runner/recovery-digest 2>/dev/null)",
-    "printf 'MAPACHE_HEALTH %s\\nMAPACHE_DIGEST %s\\n' \"$health\" \"$digest\"",
-    "exit 0",
-  ].join("\n");
-  const deadline = Date.now() + Math.max(30_000, timeoutMs);
-  let lastError;
-  while (Date.now() < deadline) {
-    const remaining = Math.max(1_000, deadline - Date.now());
-    try {
-      const result = await run("gcloud", ["compute", "ssh", descriptor.instanceName, "--project", PROJECT_ID,
-        "--zone", descriptor.zone, "--tunnel-through-iap", "--strict-host-key-checking=no", "--quiet", "--command", command],
-      {encoding: "utf8", timeout: Math.min(60_000, remaining), maxBuffer: 2 * 1024 * 1024});
-      return parseRemoteEvidence(result.stdout, {workspaceId: descriptor.workspaceId, sessionId});
-    } catch (error) {
-      lastError = error;
-      await new Promise(resolve => setTimeout(resolve, Math.min(5_000, Math.max(1_000, deadline - Date.now()))));
-    }
-  }
-  throw recoveryError("recovery_remote_evidence_unavailable", lastError);
-}
-
-async function deleteDisk(descriptor) {
-  await run("gcloud", ["compute", "disks", "delete", descriptor.dataDiskName, "--project", PROJECT_ID,
-    "--zone", descriptor.zone, "--quiet"], {encoding: "utf8", maxBuffer: 256 * 1024});
-}
-
-function shellQuote(value) {
-  return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
 
 function recoveryError(code) {

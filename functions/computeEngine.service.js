@@ -188,7 +188,10 @@ function createComputeEngineService(dependencies = {}) {
     if (!disk) return {diskDeleted: true};
     assertOwnership(disk, descriptor);
     assertDiskCreation(disk, descriptor, operationKey);
-    if (disk.status !== "READY" || !Array.isArray(disk.users) || disk.users.length) {
+    // Compute omits `users` for a detached disk; normalize that response to
+    // the empty attachment set used by inspect().
+    const users = Array.isArray(disk.users) ? disk.users : [];
+    if (disk.status !== "READY" || users.length) {
       throw computeError("runtime_data_disk_cleanup_unverified", "Recovery disk is not the exact detached operation disk");
     }
     await deleteResource(`${zoneUrl(descriptor)}/disks/${encodeURIComponent(descriptor.dataDiskName)}`, {

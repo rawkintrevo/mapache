@@ -48,6 +48,30 @@ test("recovery runtime stages isolated lease and route records, verifies digests
   assert.equal(db.size(), 0);
 });
 
+test("recovery cleanup waits for eventual disk detachment before deleting", async () => {
+  const db = memoryDb();
+  let inspections = 0;
+  let deleted = false;
+  const compute = {
+    inspect: async () => ({instance: null, disk: deleted ? null : {id: "123", labels: labels("operation", 2), users: inspections++ === 0 ? ["stale-instance"] : []}}),
+    start: async () => {},
+    deleteOwnedInstance: async () => {},
+    deleteOwnedDisk: async () => { deleted = true; },
+  };
+  const service = createVmBackupRecoveryRuntimeService({db, compute, gatewayHost: "backup-recovery---abc-uc.a.run.app",
+    runnerImage: IMAGE, now: () => 1000, sleep: async () => {}});
+  const runtimeRef = db.collection("vmBackupRecoveryRuntimes_v2").doc("workspace");
+  const sessionId = "vm-backup-" + createHash("sha256").update("operation").digest("hex").slice(0, 24);
+  await runtimeRef.set({recoveryOnly: true, recoveryOperationId: "operation", ownerUid: "owner", currentSessionId: sessionId});
+  await runtimeRef.collection("sessions").doc(sessionId).set({recoveryOperationId: "operation", ownerUid: "owner"});
+  await db.collection("vmBackupRecoveryCredentials_v2").doc(sessionId).set({recoveryOperationId: "operation", ownerUid: "owner"});
+  await db.collection("vmGatewayRoutes_v2").doc("backup-recovery---abc-uc.a.run.app").set({recoveryOnly: true, operationId: "operation", ownerUid: "owner"});
+  const cleaned = await service.cleanup(RECEIPT, {workspaceId: "workspace", ownerUid: "owner", operationId: "operation"});
+  assert.equal(cleaned.diskDeleted, true);
+  assert.equal(deleted, true);
+  assert.equal(inspections, 3);
+});
+
 function labels(operationId, generation) {
   return {"mapache-operation-id": createHash("sha256").update(operationId).digest("hex").slice(0, 63),
     "mapache-created-generation": String(generation)};

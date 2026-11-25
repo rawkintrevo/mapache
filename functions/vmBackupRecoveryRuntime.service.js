@@ -105,10 +105,10 @@ function createVmBackupRecoveryRuntimeService({
         timeoutMs: 240000,
       });
     }
-    const detached = await compute.inspect(context.descriptor);
+    const detached = await waitForDetached(context, 240000);
     if (detached.instance) throw runtimeError("vm_backup_recovery_instance_cleanup_pending");
     if (detached.disk) {
-      await compute.deleteOwnedDisk(context.descriptor, {operationId: context.operationId, timeoutMs: 240000});
+      await deleteDetachedDisk(context, 240000);
     }
     const remaining = await compute.inspect(context.descriptor);
     if (remaining.instance || remaining.disk) throw runtimeError("vm_backup_recovery_cleanup_pending");
@@ -118,6 +118,36 @@ function createVmBackupRecoveryRuntimeService({
       diskDeleted: true,
       timingsMs: {total: Math.max(0, now() - startedAtMs)},
     };
+  }
+
+  async function waitForDetached(context, timeoutMs) {
+    const deadline = now() + timeoutMs;
+    let observed;
+    do {
+      observed = await compute.inspect(context.descriptor);
+      if (!observed.instance && (!observed.disk || observed.disk.users.length === 0)) return observed;
+      if (now() >= deadline) break;
+      await sleep(Math.min(2000, Math.max(1, deadline - now())));
+    } while (now() < deadline);
+    return observed;
+  }
+
+  async function deleteDetachedDisk(context, timeoutMs) {
+    const deadline = now() + timeoutMs;
+    let lastError;
+    while (now() < deadline) {
+      const observed = await waitForDetached(context, Math.min(2000, Math.max(1, deadline - now())));
+      if (observed.instance) throw runtimeError("vm_backup_recovery_instance_cleanup_pending");
+      if (!observed.disk) return {diskDeleted: true};
+      try {
+        return await compute.deleteOwnedDisk(context.descriptor, {operationId: context.operationId, timeoutMs: Math.max(1, deadline - now())});
+      } catch (error) {
+        if (!new Set(["runtime_data_disk_attached", "runtime_data_disk_cleanup_unverified", "runtime_data_disk_cleanup_pending"]).has(error?.code)) throw error;
+        lastError = error;
+        await sleep(Math.min(2000, Math.max(1, deadline - now())));
+      }
+    }
+    throw lastError || runtimeError("vm_backup_recovery_disk_cleanup_pending");
   }
 
   function configuration(restoreReceipt, input) {
