@@ -629,9 +629,22 @@ that boundary is currently an ingress-fixture limitation: the replacement VM
 was RUNNING with the runner listening on port 8080, but the gateway continued
 to return 503/timeouts for the new private address and no partial file reached
 the runner. The two exact synthetic test files were removed through the
-disposable VM and the retained disk was preserved. This live subcase remains
-unclaimed until gateway-to-private-VM convergence is repaired; it does not
-invalidate the successful generation-26/27 ingress and resume proof above.
+disposable VM and the retained disk was preserved. This does not invalidate
+the generation-26/27 ingress and resume proof above. The harness was corrected
+to publish the replacement route only after authenticated local runner
+readiness, matching the production lifecycle adapter's health-before-route
+contract.
+
+A deterministic partial-prefix retry then passed from generation 29 to 30 on
+the same retained disk. Generation 29 accepted an exact 512 KiB prefix and
+returned `308`; after replacement and local health confirmation, generation 30
+returned `308` with `Range: bytes=0-524287`. The remaining 3.5 MiB resumed with
+HTTP 200, the committed-operation probe returned HTTP 200, cancellation returned
+HTTP 204, and the exact file was removed through the authenticated shell path.
+This is live evidence that an acknowledged partial prefix survives VM
+replacement and can be completed without reuploading the prefix. The earlier
+generation-27/28 attempt remains useful evidence of the startup route race,
+not a failed data-integrity result.
 
 The pushed handoff commit `b153114` also passed all hosted PR checks. Its
 hosted runner build used the PR `upstream_test_mode=fast` path and published
