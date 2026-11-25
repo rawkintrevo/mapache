@@ -15,6 +15,7 @@ const IMAGE_PATTERN = /^[^\s@]+@sha256:[a-f0-9]{64}$/;
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const START_TIMEOUT_MS = 10 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
+const ROUTE_PROPAGATION_RETRY_MS = 30 * 1000;
 
 function createVmBackupRecoveryRuntimeService({
   db,
@@ -321,6 +322,7 @@ function createVmBackupRecoveryRuntimeService({
   async function requestJson(context, pathname) {
     const failureCode = pathname === "/runner/health" ? "vm_backup_recovery_health_unavailable" : "vm_backup_recovery_digest_unavailable";
     const deadline = Math.min(context.deadlineMs, now() + startTimeoutMs);
+    const routePropagationDeadline = Math.min(deadline, now() + ROUTE_PROPAGATION_RETRY_MS);
     let lastError;
     while (now() < deadline) {
       let response;
@@ -336,7 +338,10 @@ function createVmBackupRecoveryRuntimeService({
       }
       if (response) {
         await response.body?.cancel?.();
-        if (Number(response.status) < 500) throw runtimeError(failureCode);
+        if (Number(response.status) < 500 &&
+            !(Number(response.status) === 404 && now() < routePropagationDeadline)) {
+          throw runtimeError(failureCode);
+        }
         lastError = runtimeError(failureCode);
       }
       if (now() >= deadline) break;

@@ -37,7 +37,7 @@ test("recovery runtime stages isolated lease and route records, verifies digests
   };
   const service = createVmBackupRecoveryRuntimeService({db, compute, gatewayHost: "backup-recovery---abc-uc.a.run.app",
     runnerImage: IMAGE, now: () => 1000, sleep: async () => {}, fetchImpl: async (url) => {
-      if (gatewayCalls++ === 0) throw new Error("runner_starting");
+      if (gatewayCalls++ === 0) return {ok: false, status: 404, body: {cancel: async () => {}}};
       return {ok: true, json: async () => url.endsWith("/health") ?
         {ok: true, workspaceId: "workspace", sessionId: "vm-backup-" + createHash("sha256").update("operation").digest("hex").slice(0, 24), agentRuntime: {ready: true, state: "ready"}} :
         {ok: true, workspaceId: "workspace", sessionId: "vm-backup-" + createHash("sha256").update("operation").digest("hex").slice(0, 24),

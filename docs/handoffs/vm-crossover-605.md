@@ -17,7 +17,7 @@ Handoff date: 2026-11-24 (America/Chicago). The validation-boot continuation and
 - New owner/agent workspace-request ticket creation checks the migration fence before publishing `workspaceTickets/{id}`; existing ticket reads and idempotent lookups remain available while queued work stays reconcilable.
 - Legacy session rename and session-bound Pi auth/environment selection now check the migration fence in the same transaction as their session writes, preventing metadata or credential selection from publishing after admission while leaving owner-global credential storage independent.
 - Direct user session deletion now uses the same fenced lifecycle transition; internal deletion after an already-admitted workspace tombstone remains available for cleanup, while manual stop remains the drain path.
-- Rough overall estimate: **82%** by engineering judgment after the lifecycle recovery, Compute resource mapping, VM settings editor, idle-stop policy, and live E2 resource proof increments. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
+- Rough overall estimate: **81%** by engineering judgment after the lifecycle recovery, Compute resource mapping, VM settings editor, idle-stop policy, and live E2 resource proof increments. No existing workspace has completed cutover. All 19 issues remain open. Checked acceptance criteria describe individually verified outcomes.
 - [VM Workspaces](../vm-workspaces.md) is the subsystem contract. Some sections describe the intended system; use the issue evidence/remaining matrix below to distinguish it from implemented behavior.
 
 ## Authorization and invariants
@@ -295,17 +295,28 @@ fails closed and is cleaned up rather than being reported as file-verified
 recovery. A file/runtime verification mismatch enters a bounded
 retryable `cleanup` phase until both the recovery VM and target disk are
 confirmed absent; it cannot become a terminal failed report while resources are
-unknown. The production adapter is deployed but remains fail-closed until its
-dedicated gateway host and immutable runner image are configured.
+unknown.
 
-The guarded scheduler deployment completed with
-`firebase deploy --only functions:vmBackupReconcile_v2 --project
-pi-agents-cloud`; the active revision is `vmbackupreconcile-v2-00008-gip` under
-`mapache-api@pi-agents-cloud.iam.gserviceaccount.com`. No VM backup or recovery
-operation was invoked by the deployment.
+Continuation update (2026-11-25 UTC): the dedicated gateway host is configured
+and `vmBackupReconcile_v2` is active at revision `vmbackupreconcile-v2-00021-kih`,
+using immutable runner image
+`us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:2190762c41d7611e7fb3b0160ab7c733446cd58ad12b349490a57966c143a208`.
+The image build succeeded in 12m49.228s wall-clock (Docker build step
+8m26.487s), and the Cloud Build startup smoke test passed. Recovery-only
+runner containers now use Docker `--restart=no`, while ordinary VMs retain
+`unless-stopped`, so a failed recovery runner remains inspectable instead of
+creating a restart loop. A proof with the previously deployed `f4cc...` image
+reached a running VM but never acquired the lease because that stale image did
+not expose the current runner health route; its VM, disk and isolated records
+were cleaned up. A fresh-image proof then reached an active lease, but the
+first gateway health request returned a resolver `404`; the adapter now retries
+that cold-route propagation case for 30 seconds and focused recovery tests pass.
+The next live proof is pending the Compute snapshot source rate limit
+(`RESOURCE_OPERATION_RATE_EXCEEDED`) cooling down; no proof has yet reported
+successful runtime/file digest verification or measured RPO/RTO.
 
-Remaining: Wire the runtime verifier to an isolated fresh VM and perform a real
-fresh-disk/fresh-VM file and runtime verification with measured RPO/RTO;
+Remaining: Rerun the isolated fresh-disk/fresh-VM file and runtime verification
+after the Compute snapshot rate limit clears, with measured RPO/RTO;
 surface backup/runtime startup, attach, and mount timings and actual measured
 costs; and provide a current billing-backed worksheet. The read-only inventory now enumerates owned
 Compute instances/disks before any future cleanup. The fail-closed
