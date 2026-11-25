@@ -80,7 +80,9 @@ exports.vmLifecycle_v2 = onRequest({invoker: "private", serviceAccount, timeoutS
       if (!op) { res.status(404).json({error: "not_found"}); return; }
       res.json({operationId: id, workspaceId: op.workspaceId, status: op.status, phase: op.phase,
         generation: op.descriptor.generation, failedPhase: op.failedPhase || null,
-        startupDeadlineAtMs: startupDeadlineForOperation(op), lastError: op.lastError || null,
+        startupDeadlineAtMs: startupDeadlineForOperation(op),
+        nextAttemptAtMs: Number.isSafeInteger(op.nextAttemptAtMs) ? op.nextAttemptAtMs : null,
+        lastError: op.lastError || null,
         quiesceResult: op.quiesceResult || null});
       return;
     }

@@ -145,5 +145,5 @@ test("status exposes only safe fields and operation status cannot cross workspac
   const status = await f.call(`/workspaces/workspace/operations/${id}`, {}, "GET");
   assert.deepEqual(status.body, {operationId: id, action: "replace", status: "pending", phase: "provision", generation: 7,
     lastError: "disk_attach_failed", lastErrorAtMs: 1000, failedPhase: "provision", phaseStartedAtMs: 900,
-    phaseTimingsMs: {quiesce: 25, provision: 80}, quiesceResult: null});
+    phaseTimingsMs: {quiesce: 25, provision: 80}, nextAttemptAtMs: null, quiesceResult: null});
 });

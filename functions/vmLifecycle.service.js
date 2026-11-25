@@ -10,6 +10,8 @@ const OPERATIONS = "vmLifecycleOperations_v2";
 // Workers have a hard 540-second platform timeout. Do not reclaim an uncertain
 // cloud operation until that invocation is necessarily gone, plus a margin.
 const CLAIM_MS = 15 * 60 * 1000;
+const RETRY_BACKOFF_BASE_MS = 15 * 1000;
+const RETRY_BACKOFF_MAX_MS = CLAIM_MS;
 // Leave room for one uncertain 15-minute claim plus a bounded reconciliation
 // retry before failing a boot that never becomes healthy.
 const STARTUP_DEADLINE_MS = 30 * 60 * 1000;
@@ -233,8 +235,12 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         const current = (await tx.get(ref)).data();
         if (current?.claim?.id === claimId) {
           const failedAtMs = now();
+          const phaseAttempts = Number(current.phaseAttempts?.[operation.phase] || 0) + 1;
+          const nextAttemptAtMs = failedAtMs + retryBackoffMs(phaseAttempts);
           tx.update(ref, {lastError: error.publicMessage || error.code || "vm_operation_failed",
-            lastErrorAtMs: failedAtMs, failedPhase: operation.phase, updatedAtMs: failedAtMs});
+            lastErrorAtMs: failedAtMs, failedPhase: operation.phase,
+            phaseAttempts: {...(current.phaseAttempts || {}), [operation.phase]: phaseAttempts},
+            nextAttemptAtMs, updatedAtMs: failedAtMs});
         }
       });
       throw error;
@@ -272,4 +278,17 @@ function startupDeadlineForOperation(operation = {}) {
   }
   return null;
 }
-module.exports = {createVmLifecycleService, OPERATIONS, CLAIM_MS, STARTUP_DEADLINE_MS, startupDeadlineForOperation};
+function retryBackoffMs(attempt) {
+  const count = Number.isSafeInteger(Number(attempt)) && Number(attempt) > 0 ? Number(attempt) : 1;
+  return Math.min(RETRY_BACKOFF_MAX_MS, RETRY_BACKOFF_BASE_MS * (2 ** Math.min(count - 1, 10)));
+}
+module.exports = {
+  createVmLifecycleService,
+  OPERATIONS,
+  CLAIM_MS,
+  RETRY_BACKOFF_BASE_MS,
+  RETRY_BACKOFF_MAX_MS,
+  STARTUP_DEADLINE_MS,
+  startupDeadlineForOperation,
+  retryBackoffMs,
+};

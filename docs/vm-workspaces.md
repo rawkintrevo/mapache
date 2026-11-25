@@ -286,8 +286,8 @@ Each lifecycle operation also records `phaseStartedAtMs`, bounded
 `phaseTimingsMs`, and (when a worker fails) `failedPhase`, `lastError`, and
 `lastErrorAtMs`. The owner-scoped `GET /workspaces/{id}/operations/{id}`
 projection exposes only those sanitized diagnostics. Operators can identify the
-failed phase and its recovery state before retrying; a failed operation is not
-treated as a reason to blindly start another VM.
+failed phase, last error and next retry time before retrying; a failed operation
+is not treated as a reason to blindly start another VM.
 The health phase has a 30-minute startup deadline after routing. If the runner
 never becomes ready, the operation fails closed while retaining
 `activeOperationId` and writer admission. The IAM-private lifecycle endpoint's
@@ -327,8 +327,10 @@ exclusive claim. An uncertain cloud effect or exception retains the claim and
 workspace admission. Reconciliation waits until that invocation cannot still
 be running, then retries the same phase and operation ID. Stale completion
 callbacks cannot overwrite a newer claim. The worker never logs raw Google API
-error objects, which can contain bootstrap credentials. Health-not-ready retries
-wait at least 15 seconds and are picked up by the minute scheduler; after the
+error objects, which can contain bootstrap credentials. A failed phase records a
+bounded exponential retry time capped at one claim window, so quota, attachment
+and transient provider errors do not hot-loop while the workspace remains
+fenced. Health-not-ready retries wait at least 15 seconds and are picked up by the minute scheduler; after the
 30-minute startup deadline, the operation becomes an explicitly retryable
 failure instead of polling forever.
 

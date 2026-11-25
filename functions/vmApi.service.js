@@ -63,6 +63,7 @@ function createVmApiService({db, requireUser, lifecycle, requestBackupRestore, n
       return {status: 200, body: {operationId, action: op.action, status: op.status, phase: op.phase,
         generation: op.descriptor.generation, lastError: op.lastError || null,
         lastErrorAtMs: Number.isSafeInteger(op.lastErrorAtMs) ? op.lastErrorAtMs : null,
+        nextAttemptAtMs: Number.isSafeInteger(op.nextAttemptAtMs) ? op.nextAttemptAtMs : null,
         failedPhase: op.failedPhase || null,
         phaseStartedAtMs: Number.isSafeInteger(op.phaseStartedAtMs) ? op.phaseStartedAtMs : null,
         phaseTimingsMs: publicPhaseTimings(op.phaseTimingsMs),

@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {createVmLifecycleService, CLAIM_MS, OPERATIONS, STARTUP_DEADLINE_MS} = require("./vmLifecycle.service");
+const {createVmLifecycleService, CLAIM_MS, OPERATIONS, RETRY_BACKOFF_BASE_MS, STARTUP_DEADLINE_MS} = require("./vmLifecycle.service");
 const {createRuntimeDescriptor} = require("./runtimeProvider.helpers");
 
 function fixture() {
@@ -158,6 +158,36 @@ test("lifecycle receipts retain bounded phase timings and failed phase evidence"
   assert.equal(operation.lastError, "runner_image_rejected");
   assert.equal(operation.lastErrorAtMs, 1000);
   assert.deepEqual(operation.phaseTimingsMs, {quiesce: 0, delete: 0, reserve: 0});
+});
+
+test("transient quota or attachment failures back off without releasing writer admission", async () => {
+  const f = fixture();
+  const {operationId} = await f.request();
+  await f.service.step(operationId);
+  let failed = true;
+  const originalPause = f.dependencies.compute.pause;
+  f.dependencies.compute.pause = async () => {
+    if (failed) {
+      const error = new Error("retained disk is still attached");
+      error.code = "runtime_data_disk_attached";
+      throw error;
+    }
+    return originalPause();
+  };
+
+  await assert.rejects(f.service.step(operationId), /retained disk is still attached/);
+  const operation = f.op(operationId);
+  assert.equal(operation.failedPhase, "delete");
+  assert.equal(operation.phaseAttempts.delete, 1);
+  assert.equal(operation.nextAttemptAtMs, 1000 + RETRY_BACKOFF_BASE_MS);
+  assert.equal(f.ws().activeOperationId, operationId);
+  assert.deepEqual(await f.service.step(operationId), {claimed: false});
+
+  failed = false;
+  f.advance();
+  await finish(f, operationId);
+  assert.equal(f.op(operationId).status, "succeeded");
+  assert.equal(f.ws().activeOperationId, null);
 });
 
 test("successful lifecycle receipts record every completed phase", async () => {
