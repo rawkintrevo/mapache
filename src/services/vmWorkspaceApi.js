@@ -53,6 +53,12 @@ export function withVmWorkspaces(legacy, request, {requestId = () => crypto.rand
     getSessions: id => read(id),
     restartSession: (id, sessionId) => lifecycle(id, sessionId, "restart"),
     stopSession: (id, sessionId) => lifecycle(id, sessionId, "pause"),
+    deleteWorkspace: async id => {
+      const data = await read(id);
+      return vmRequest(id, "/delete", {method: "POST", body: {
+        expectedGeneration: data.workspace.generation, requestId: requestId(),
+      }});
+    },
     getSessionAccessUrls: async (id, sessionId) => {
       const data = await read(id);
       if (data.workspace.currentSessionId !== sessionId) throw new Error("The runtime changed. Refresh before opening it.");

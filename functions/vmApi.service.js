@@ -18,7 +18,7 @@ function createVmApiService({db, requireUser, lifecycle, requestBackupRestore, n
     if (!uid) throw httpError(401, "invalid_auth_token");
     const reads = createVmReadService({db, now});
     if (/^\/workspaces\/?$/.test(req.path || "") && req.method === "GET") return {status: 200, body: await reads.list(uid, req.query)};
-    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(backup|create|configuration|runtime-policy|sessions|uploads|access|rename|start|pause|replace|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
+    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(backup|create|configuration|runtime-policy|sessions|uploads|access|rename|start|pause|replace|delete|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
     if (!match) throw httpError(404, "not_found");
     const [, workspaceId, action, operationId] = match;
     const wr = db.collection("vmRuntimes_v2").doc(workspaceId);
@@ -99,7 +99,7 @@ function createVmApiService({db, requireUser, lifecycle, requestBackupRestore, n
         phaseTimingsMs: publicPhaseTimings(op.phaseTimingsMs),
         quiesceResult: op.quiesceResult || null}};
     }
-    if (req.method !== "POST" || operationId || !["access", "start", "pause", "replace"].includes(action)) throw httpError(405, "method_not_allowed");
+    if (req.method !== "POST" || operationId || !["access", "start", "pause", "replace", "delete"].includes(action)) throw httpError(405, "method_not_allowed");
     const body = req.body || {};
     const fields = action === "access" ? ["expectedGeneration"] : ["expectedGeneration", "requestId"];
     if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => !fields.includes(key)) ||

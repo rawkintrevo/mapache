@@ -66,7 +66,7 @@ workspace selection skips the legacy workspace MCP/Google config reads for VM
 records. Global account credential management remains available; unsupported
 VM-scoped actions return an explicit unavailable error. This is temporary
 crossover coverage, not removal of the central configuration requirements.
-Creation UI, deletion, remaining configuration/automation/request routing and
+Creation UI, remaining configuration/automation/request routing and
 full-shell creation/lifecycle acceptance remain unfinished. VM
 scheduled-policy reconciliation is server-authoritative: the one-minute VM
 lifecycle reconciler starts stopped admitted machines inside a configured

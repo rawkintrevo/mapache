@@ -10,7 +10,7 @@ function fixture() {
   const descriptor = createRuntimeDescriptor({backend: "compute-engine", workspaceId: "workspace", ownerUid: "owner", generation: 6});
   const docs = new Map([
     ["vmRuntimes_v2/workspace", {ownerUid: "owner", backend: "compute-engine", generation: 6, currentSessionId: "old",
-      state: "active", lifecycleEnabled: true, runnerImage: `us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:${"a".repeat(64)}`, gatewayHost: "fixture.example.com"}],
+      state: "active", lifecycleEnabled: true, initialOperationId: "create-operation", runnerImage: `us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:${"a".repeat(64)}`, gatewayHost: "fixture.example.com"}],
     ["vmRuntimes_v2/workspace/sessions/old", {ownerUid: "owner", generation: 6, state: "active", runtimeProvider: descriptor, piScopedModels: ["selected/model"]}],
   ]);
   const copy = value => value === undefined ? undefined : structuredClone(value);
@@ -43,6 +43,10 @@ function fixture() {
   const dependencies = {db, now: () => time, compute: {
     inspect: async () => ({disk: {sizeGb: dataDiskSizeGb, users: dataDiskAttached ? ["instance"] : []}}),
     pause: async () => effect("delete"),
+    deleteRetainedDisk: async (descriptor, options) => {
+      assert.equal(options.creationOperationId, "create-operation-create");
+      return effect("cleanup", {diskDeleted: true});
+    },
     resizeDataDisk: async (descriptor, options) => {
       resizes.push({descriptor, options});
       dataDiskSizeGb = options.sizeGb;
@@ -333,6 +337,20 @@ test("pause confirms deletion before stopped; start then reserves a fresh genera
   const next = await f.request({action: "start", requestId: "start"});
   await finish(f, next.operationId);
   assert.equal(f.ws().generation, 7);
+});
+
+test("delete quiesces the VM, removes the retained disk and tombstones the workspace", async () => {
+  const f = fixture();
+  f.docs.set("vmGatewayRoutes_v2/fixture.example.com", {enabled: true, workspaceId: "workspace", ownerUid: "owner"});
+  const {operationId} = await f.request({action: "delete", requestId: "delete"});
+  await finish(f, operationId);
+  assert.deepEqual(f.effects, ["quiesce", "delete", "cleanup"]);
+  assert.equal(f.ws().state, "deleted");
+  assert.equal(f.ws().apiEnabled, false);
+  assert.equal(f.ws().lifecycleEnabled, false);
+  assert.equal(f.ws().activeOperationId, null);
+  assert.equal(f.docs.get("vmRuntimes_v2/workspace/sessions/old").state, "deleted");
+  assert.equal(f.docs.get("vmGatewayRoutes_v2/fixture.example.com").enabled, false);
 });
 
 test("pause records one VM runtime and retained-storage interval in the user ledger", async () => {

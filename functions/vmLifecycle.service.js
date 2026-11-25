@@ -17,7 +17,7 @@ const RETRY_BACKOFF_MAX_MS = CLAIM_MS;
 // Leave room for one uncertain 15-minute claim plus a bounded reconciliation
 // retry before failing a boot that never becomes healthy.
 const STARTUP_DEADLINE_MS = 30 * 60 * 1000;
-const RETRYABLE_PHASES = new Set(["disk", "quiesce", "delete", "reserve", "provision", "route", "health"]);
+const RETRYABLE_PHASES = new Set(["disk", "quiesce", "delete", "cleanup", "reserve", "provision", "route", "health"]);
 function createVmLifecycleService({db, compute, quiesce, publishRoute, health, now = Date.now,
   claimMs = CLAIM_MS, afterEffect = async () => {}}) {
   const workspaceRef = id => db.collection("vmRuntimes_v2").doc(identifier(id));
@@ -25,7 +25,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
   async function request({workspaceId, ownerUid, requestId, action, expectedGeneration, requireApiAdmission = false,
     runtimeScheduleManualPause = false, runtimeScheduleManualStart = false}) {
     identifier(ownerUid); identifier(requestId);
-    if (!["start", "pause", "replace"].includes(action)) throw httpError(400, "invalid_vm_action");
+    if (!["start", "pause", "replace", "delete"].includes(action)) throw httpError(400, "invalid_vm_action");
     const wr = workspaceRef(workspaceId);
     const id = createHash("sha256").update(`${workspaceId}:${requestId}`).digest("hex");
     const ref = opRef(id);
@@ -43,7 +43,10 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       if (ws.generation !== expectedGeneration) throw httpError(409, "vm_generation_mismatch");
       if (ws.activeOperationId) throw httpError(409, "vm_operation_in_progress");
       if ((action === "start" && ws.state !== "stopped") ||
-          (action !== "start" && !["active", "released"].includes(ws.state))) throw httpError(409, "vm_state_conflict");
+          (action === "delete" && !["active", "released", "stopped"].includes(ws.state)) ||
+          (["pause", "replace"].includes(action) && !["active", "released"].includes(ws.state))) {
+        throw httpError(409, "vm_state_conflict");
+      }
       if (!/^us-central1-docker\.pkg\.dev\/pi-agents-cloud\/pi-agents\/session-runner@sha256:[a-f0-9]{64}$/.test(ws.runnerImage || "") ||
           !/^[a-z0-9][a-z0-9.-]{0,252}$/.test(ws.gatewayHost || "")) throw httpError(409, "vm_lifecycle_configuration_missing");
       const ss = (await tx.get(wr.collection("sessions").doc(identifier(ws.currentSessionId)))).data();
@@ -55,11 +58,12 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         oldWorkspaceState: ws.state, oldSessionState: ss.state,
         oldSessionId: ws.currentSessionId, descriptor, runnerImage: ws.runnerImage, gatewayHost: ws.gatewayHost,
         ...(runtimeScheduleManualPause && action === "pause" ? {runtimeScheduleManualPause: true} : {}),
-        phase: action === "start" ? "delete" : "quiesce", status: "pending", claim: null,
+        phase: action === "start" ? "delete" : action === "delete" && ws.state === "stopped" ? "delete" : "quiesce",
+        status: "pending", claim: null,
         phaseStartedAtMs: startedAtMs, phaseTimingsMs: {}, phaseAttempts: {},
         lastError: null, lastErrorAtMs: null, createdAtMs: startedAtMs, updatedAtMs: startedAtMs};
       tx.set(ref, operation);
-      tx.update(wr, {activeOperationId: id, state: "stopping",
+      tx.update(wr, {activeOperationId: id, state: action === "delete" ? "deleting" : "stopping",
         ...(runtimeScheduleManualStart && action === "start" ? {runtimeScheduleManualPauseWindowKey: null} : {})});
       tx.update(wr.collection("sessions").doc(ws.currentSessionId), {state: "stopping"});
       return {operationId: id, status: "pending"};
@@ -120,6 +124,12 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       const op = snapshot.data();
       assertOperation(w.data(), op, operationId);
       if (op.claim?.id !== claimId || op.phase !== operation.phase || !(op.claim.expiresAt > now())) throw httpError(409, "vm_worker_claim_lost");
+      const currentWorkspace = w.data() || {};
+      let route;
+      if (workspaceFields.state === "deleted" && currentWorkspace.gatewayHost) {
+        const routeRef = db.collection("vmGatewayRoutes_v2").doc(currentWorkspace.gatewayHost);
+        route = {ref: routeRef, data: (await tx.get(routeRef)).data()};
+      }
       if (op.phase === "health" && fields.status === "succeeded") {
         const session = (await tx.get(wr.collection("sessions").doc(op.sessionId))).data();
         const ws = w.data();
@@ -161,6 +171,10 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         tx.update(wr, {...workspaceFields, ...manualScheduleFields});
       }
       if (workspaceFields.state === "stopped") tx.update(wr.collection("sessions").doc(op.oldSessionId), {state: "stopped", leaseExpiresAt: 0});
+      if (workspaceFields.state === "deleted") {
+        tx.update(wr.collection("sessions").doc(op.oldSessionId), {state: "deleted", leaseExpiresAt: 0});
+        if (route?.data) tx.update(route.ref, {enabled: false, disabledAtMs: completedAtMs});
+      }
     });
     try {
       if (operation.phase === "disk") {
@@ -180,7 +194,27 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         if (operation.action === "pause") {
           await commit("complete", {status: "succeeded", completedAtMs: now()},
               {state: "stopped", activeOperationId: null, leaseExpiresAt: 0, bootId: null});
-        } else await commit("reserve");
+        } else if (operation.action === "delete") {
+          await commit("cleanup", {quiesceResult: operation.quiesceResult || null});
+        } else {
+          await commit("reserve");
+        }
+      } else if (operation.phase === "cleanup") {
+        const currentWorkspace = (await wr.get()).data();
+        assertOperation(currentWorkspace, operation, operationId);
+        if (typeof compute.deleteRetainedDisk !== "function") throw httpError(409, "vm_data_disk_cleanup_unavailable");
+        if (typeof currentWorkspace.initialOperationId !== "string" || !currentWorkspace.initialOperationId) {
+          throw httpError(409, "vm_data_disk_cleanup_unverified");
+        }
+        await compute.deleteRetainedDisk(operation.descriptor, {
+          operationId: `${operationId}-cleanup`,
+          creationOperationId: `${currentWorkspace.initialOperationId}-create`,
+          timeoutMs: 240000,
+        });
+        await afterEffect(operation, "cleanup");
+        await commit("complete", {status: "succeeded", completedAtMs: now()},
+            {state: "deleted", activeOperationId: null, leaseExpiresAt: 0, bootId: null,
+              apiEnabled: false, lifecycleEnabled: false, deletedAtMs: now()});
       } else if (operation.phase === "reserve") {
         await db.runTransaction(async tx => {
           const [snapshot, w] = await Promise.all([tx.get(ref), tx.get(wr)]);

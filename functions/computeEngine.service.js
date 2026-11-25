@@ -74,6 +74,7 @@ function createComputeEngineService(dependencies = {}) {
     replace: (descriptor, options) => replace(descriptor, options),
     deleteOwnedInstance: (descriptor, options) => deleteOwnedInstance(descriptor, options),
     deleteOwnedDisk: (descriptor, options) => deleteOwnedDisk(descriptor, options),
+    deleteRetainedDisk: (descriptor, options) => deleteRetainedDisk(descriptor, options),
     provisionSessionService: (workspace, sessionRef, session, options) => provisionSessionService(workspace, sessionRef, session, options),
     patchSessionService: (sessionRef, session, options) => patchSessionService(sessionRef, session, options),
     deleteSessionService: (sessionRef, session, options) => deleteSessionService(sessionRef, session, options),
@@ -199,6 +200,30 @@ function createComputeEngineService(dependencies = {}) {
     }, descriptor);
     const remaining = await getDisk(descriptor).catch((error) => error.code === "compute_not_found" ? null : Promise.reject(error));
     if (remaining) throw computeError("runtime_data_disk_cleanup_pending", "Recovery disk deletion is not confirmed");
+    return {diskDeleted: true};
+  }
+
+  async function deleteRetainedDisk(rawDescriptor, {operationId: operationKey, creationOperationId, timeoutMs = 240000} = {}) {
+    const descriptor = descriptorFor(rawDescriptor);
+    if (typeof operationKey !== "string" || !operationKey.trim() ||
+        typeof creationOperationId !== "string" || !creationOperationId.trim()) {
+      throw computeError("runtime_data_disk_cleanup_operation_required", "Data disk cleanup requires an operation identity");
+    }
+    const disk = await getDisk(descriptor).catch((error) => error.code === "compute_not_found" ? null : Promise.reject(error));
+    if (!disk) return {diskDeleted: true};
+    assertOwnership(disk, descriptor);
+    const users = Array.isArray(disk.users) ? disk.users : [];
+    const createdGeneration = Number(disk.labels?.["mapache-created-generation"]);
+    const expectedCreationOperation = identityLabel(creationOperationId);
+    if (disk.status !== "READY" || users.length || !Number.isSafeInteger(createdGeneration) || createdGeneration < 1 ||
+        createdGeneration > descriptor.generation || disk.labels?.["mapache-operation-id"] !== expectedCreationOperation) {
+      throw computeError("runtime_data_disk_cleanup_unverified", "Retained data disk ownership could not be verified");
+    }
+    await deleteResource(`${zoneUrl(descriptor)}/disks/${encodeURIComponent(descriptor.dataDiskName)}`, {
+      operationId: operationKey, timeoutMs,
+    }, descriptor);
+    const remaining = await getDisk(descriptor).catch((error) => error.code === "compute_not_found" ? null : Promise.reject(error));
+    if (remaining) throw computeError("runtime_data_disk_cleanup_pending", "Retained data disk deletion is not confirmed");
     return {diskDeleted: true};
   }
 

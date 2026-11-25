@@ -157,6 +157,16 @@ test("lifecycle dispatch derives owner from auth and forbids caller-selected run
   assert.equal(f.calls.length, 1);
 });
 
+test("delete dispatch is owner- and generation-fenced like other lifecycle actions", async () => {
+  const f = fixture();
+  const result = await f.call("/workspaces/workspace/delete", {expectedGeneration: 7, requestId: "delete"});
+  assert.equal(result.status, 202);
+  assert.equal(f.calls[0].action, "delete");
+  await assert.rejects(f.call("/workspaces/workspace/delete", {
+    expectedGeneration: 7, requestId: "delete", ownerUid: "attacker",
+  }), /invalid_vm_request/);
+});
+
 test("rename is owner-scoped and generation-fenced", async () => {
   const f = fixture();
   const result = await f.call("/workspaces/workspace/rename", {name: "  Renamed VM  ", expectedGeneration: 7}, "PATCH");

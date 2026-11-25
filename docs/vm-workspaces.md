@@ -470,6 +470,7 @@ address from the caller. All responses use `Cache-Control: no-store`.
 | `GET /workspaces/{id}` | Safe state/generation/session/operation fields; readiness also requires a live lease |
 | `POST /workspaces/{id}/access` | `{expectedGeneration}`; owner-scoped signed runner URLs only after lifecycle readiness and matching live session/route authority |
 | `POST /workspaces/{id}/start`, `/pause`, `/replace` | `{expectedGeneration, requestId}`; queues the isolated lifecycle operation, with API admission rechecked in its reservation transaction |
+| `POST /workspaces/{id}/delete` | `{expectedGeneration, requestId}`; quiesces the owner VM, verifies and deletes its retained disk, disables the route, and records a non-listable tombstone |
 | `GET /workspaces/{id}/operations/{operationId}` | Safe progress/error fields only for the same owner and workspace |
 | `GET /workspaces/{id}/backup` | Owner-scoped backup inventory, cost-known/unknown components, stranded-resource state, and sanitized recovery diagnostics |
 | `PATCH /workspaces/{id}/rename` | `{name, expectedGeneration}`; trims and validates the owner-scoped display name and refuses stale generations |
@@ -486,10 +487,17 @@ appear in owner API responses. The gateway continues checking current
 generation/boot/lease on requests and long connections. A signed runner token
 is not a Firebase API credential. Chrome URLs are returned only when the
 session records that capability. This endpoint does not yet admit/migrate an
-existing workspace. Workspace
-deletion and the remaining workspace-scoped compatibility operations still
-stay on the legacy path until their VM-specific lifecycle and retained-disk
-cleanup contracts are implemented.
+existing workspace. Workspace creation/admission and the remaining
+workspace-scoped compatibility operations still stay on the legacy path until
+their VM-specific contracts are implemented.
+
+Deletion is asynchronous. The request keeps workspace writer admission until
+quiesce, Compute instance disappearance, detached-disk verification, and
+retained-disk deletion are all confirmed. The original creation operation label
+on the disk is checked across generations, so a caller cannot use a current
+workspace ID to delete an unrelated or ambiguously-created disk. On success
+the route is disabled and the VM record becomes a non-listable tombstone;
+failed cleanup remains retryable under the same operation.
 
 The backup status projection is read-only. It combines the latest inventory
 report with bounded recovery-operation and recovery-report diagnostics, and

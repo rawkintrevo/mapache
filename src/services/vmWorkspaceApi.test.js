@@ -37,7 +37,8 @@ describe("VM frontend provider routing", () => {
     f.workspace.state = "stopped"; await f.api.restartSession("vm", "s8");
     expect(f.request.mock.lastCall[0]).toMatch(/\/start$/);
     await expect(f.api.restartSession("vm", "stale")).rejects.toThrow("runtime changed");
-    await expect(f.api.deleteWorkspace("vm")).rejects.toThrow("not available");
+    await f.api.deleteWorkspace("vm");
+    expect(f.request.mock.lastCall[0]).toMatch(/\/delete$/);
     expect(f.legacy.deleteWorkspace).not.toHaveBeenCalled();
     f.request.mockRejectedValue(new Error("VM endpoint unavailable"));
     await expect(f.api.stopSession("vm", "s8")).rejects.toThrow("VM endpoint unavailable");
@@ -47,7 +48,7 @@ describe("VM frontend provider routing", () => {
     const f = fixture(); await f.api.getWorkspaces();
     f.request.mockResolvedValue({workspaces: [], nextCursor: null}); await f.api.getWorkspaces();
     expect(f.api.isVmWorkspace("vm")).toBe(true);
-    await expect(f.api.deleteWorkspace("vm")).rejects.toThrow("not available");
+    await expect(f.api.deleteWorkspace("vm")).rejects.toThrow("Invalid VM workspace response");
   });
   it("routes runtime policy reads and generation-fenced saves to the VM API", async () => {
     const f = fixture(); await f.api.getWorkspaces();
@@ -74,6 +75,14 @@ describe("VM frontend provider routing", () => {
     });
     await f.api.createWorkspaceUpload("old", file);
     expect(f.legacy.createWorkspaceUpload).toHaveBeenCalledWith("old", file);
+  });
+  it("routes VM deletion to the durable lifecycle API without legacy fallback", async () => {
+    const f = fixture(); await f.api.getWorkspaces();
+    await f.api.deleteWorkspace("vm");
+    expect(f.request).toHaveBeenLastCalledWith(expect.stringMatching(/\/vm\/delete$/), {
+      method: "POST", body: {expectedGeneration: 8, requestId: "request-id"},
+    });
+    expect(f.legacy.deleteWorkspace).not.toHaveBeenCalled();
   });
   it("rejects provider collisions and pagination loops", async () => {
     const f = fixture(); f.legacy.getWorkspaces.mockResolvedValue({workspaces: [{id: "vm"}]});
