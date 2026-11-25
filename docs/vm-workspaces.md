@@ -1089,6 +1089,45 @@ Rules apply to Firebase clients. Admin SDK operations, existing session
 dispatch, queued workers and signed Storage writes need their own admission
 and drain checks.
 
+### Durable source-completeness audit
+
+The read-only inventory is evidence for planning; it is not permission to
+reserve a migration. The guarded operator path additionally requires
+`vmMigrationSourceAudits_v2/{workspaceId}` to be a `ready` audit bound to the
+same workspace owner, source generation, source-observation digest,
+observation digest, and resolved Storage scope. A changed source therefore
+invalidates an audit before a migration fence can be created.
+
+Record the audit only after a fresh inventory report and separately reviewed
+proof file are available:
+
+```bash
+node scripts/vm-migration-record-audit.mjs \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --observation-sha256 PREFLIGHT_OBSERVATION_SHA256 \
+  --report artifacts/qa/vm-migration-inventory/report.json \
+  --evidence artifacts/qa/vm-migration-inventory/source-proof.json \
+  --confirm migration-record-source-audit
+```
+
+The proof file must provide verified evidence for every discovered source
+role (workspace, HOME when configured, browser, uploads, owner tools, private
+Git, shared tree when configured) plus live-state coverage and an approved
+USD cost/downtime estimate. Each verified coverage item carries its own
+SHA-256 evidence digest; a source that is not configured must be explicitly
+marked `not-applicable`. Storage listings must be complete and bounded: a
+blocked, truncated, unresolved, or budget-exhausted listing cannot become
+ready. Compute and Storage preflight evidence must also be clear and stable.
+
+The command reruns preflight and transactionally compares the source before
+writing the audit. A source blocker is recorded as `state: "blocked"`,
+`decision: "source-retained"`, and never enables reservation. The production
+operator command `vm-migration-reserve.mjs reserve` enables the audit gate and
+fails with `vm_migration_source_audit_required` when the audit is absent,
+blocked, stale, or scoped to different source evidence. The audit does not
+replace the later fence, writer-drain, content-capture, disk-import,
+validation, cutover, or rollback gates.
+
 ### Explicitly blocked legacy sources
 
 Not every legacy workspace can be made complete when its historical writer or

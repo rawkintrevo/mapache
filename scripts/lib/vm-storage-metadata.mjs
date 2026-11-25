@@ -88,7 +88,7 @@ export async function inventoryStorageMetadata({candidates, unresolved, listPage
           aggregate.objects++; aggregate.storedBytes += Number(object.size);
           source.objects++; source.storedBytes += Number(object.size); remaining--;
           if (!Number.isSafeInteger(source.storedBytes)) throw Error('invalid_object_metadata');
-          if (object.name.includes('/.mapahce-internal/')) source.legacyInternalObjects++;
+          if (/(?:^|\/)(?:\.mapache-internal|\.mapahce-internal)\//.test(object.name)) source.legacyInternalObjects++;
           evidence.update(JSON.stringify([object.name, String(object.generation), String(object.size), object.crc32c || null, object.md5Hash || null]));
         }
         pageToken = page.nextPageToken;

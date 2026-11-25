@@ -826,3 +826,22 @@ the explicit default-mode limitation (0644 files, 0755 directories). The
 staged tree can participate in the existing verified merge, but it is not a
 complete machine import or cutover approval. Focused flat-prefix and merge
 coverage passes 12/12; no production operation invoked the new importer.
+
+## Continuation implementation — durable source audit gate
+
+The source-completeness boundary is now durable and enforced by the guarded
+operator reservation path. `scripts/vm-migration-record-audit.mjs` combines a
+fresh read-only preflight with the bounded inventory report and a separately
+reviewed coverage/cost proof, then transactionally records
+`vmMigrationSourceAudits_v2/{workspaceId}`. The audit binds owner, source
+generation, both observation digests, and the resolved Storage scope. It
+requires complete bounded listings, explicit coverage for every discovered
+source role, stable Compute/Storage evidence, and an approved USD
+cost/downtime estimate. Source blockers are retained as blocked/source-retained
+audits.
+
+`vm-migration-reserve.mjs reserve` now requires a current `ready` audit before
+creating the migration and Storage fences; stale, missing, blocked, or
+scope-mismatched audits fail closed. Focused source-audit coverage passes 4/4,
+and the coordinator gate is covered by the Firestore emulator test. No real
+workspace has a ready audit or has been reserved through this new gate yet.

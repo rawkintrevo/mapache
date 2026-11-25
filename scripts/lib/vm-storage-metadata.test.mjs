@@ -35,7 +35,7 @@ test('paginated metadata classifies both internal spellings without exposing nam
   assert.equal(source.categories['home-archive'].objects, 1);
   assert.equal(source.categories['browser-seed-pointer'].objects, 1);
   assert.equal(source.categories['private-git-archive'].objects, 1);
-  assert.equal(source.legacyInternalObjects, 1);
+  assert.equal(source.legacyInternalObjects, 3);
   assert.ok(!JSON.stringify(result).includes('private-name.txt'));
   assert.equal(result.sourceTotalsMayOverlap, true);
 });

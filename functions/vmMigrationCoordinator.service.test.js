@@ -22,6 +22,36 @@ const {createWorkspaceRuntimeScheduleService} = require("./workspaceRuntimeSched
 const {createSessionLifecycleService} = require("./sessionLifecycle.service");
 const {createVmMigrationStorageObserver} = require("./vmMigrationStorageObservation.service");
 
+test("operator reservation requires a current ready source audit", {
+  skip: !process.env.FIRESTORE_EMULATOR_HOST,
+}, async () => {
+  const app = admin.initializeApp({projectId: "demo-mapache-cutover"}, randomUUID());
+  try {
+    const db = app.firestore();
+    const ownerUid = "owner-" + randomUUID();
+    const workspaceId = "workspace-" + randomUUID();
+    const bucket = "fixture-bucket";
+    await db.collection("workspaces").doc(workspaceId).create({ownerUid, bucket,
+      storagePrefix: `workspaces/${ownerUid}/staging`, agentRuntimeGeneration: 7});
+    const target = {workspaceId, ownerUid};
+    const {observationSha256, sourceObservationSha256, sourceGeneration} = await createVmMigrationPreflight({db})(target);
+    const input = {...target, operationId: "audit-gated", observationSha256};
+    const coordinator = createVmMigrationCoordinator({db, defaultBucket: bucket, requireSourceAudit: true,
+      authorize: async () => true});
+    await assert.rejects(coordinator.reserve(input), {publicMessage: "vm_migration_source_audit_required"});
+    await db.collection("vmMigrationSourceAudits_v2").doc(workspaceId).create({
+      schemaVersion: 1, state: "ready", decision: "admit-reservation", workspaceId, ownerUid, sourceGeneration,
+      observationSha256, sourceObservationSha256, scope: {bucket, prefix: `workspaces/${ownerUid}/staging`, workspaceKey: "staging"},
+      blockers: [], evidenceSha256: "a".repeat(64), sourceRetained: true,
+    });
+    const reserved = await coordinator.reserve(input);
+    assert.equal(reserved.phase, "reserved");
+    assert.equal(reserved.sourceAuditSha256, "a".repeat(64));
+  } finally {
+    await app.delete();
+  }
+});
+
 test("reservation and abort are atomic under concurrent callers and fail closed on changed authority", {
   skip: !process.env.FIRESTORE_EMULATOR_HOST,
 }, async () => {

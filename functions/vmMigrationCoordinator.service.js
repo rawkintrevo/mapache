@@ -12,6 +12,7 @@ const {sessionHomePolicyMetadata} = require("./sessionCreation.service");
 const {createRuntimeDescriptor, COMPUTE_ENGINE_BACKEND} = require("./runtimeProvider.helpers");
 const {reserveValidationRuntime} = require("./vmMigrationValidationBoot.service");
 const {DESTINATION_AUTHORITY, cutoverReview, validateDestinationRuntimeEvidence} = require("./vmMigrationCutover.service");
+const {vmMigrationSourceAuditRef, requireReadyVmMigrationSourceAudit} = require("./vmMigrationSourceAudit.helpers");
 
 const DRAIN_AFTER_FREEZE = new Set([
   "legacy_stop_requires_reconciliation", "legacy_sessions_require_quiesce", "background_runs_require_drain",
@@ -148,7 +149,7 @@ function verifyDestinationRollbackEvidence(evidence, record) {
 function createVmMigrationCoordinator({
   db, authorize = async () => false, inspectCompute, inspectStorage, inspectDestinationDisk, readDiskImportEvidence,
   inspectDestinationRuntime, inspectDestinationRollback, deleteImportedDisk, ensureValidationClone, startValidationVm, deleteValidationResources,
-  defaultBucket = DEFAULT_BUCKET, now = Date.now,
+  defaultBucket = DEFAULT_BUCKET, now = Date.now, requireSourceAudit = false,
 }) {
   function refs(input) {
     const workspaceId = identify(input.workspaceId);
@@ -187,6 +188,7 @@ function createVmMigrationCoordinator({
     } else if (nextAction) recoveryAction = `Retry the ${nextAction} action after rechecking the recorded source evidence.`;
     return {workspaceId: record.workspaceId, operationId: record.operationId, phase: record.phase,
       sourceGeneration: record.sourceGeneration, reservedAtMs: record.reservedAtMs, releasedAtMs: record.releasedAtMs ?? null,
+      sourceAuditSha256: record.sourceAuditSha256 ?? null,
       quiescedAtMs: record.quiesce?.confirmedAtMs ?? null,
       downtimeStartedAtMs: record.quiesce?.confirmedAtMs ?? null,
       prefixCapturedAtMs: record.prefixCapture?.confirmedAtMs ?? null,
@@ -234,6 +236,11 @@ function createVmMigrationCoordinator({
       if (observation.observationSha256 !== input.observationSha256) throw httpError(409, "vm_migration_observation_stale");
       if (observation.blockers.some(blocker => !DRAIN_AFTER_FREEZE.has(blocker))) throw httpError(409, "vm_migration_source_blocked");
       const scope = resolveMigrationPrefix(observation.workspace, input.ownerUid, defaultBucket);
+      const sourceAudit = requireSourceAudit ? await transaction.get(vmMigrationSourceAuditRef(db, input.workspaceId)) : null;
+      if (requireSourceAudit) requireReadyVmMigrationSourceAudit(sourceAudit?.data(), {
+        workspaceId: input.workspaceId, ownerUid: input.ownerUid, sourceGeneration: observation.sourceGeneration,
+        observationSha256: observation.observationSha256, sourceObservationSha256: observation.sourceObservationSha256, scope,
+      });
       const prefixFence = storageFenceRef(db, scope, input.ownerUid);
       const [existingPrefixFence, candidates] = await Promise.all([
         transaction.get(prefixFence),
@@ -246,6 +253,7 @@ function createVmMigrationCoordinator({
       const identity = {workspaceId: input.workspaceId, ownerUid: input.ownerUid, operationId: input.operationId};
       const record = {...identity, phase: "reserved", scope, sourceGeneration: observation.sourceGeneration,
         observationSha256: observation.observationSha256,
+        ...(requireSourceAudit ? {sourceAuditSha256: sourceAudit.get("evidenceSha256")} : {}),
         drainBlockers: observation.blockers.filter(blocker => blocker !== "migration_fence_already_exists"), reservedAtMs: now()};
       transaction.create(operation, record);
       transaction.create(fence, identity);

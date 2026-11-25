@@ -61,6 +61,7 @@ try {
   try {
     if (action === "reserve") {
       const coordinator = createVmMigrationCoordinator({db,
+        requireSourceAudit: true,
         authorize: async (_, requestedAction) => requestedAction === "reserve"});
       console.log(JSON.stringify(await coordinator.reserve({...input,
         observationSha256: options.get("--observation-sha256")})));
