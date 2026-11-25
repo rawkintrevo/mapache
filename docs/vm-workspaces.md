@@ -1252,7 +1252,29 @@ transition before abort can release its fences. The reservation, quiesce and
 abort methods require a trusted admission policy. Production Functions expose the existing preflight
 and IAM-private GET status at `vmMigrationStatus_v2`, which takes
 `workspaceId`, `ownerUid` and `operationId`. The coordinator's mutation
-methods have no production entry point.
+methods are intentionally not browser/API endpoints. A trusted operator can
+begin the bounded workflow with the checked-in CLI below; each command requires
+an explicit confirmation token and the reserve action must use the exact
+observation digest returned by the read-only preflight:
+
+```bash
+node scripts/vm-migration-reserve.mjs reserve \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --operation OPERATION_ID --confirm migration-reserve \
+  --observation-sha256 PREFLIGHT_OBSERVATION_SHA256
+
+node scripts/vm-migration-reserve.mjs quiesce \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --operation OPERATION_ID --confirm migration-quiesce
+```
+
+`reserve` atomically creates the operation, workspace fence, and owned
+Storage-prefix fence only if the source observation is unchanged. `quiesce`
+rechecks the same fences, legacy writer inventory, regional Compute discovery,
+and two matching Storage listings before recording downtime. Both commands
+print sanitized status JSON and fail closed; they never switch authority,
+create a destination runtime, or delete source data. Keep the read-only
+preflight and status endpoints as the browser/operator display contract.
 
 The status projection is intentionally safe for operator display. It reports
 the current phase, completed timestamps, `downtimeStartedAtMs` after quiesce,

@@ -686,3 +686,26 @@ HTTP **200**, cancellation returned HTTP **204**, and the exact upload and
 operation-state paths were absent afterward. This is live evidence for the
 initial-state ENOSPC boundary and recovery behavior on the fixed image. No
 production workspace or authority switch was changed.
+
+## Continuation implementation — 2026-11-25 migration admission CLI
+
+The coordinator already contained the guarded `reserve` and `confirmQuiesced`
+transactions, but they had no checked-in production operator entry point. The
+new `scripts/vm-migration-reserve.mjs` exposes both actions without adding a
+browser/API mutation route:
+
+- `reserve` requires the exact `observationSha256` from the read-only preflight,
+  `--confirm migration-reserve`, and the explicit `pi-agents-cloud` project.
+  It atomically creates the operation, workspace fence, and owned
+  Storage-prefix fence through the existing coordinator.
+- `quiesce` requires `--confirm migration-quiesce` and reuses the existing
+  Compute/Storage observers. It records downtime only after writer inventory,
+  regional Compute discovery, and two matching Storage listings pass the
+  coordinator's fence/version checks.
+- Both actions return sanitized blocked/status JSON and never switch authority,
+  create a destination runtime, or delete source data. `node --check`, the
+  explicit-argument negative path, and `git diff --check` pass.
+
+This makes the migration start gate callable by a trusted operator while
+preserving the no-production-cutover default. No production workspace invoked
+either action.
