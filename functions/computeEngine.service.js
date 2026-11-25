@@ -604,10 +604,26 @@ function createComputeEngineService(dependencies = {}) {
         disk.labels?.["mapache-operation-id"] === identityLabel(String(options.operationId || descriptor.generation))}),
     });
     await waitForOperation(response.data, descriptor, options);
-    const created = await getInstance(descriptor);
+    const created = await waitForCreatedInstance(descriptor, options);
     assertOwnership(created, descriptor);
     assertInstanceDisk(created, descriptor);
     return created;
+  }
+
+  async function waitForCreatedInstance(descriptor, options = {}) {
+    const timeoutMs = Math.min(120_000, Math.max(1_000, Number(options.timeoutMs) || 120_000));
+    const deadline = Date.now() + timeoutMs;
+    let lastError;
+    while (Date.now() < deadline) {
+      try {
+        return await getInstance(descriptor);
+      } catch (error) {
+        if (error.code !== "compute_not_found") throw error;
+        lastError = error;
+        await new Promise(resolve => setTimeout(resolve, Math.min(1_000, Math.max(1, deadline - Date.now()))));
+      }
+    }
+    throw lastError || computeError("compute_not_found", "Created VM was not visible before the deadline");
   }
 
   function assertInstanceDisk(instance, descriptor) {

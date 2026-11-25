@@ -113,6 +113,39 @@ test("VM startup accepts a validated custom machine type", async () => {
   assert.match(instanceRequest.machineType, /\/machineTypes\/e2-custom-4-8192$/);
 });
 
+test("VM startup waits for eventual instance visibility after insert", async () => {
+  let disk;
+  let instance;
+  let missingInstanceReads = 3;
+  const missing = () => Object.assign(new Error("missing"), {response: {status: 404}});
+  const service = createComputeEngineService({
+    projectId: "pi-agents-cloud",
+    request: async request => {
+      if (request.method === "GET" && request.url.includes("/disks/")) {
+        if (!disk) throw missing();
+        return {data: disk};
+      }
+      if (request.method === "GET" && request.url.includes("/instances/")) {
+        if (!instance || missingInstanceReads-- > 0) throw missing();
+        return {data: instance};
+      }
+      if (request.method === "POST" && request.url.endsWith("/disks")) {
+        disk = {name: request.data.name, status: "READY", sizeGb: 64, labels: request.data.labels};
+        return {data: {status: "DONE"}};
+      }
+      if (request.method === "POST" && request.url.endsWith("/instances")) {
+        instance = {name: request.data.name, status: "RUNNING", labels: request.data.labels,
+          disks: request.data.disks};
+        return {data: {status: "DONE"}};
+      }
+      throw new Error(`unexpected ${request.method} ${request.url}`);
+    },
+  });
+  const result = await service.start(descriptor(), {allowCreateDisk: true, runnerImage: "pinned-image"});
+  assert.equal(result.instance.status, "RUNNING");
+  assert.ok(missingInstanceReads < 0);
+});
+
 test("failed Compute operations normalize attachment conflicts before lifecycle retry", async () => {
   const d = descriptor();
   const service = createComputeEngineService({
