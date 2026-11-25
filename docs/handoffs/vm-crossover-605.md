@@ -573,3 +573,13 @@ It is not production compatibility-tagged. Real VM-generation replacement with
 an in-flight upload, live disk-full recovery, paused-machine UX, and automation
 input compatibility remain unproven #622 acceptance criteria; no production
 authority switch or existing workspace was changed.
+
+The follow-up disposable imported-disk boot was started with the reauthorization
+image and the exact retained disk, but its private runner could not be reached
+through the available IAP SSH tunnel: Compute returned `4047 Failed to lookup
+instance` twice even though the exact VM was confirmed RUNNING with its expected
+private address. The proof was stopped through the Compute provider, the exact
+temporary VM and registry records were removed, and the imported disk remained
+detached/READY. This is an ingress-path limitation, not upload acceptance
+evidence; the live replacement and disk-full tests still need a reachable
+disposable gateway/tunnel.
