@@ -709,3 +709,14 @@ browser/API mutation route:
 This makes the migration start gate callable by a trusted operator while
 preserving the no-production-cutover default. No production workspace invoked
 either action.
+
+## Continuation implementation — 2026-11-25 prefix-capture CLI
+
+The coordinator's generation-pinned `capturePrefix` transition now has the
+checked-in operator entry point `scripts/vm-migration-capture.mjs`. It requires
+the explicit `pi-agents-cloud` project, operation identity, and
+`--confirm migration-capture`; it repeats the quiesce-time Compute and Storage
+observations and writes only bounded private inventory chunks. It does not
+download payloads, switch authority, or delete the source. The existing
+checkpoint/archive import CLIs can consume the resulting coordinator-bound
+capture. No production workspace invoked this action.

@@ -1276,6 +1276,21 @@ print sanitized status JSON and fail closed; they never switch authority,
 create a destination runtime, or delete source data. Keep the read-only
 preflight and status endpoints as the browser/operator display contract.
 
+After quiesce, the operator can pin the complete owned Storage prefix into the
+operation's private inventory:
+
+```bash
+node scripts/vm-migration-capture.mjs \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --operation OPERATION_ID --confirm migration-capture
+```
+
+The capture command repeats the Compute and Storage observations, requires
+them to match the quiesce receipt, and writes only bounded generation-pinned
+inventory chunks. It never downloads payloads, switches authority, or deletes
+source data. The subsequent checkpoint/archive import CLIs consume this
+coordinator-bound capture.
+
 The status projection is intentionally safe for operator display. It reports
 the current phase, completed timestamps, `downtimeStartedAtMs` after quiesce,
 known drain blocker codes, the next bounded action, a recovery instruction and
