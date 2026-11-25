@@ -147,6 +147,13 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
   const qaCase = normalizeEnvString(process.env.QA_CASE);
   const runnerCapabilities = parseRunnerCapabilities();
   const chromeEnabled = Boolean(runnerCapabilities.chrome);
+  const chromeSandboxEnabled = retainedDiskMode && !envFlag(process.env.CHROME_DISABLE_SANDBOX);
+  const chromeSandboxUser = chromeSandboxEnabled ?
+    normalizeEnvString(process.env.CHROME_SANDBOX_USER) || "node" : "";
+  const chromeSandboxUid = chromeSandboxEnabled ?
+    Math.trunc(positiveNumber(process.env.CHROME_SANDBOX_UID, 1000)) : null;
+  const chromeSandboxGid = chromeSandboxEnabled ?
+    Math.trunc(positiveNumber(process.env.CHROME_SANDBOX_GID, 1000)) : null;
   const previewEnabled = envFlag(process.env.PREVIEW_ENABLED) && runnerCapabilities.preview;
   const previewBasePath = normalizePreviewBasePath(process.env.PREVIEW_BASE_PATH || "/preview");
   const browserQaDir = path.resolve(retainedPaths?.caches || privatePaths?.browserQaDir || process.env.MAPACHE_QA_DIR || path.join(workspaceDir, ".mapache", "qa"));
@@ -169,7 +176,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     activityWriteDebounceMs: positiveNumber(process.env.ACTIVITY_WRITE_DEBOUNCE_MS, 15000),
     agentAccessAudience: "agent",
     agentRuntimeEnabled,
-    chromeSandboxEnabled: retainedDiskMode && !envFlag(process.env.CHROME_DISABLE_SANDBOX),
+    chromeSandboxEnabled,
     chromeDesktopMinimal: retainedDiskMode,
     agentRuntimeGeneration: normalizeEnvString(process.env.MAPACHE_AGENT_RUNTIME_GENERATION),
     startupSmoke: envFlag(process.env.MAPACHE_STARTUP_SMOKE),
@@ -210,6 +217,10 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     chromeProfileInitialization: parseJsonObject(process.env.MAPACHE_CHROME_PROFILE_INITIALIZATION),
     chromeProfileSeed,
     chromeProfileSeedConfigError: chromeProfileSeedRaw && !chromeProfileSeed ? "chrome_profile_seed_descriptor_invalid" : "",
+    chromeSandboxHome: chromeSandboxUser ? normalizeEnvString(process.env.CHROME_SANDBOX_HOME) || `/home/${chromeSandboxUser}` : "",
+    chromeSandboxUser,
+    chromeSandboxUid,
+    chromeSandboxGid,
     chromeStartupTimeoutMs: chromeEnabled ? positiveNumber(process.env.CHROME_STARTUP_TIMEOUT_MS, 30000) : 0,
     chromeViewport: chromeEnabled ? {
       width: positiveNumber(process.env.CHROME_VIEWPORT_WIDTH, 1440),

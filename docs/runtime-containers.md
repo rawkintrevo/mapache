@@ -802,7 +802,22 @@ Chrome-capable images run one workspace-owned headed Chromium desktop alongside 
 
 Cloud Run does not permit the nested PID/network namespaces Chromium's Linux process sandbox requires, so the headed browser retains `--no-sandbox` and relies on the per-session Cloud Run service boundary for workload isolation. Both Chrome images install `/etc/chromium/policies/managed/mapache.json` with `CommandLineFlagSecurityWarningsEnabled` disabled so Chromium does not cover browser content with the corresponding command-line security warning. The image build validates this policy before running the browser smoke test.
 
-Compute Engine retained-disk runners also set `CHROME_DISABLE_SANDBOX=true`. The VM startup script runs the runner container as root, and Chromium cannot initialize its Linux sandbox in that configuration. The runner remains `--privileged=false`; the VM uses a private subnet and the authenticated gateway, and the container blocks metadata-server access. If the VM container user or isolation model changes, revisit this flag and add a sandboxed Chromium proof before removing it.
+Compute Engine retained-disk runners keep the Node server root-owned for disk
+bootstrap and lifecycle ownership, but launch Chromium through `runuser` as the
+image's unprivileged `node` user (`CHROME_SANDBOX_USER=node`, UID/GID 1000).
+The image installs Debian's separate `chromium-sandbox` helper and the image
+build verifies that its setuid mode is present.
+Before launch, the root-owned browser tree is adopted by that user and the
+retained-disk root is changed to traverse-only (`0711`); the browser directory
+and its descendants remain private (`0700`/original file modes). This lets
+Chromium use its Linux sandbox without making the whole runner non-root or
+changing ownership of workspace, HOME, credentials, upload, or cache roots.
+The runner remains `--privileged=false`; the VM grants only the narrowly scoped
+Docker `SYS_ADMIN` capability needed for Chromium's setuid helper to create its
+PID/network namespaces. The VM uses a private subnet and the authenticated
+gateway, and the container blocks metadata-server access. A sandboxed Chromium
+boot must still be re-proven on each changed runner image; falling back to
+`CHROME_DISABLE_SANDBOX` is not an accepted Compute runtime configuration.
 
 The browser surface is protected by the same per-session HMAC browser token as the terminal and preview. `/browser/` serves authenticated noVNC, `/browser/status` reports safe desktop/CDP readiness, `/browser/activity` records meaningful agent browser actions, and the `/browser/vnc` WebSocket bridges only to loopback x11vnc. Browser runtime readiness requires a live CDP endpoint, the required desktop processes for the selected mode, and a reachable loopback VNC port; retained-disk minimal mode intentionally omits the optional taskbar. A later supervised process exit transitions the runtime away from `ready` until the desktop and both probes recover. A dropped VNC bridge is closed so noVNC can reconnect to a replacement x11vnc process. CDP and VNC ports are not public. `mapache-chrome-status` reports only readiness and browser version and exits nonzero when CDP is unavailable.
 

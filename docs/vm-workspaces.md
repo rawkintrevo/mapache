@@ -1729,18 +1729,26 @@ source set, but not application behavior.
 
 The same selected tree was then installed on a labeled retained disk and
 started with the new pinned runner image through the Compute provider path.
-The first two attempts exposed two retained-disk browser defects: the VM
-container needed `CHROME_DISABLE_SANDBOX=true` because it starts as root, and
-the runtime readiness check incorrectly required the optional taskbar even in
-minimal mode. The fixed image
-`sha256:b3bf1eac5fe03a6db9a6e79046c9b71fa0f394ecbf9247e1264202a4708f5741`
-completed every startup stage; `chrome_start` took 1.096 seconds. Authenticated
-`/runner/health` and `/browser/status` both returned 200, with the agent ready,
-CDP ready, VNC ready, `taskbar=false`, zero browser restarts and no process
-errors. The exact runner VM and temporary registry records were removed; the
-imported disk was left detached and READY for the separately authorized proof
-fixture. This is real selected-source application/runtime evidence, not a
-complete legacy cutover or source-authority switch.
+The first two attempts exposed two retained-disk browser defects: the runtime
+readiness check incorrectly required the optional taskbar in minimal mode, and
+Chromium's setuid sandbox could not create namespaces inside the VM's default
+Docker capability set. The fixed Compute path keeps the server root-owned,
+launches Chromium through `runuser` as `node`, installs Debian's separate
+`chromium-sandbox` helper, and grants only Docker `SYS_ADMIN` for those browser
+namespaces while retaining `--privileged=false`. The image
+`sha256:664e48a77fe59b0f6b54e6bf1929ae9ee0dc092aaf6030a7fd2cf45829ce3eb3`
+passed the full upstream suite, Docker smoke, helper setuid assertion, and an
+isolated live Chromium/CDP diagnostic with the narrow capability. After the
+updated Functions revision deployed (28 deployed, 0 errors), a fresh Compute
+VM booted that image with `CapAdd=[SYS_ADMIN]`; workspace source,
+checkpoint restore, authority acquisition, Chrome seed/profile restore,
+`chrome_start`, and `agent_start` all passed. Authenticated `/runner/health`
+and `/browser/status` both returned 200 with the Agent runtime, CDP and VNC
+ready, `taskbar=false`, zero browser restarts, and no process errors. The
+exact VM/registry cleanup passed and the imported disk remains detached/READY
+as a separately authorized proof fixture. This is real selected-source
+application/runtime evidence, not a complete legacy cutover or source-authority
+switch.
 
 The same 2026-11-25 read-only source audit narrows the `vm-test`-specific
 reconciliation boundary: its Firestore source is explicitly `blank` with blank

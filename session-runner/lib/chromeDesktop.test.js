@@ -223,3 +223,43 @@ test("retained-disk browser uses the minimal desktop and keeps the Chromium sand
   assert.equal(service.status().taskbar, false);
   await service.stop();
 });
+
+test("retained-disk sandbox adopts the profile and launches Chromium as the unprivileged browser user", async () => {
+  const calls = [];
+  const ownership = [];
+  const service = createChromeDesktopService(config({
+    retainedDiskMode: true,
+    retainedDiskPaths: {root: "/tmp/mapache-data"},
+    chromeProfileDir: "/tmp/mapache-data/browser/profile",
+    chromeDesktopMinimal: true,
+    chromeSandboxEnabled: true,
+    chromeSandboxUser: "node",
+    chromeSandboxUid: 1000,
+    chromeSandboxGid: 1000,
+  }), {
+    spawn: (command, args) => {
+      calls.push({command, args});
+      const child = new EventEmitter(); child.kill = () => {};
+      return child;
+    },
+    fs: {promises: {
+      mkdir: async () => {},
+      rm: async () => {},
+      chmod: async (...args) => ownership.push(["chmod", ...args]),
+      chown: async (...args) => ownership.push(["chown", ...args]),
+      lchown: async (...args) => ownership.push(["lchown", ...args]),
+      lstat: async () => ({isSymbolicLink: () => false, isDirectory: () => true}),
+      readdir: async () => [],
+    }},
+    displayReady: async () => true,
+  });
+
+  await service.start();
+  const chromium = calls.find((call) => call.command === "runuser");
+  assert.ok(chromium);
+  assert.deepEqual(chromium.args.slice(0, 5), ["--preserve-environment", "--user", "node", "--", "chromium"]);
+  assert.equal(chromium.args.includes("--no-sandbox"), false);
+  assert.ok(ownership.some(([operation, target, mode]) => operation === "chmod" && target === "/tmp/mapache-data" && mode === 0o711));
+  assert.ok(ownership.some(([operation, target, uid, gid]) => operation === "chown" && target === "/tmp/mapache-data/browser" && uid === 1000 && gid === 1000));
+  await service.stop();
+});

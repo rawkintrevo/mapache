@@ -776,7 +776,7 @@ function createComputeEngineService(dependencies = {}) {
       "# The host pulls images; workspace code must not obtain the host identity.",
       "iptables -C DOCKER-USER -d 169.254.169.254/32 -p tcp --dport 80 -j REJECT 2>/dev/null || iptables -I DOCKER-USER 1 -d 169.254.169.254/32 -p tcp --dport 80 -j REJECT",
       "docker rm -f mapache-runner >/dev/null 2>&1 || true",
-      `docker run -d --restart=${options.env?.MAPACHE_RECOVERY_ONLY === "true" ? "no" : "unless-stopped"} --name mapache-runner --privileged=false -p 8080:8080 --shm-size=${shellQuote(options.shmSize || "2g")} ${runtimeMountArgs()} ${runtimeEnvArgs(descriptor, options)} ${shellQuote(image)}`,
+      `docker run -d --restart=${options.env?.MAPACHE_RECOVERY_ONLY === "true" ? "no" : "unless-stopped"} --name mapache-runner --privileged=false --cap-add=SYS_ADMIN -p 8080:8080 --shm-size=${shellQuote(options.shmSize || "2g")} ${runtimeMountArgs()} ${runtimeEnvArgs(descriptor, options)} ${shellQuote(image)}`,
     ].join("\n");
   }
 
@@ -784,10 +784,12 @@ function createComputeEngineService(dependencies = {}) {
     const functionBase = `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net`;
     const env = {
       RUNTIME_PROVIDER: COMPUTE_ENGINE_BACKEND,
-      // The VM container currently starts as root. Chromium's Linux sandbox
-      // cannot initialize in that configuration; isolation comes from the
-      // unprivileged Docker container and private VM/gateway boundary.
-      CHROME_DISABLE_SANDBOX: "true",
+      // The runner server remains root for disk/bootstrap ownership, but the
+      // retained-disk browser is launched as the image's unprivileged node
+      // user so Chromium can keep its Linux sandbox enabled.
+      CHROME_SANDBOX_USER: "node",
+      CHROME_SANDBOX_UID: "1000",
+      CHROME_SANDBOX_GID: "1000",
       MAPACHE_RETAINED_DISK_ROOT: "/var/lib/mapache/workspace",
       MAPACHE_DATA_DISK_NAME: descriptor.dataDiskName,
       MAPACHE_ALLOW_FORMAT_NEW_DISK: options.allowNewDisk === true ? "true" : "false",

@@ -293,6 +293,10 @@ test("compute-engine config maps all durable roots to the retained disk", () => 
     assert.equal(config.previewStaticRoot, "/mnt/mapache-data/workspace/build");
     assert.equal(config.chromeDesktopMinimal, true);
     assert.equal(config.chromeSandboxEnabled, true);
+    assert.equal(config.chromeSandboxUser, "node");
+    assert.equal(config.chromeSandboxUid, 1000);
+    assert.equal(config.chromeSandboxGid, 1000);
+    assert.equal(config.chromeSandboxHome, "/home/node");
     assert.equal(config.piSessionStorageBucket, "");
   } finally {
     for (const name of names) {

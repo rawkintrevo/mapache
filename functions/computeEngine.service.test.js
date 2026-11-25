@@ -63,9 +63,13 @@ test("VM startup creates a labeled retained disk and a private instance without 
   assert.notEqual(diskRequest.params.requestId, instanceRequest.params.requestId);
   assert.match(script, /mkfs.ext4 -L mapache-data/);
   assert.match(script, /docker run/);
+  assert.match(script, /--privileged=false --cap-add=SYS_ADMIN/);
   assert.doesNotMatch(script, /gce-container-declaration|konlet/);
   assert.match(script, /runner\/health|MAPACHE_RUNTIME_PROVIDER|mapache-runner/);
-  assert.match(script, /CHROME_DISABLE_SANDBOX=true/);
+  assert.match(script, /CHROME_SANDBOX_USER=node/);
+  assert.match(script, /CHROME_SANDBOX_UID=1000/);
+  assert.match(script, /CHROME_SANDBOX_GID=1000/);
+  assert.doesNotMatch(script, /CHROME_DISABLE_SANDBOX=true/);
   assert.match(script, /MAPACHE_AUTOMATION_AGENT_TOKEN_URL=https:\/\/us-central1-pi-agents-cloud\.cloudfunctions\.net\/automationAgentToken/);
   assert.match(script, /MAPACHE_AUTOMATION_AGENT_API_URL=https:\/\/us-central1-pi-agents-cloud\.cloudfunctions\.net\/api/);
   assert.match(script, /DOCKER-USER.*169\.254\.169\.254/);
