@@ -11,6 +11,13 @@ and the authenticated API route composition in `functions/apiRouteManifest.js`,
 `functions/apiHandlers.helpers.js`. It remains a registry-only capability until
 the bootstrap, guest, lifecycle and gateway children are complete.
 
+The host bootstrap portion is implemented by the versioned pair
+`scripts/remote-vm-host/install.py` and `scripts/remote-vm-host/helper.py`.
+The installer supports Ubuntu 22.04 and 24.04, writes only files carrying the
+Mapache marker (or the exact managed libvirt network definition), and reports
+readiness with `--check-only --json`. It refuses an unmanaged account, helper,
+SSH configuration or network definition instead of overwriting it.
+
 ## Product boundary
 
 The existing authenticated `/app` remains the entry point. Workspace creation
@@ -104,11 +111,16 @@ after the operation reaches a terminal state or verified cleanup.
 
 The backend generates a dedicated SSH keypair for each owner/host registration.
 The UI shows only the public key and a one-time, inspectable `sudo` setup
-command. The user installs the key and the versioned host helper on the host,
-then explicitly verifies the host fingerprint. The helper account may manage
+command. The user downloads the matching `scripts/remote-vm-host/install.py`
+and `helper.py`, inspects them, and runs
+`sudo python3 install.py --public-key ./mapache-remote-host.pub`. The user then
+explicitly verifies the host fingerprint. The helper account may manage
 only Mapache-owned libvirt guests, disks and the private NAT network; it is not
 an arbitrary root shell. Re-running setup must preserve unrelated VMs, disks,
 firewall rules and SSH access.
+
+The operator-facing steps and revocation procedure are in the
+[Remote VM host setup guide](./guides/remote-vm-host-setup.md).
 
 The backend pins the verified host key and rejects changed keys. Revoking a host
 removes its app-side secret authorization and shows host-side key removal
