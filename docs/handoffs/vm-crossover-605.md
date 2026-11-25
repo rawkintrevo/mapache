@@ -751,3 +751,21 @@ and Storage observations used by the coordinator and prints the exact
 `observationSha256` required by `vm-migration-reserve.mjs`. It creates no
 operation, fence, VM, or disk and returns sanitized blocked/status JSON. No
 production workspace invoked it.
+
+## Continuation implementation — 2026-11-25 explicit blocked-source report
+
+The completion path for an existing workspace whose legacy source cannot be
+verified now has `scripts/vm-migration-record-blocked.mjs`. It reruns the
+read-only Compute/Storage preflight, requires the exact preflight observation
+digest, compares the source generation and source-observation digest in a
+Firestore transaction, and records only a bounded
+`vmMigrationBlockedReports_v2/{workspaceId}` report. It requires a concrete
+source blocker and refuses an active migration fence or changed source. The
+report is explicitly `state: "blocked"`, `decision: "source-retained"`; it
+does not approve incomplete data, switch authority, or delete anything. Pure
+report-shaping coverage passes 3/3. The command was then run against the real
+`vm-test` source (`1yIPKCPpk5O8s6RfAd0n`, owner
+`lzbp4xahITXWWgtrWpmGgAvzzmU2`) using the fresh preflight digest. It created
+the report with source generation 2, 568 stable Storage objects, and the
+`legacy_persistent_home_archive_missing` blocker. No migration fence, VM,
+disk, authority, or source data was changed.

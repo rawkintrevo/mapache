@@ -1086,6 +1086,34 @@ Rules apply to Firebase clients. Admin SDK operations, existing session
 dispatch, queued workers and signed Storage writes need their own admission
 and drain checks.
 
+### Explicitly blocked legacy sources
+
+Not every legacy workspace can be made complete when its historical writer or
+source archive is no longer available. A preflight with a concrete source
+blocker can be recorded as an explicit blocked outcome without treating the
+workspace as cut over or accepting data loss:
+
+```bash
+node scripts/vm-migration-record-blocked.mjs \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --observation-sha256 PREFLIGHT_OBSERVATION_SHA256 \
+  --confirm migration-record-blocked
+```
+
+The command reruns the read-only Compute/Storage preflight, requires the exact
+observation digest printed by the preceding preflight, and transactionally
+compares the source generation and source-observation digest before creating
+`vmMigrationBlockedReports_v2/{workspaceId}`. It only records bounded blocker
+codes, counts and evidence digests; it never records provider addresses,
+object names or credentials. The report is idempotent for the same source
+observation and refuses an active migration fence or a changed source.
+
+This report means `state: "blocked"`, `decision: "source-retained"`, and
+`sourceRetained: true`. It is a release-audit outcome, not a recovery decision
+that authorizes incomplete data, an authority switch, source deletion, or
+legacy-writer retirement. A later recovery decision or new source evidence
+requires a fresh preflight and a new migration attempt.
+
 The checked-in server admission paths use `functions/vmMigrationFence.helpers.js`
 to read the backend-only fence in the same Firestore transaction as new
 session reservation, resize enqueue/claim, automation enqueue/admission/
