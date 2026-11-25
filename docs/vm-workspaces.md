@@ -1727,6 +1727,15 @@ after which the block-device read-only remount reverified every root. This
 closes interruption/resume and real capacity-failure evidence for the selected
 source set, but not application behavior.
 
+The same selected tree was then installed on a labeled retained disk and
+started with the pinned runner image through the Compute provider path. The
+runner reached authority acquisition, workspace-source, checkpoint-restore and
+browser-seed/profile-restore stages, but Chromium exited on both supervised
+attempts at `chrome_start`; the runner therefore did not reach `/runner/health`.
+The exact runner VM, maintenance VM, disk and temporary registry records were
+removed. This is a real imported-state application blocker, not evidence that
+the source import or disk-resume path failed.
+
 The same 2026-11-25 read-only source audit narrows the `vm-test`-specific
 reconciliation boundary: its Firestore source is explicitly `blank` with blank
 sync policy and no repository, installation, branch or commit configured. Its
