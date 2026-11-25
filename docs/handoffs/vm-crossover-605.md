@@ -102,7 +102,7 @@ npm run docs:check
 
 Evidence: The durable path/ownership/lifetime table and separate-backup lifecycle contract are in docs/vm-workspaces.md; the VM path skips ordinary HOME/workspace/profile checkpoint restoration and upload.
 
-Remaining: Finish concrete owner-wide sharing/automation decisions, measured costs/quotas, recovery targets, disk-growth operations and the detailed module-level simplification audit. Normative design text is not implementation evidence.
+Remaining: Finish concrete owner-wide sharing/automation decisions, measured costs/quotas, recovery targets, disk-growth operations and the detailed module-level simplification audit. Cloud Billing is enabled for `pi-agents-cloud`, but the read-only audit found no BigQuery billing-export dataset and the Cloud Billing Budgets API is disabled; no billing-backed worksheet or budget-alert proof is available. Normative design text is not implementation evidence.
 
 Fully evidenced original acceptance criteria: 1, 3.
 
@@ -118,7 +118,7 @@ Fully evidenced original acceptance criteria: 2, 3.
 
 Evidence: Private VPC/subnet, outbound NAT, IAP access, scoped provisioning, retained-disk labels and metadata fencing support the isolated VM gateway/runner. APIs use mapache-api; runners use mapache-runner.
 
-Remaining: Finish the complete least-privilege negative matrix, reproducible full environment cleanup, quotas/concurrency limits, budget alerts and hard cost controls. Do not equate container metadata denial with every assigned-identity authorization test.
+Remaining: Finish the complete least-privilege negative matrix, reproducible full environment cleanup, quotas/concurrency limits, budget alerts and hard cost controls. The project billing audit found the Budgets API disabled, so budget-alert evidence remains unavailable without an explicit billing-admin configuration change. Do not equate container metadata denial with every assigned-identity authorization test.
 
 Fully evidenced original acceptance criteria: none; partial evidence does not satisfy the full criterion.
 
