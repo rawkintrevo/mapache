@@ -29,6 +29,7 @@ function fixture() {
   }};
   const effects = [];
   const creates = [];
+  const resizes = [];
   const cloud = new Set();
   let crashPhase;
   let ready = true;
@@ -39,6 +40,10 @@ function fixture() {
   }
   const dependencies = {db, now: () => time, compute: {
     pause: async () => effect("delete"),
+    resizeDataDisk: async (descriptor, options) => {
+      resizes.push({descriptor, options});
+      return {resized: true, sizeGb: options.sizeGb};
+    },
     start: async (descriptor, options) => {
       assert.equal(options.allowCreateDisk, false);
       assert.ok(options.env.MAPACHE_VM_CONTROL_TOKEN.length >= 32);
@@ -50,7 +55,7 @@ function fixture() {
     },
   }, quiesce: async () => effect("quiesce", {ok: true}), publishRoute: async () => effect("route"), health: async () => effect("health", ready)};
   const service = createVmLifecycleService(dependencies);
-  return {service, dependencies, docs, effects, cloud, creates,
+  return {service, dependencies, docs, effects, cloud, creates, resizes,
     advance: () => { time += CLAIM_MS + 1; }, crash: phase => { crashPhase = phase; }, ready: value => { ready = value; },
     request: (overrides = {}) => service.request({workspaceId: "workspace", ownerUid: "owner", requestId: "request", action: "replace", expectedGeneration: 6, ...overrides}),
     op: id => docs.get(`${OPERATIONS}/${id}`), ws: () => docs.get("vmRuntimes_v2/workspace"),
@@ -126,6 +131,19 @@ test("desired machine selections override old-session selections and become appl
   assert.equal(f.ws().machineConfig.desiredVersion, 4);
   assert.equal(f.ws().machineConfig.state, "pending-restart");
   assert.deepEqual(f.ws().machineConfig.desired.environmentEntryIds, []);
+});
+
+test("desired data-disk growth runs after pause and before replacement start", async () => {
+  const f = fixture();
+  f.ws().machineConfig = {desiredVersion: 3, appliedVersion: 2, state: "pending-restart",
+    desired: {diskSizeGb: 128}};
+  const {operationId} = await f.request();
+  await finish(f, operationId);
+  assert.equal(f.resizes.length, 1);
+  assert.equal(f.resizes[0].descriptor.generation, 7);
+  assert.deepEqual(f.resizes[0].options, {sizeGb: 128, operationId: `${operationId}-resize`, timeoutMs: 240000});
+  assert.deepEqual(f.effects, ["quiesce", "delete", "provision", "route", "health"]);
+  assert.equal(f.creates.length, 1);
 });
 
 test("duplicate requests share one operation and competing requests cannot acquire the machine", async () => {

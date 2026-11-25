@@ -613,6 +613,17 @@ edits require a process restart and do not change a running process environment.
 Deleted selected auth entries fail the versioned session's startup broker call.
 Failures remain visible through lifecycle operation status.
 
+For an admitted Compute Engine start or replacement, a desired `diskSizeGb` is
+captured with the lifecycle operation during reservation. After the old VM is
+paused and the retained disk is confirmed detached, the worker calls the
+ownership-checked disk expansion API with an operation-specific request ID,
+then starts the new VM with the requested capacity as an additional invariant.
+Expansion is monotonic; shrink is rejected. A quota, attachment, or provider
+failure remains in the provision phase with writer admission held and is
+retried using the lifecycle backoff, so an uncertain resize is not silently
+reissued under a new operation. CPU/memory resource presets still have no
+documented Compute machine-type mapping and are not applied by this path.
+
 The VM workspace editor now supports provider/environment selections and
 pending/applied/conflict status; see [Frontend architecture](./frontend-architecture.md).
 Remaining machine properties, reusable defaults, hot application, and other central

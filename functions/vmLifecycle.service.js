@@ -188,6 +188,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
           const config = w.data().machineConfig;
           const selected = config?.desired || saved;
           const configVersion = config?.desiredVersion || 0;
+          const desiredDiskSizeGb = selected?.diskSizeGb == null ? null : Number(selected.diskSizeGb);
           tx.set(cr, secrets);
           tx.set(sr, {ownerUid: operation.ownerUid, generation, state: "reserved", runtimeProvider: descriptor,
             authSelection: selected.authSelection || {harness: "pi", providers: {}}, piScopedModels: saved.piScopedModels || [],
@@ -196,6 +197,7 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
           tx.update(wr, {generation, currentSessionId: sessionId, state: "reserved", bootId: null, leaseExpiresAt: 0});
           const committedAtMs = now();
           tx.update(ref, {phase: "provision", descriptor, sessionId, configVersion, claim: null,
+            desiredDiskSizeGb,
             phaseStartedAtMs: committedAtMs, phaseTimingsMs: recordPhaseTiming(op, committedAtMs),
             lastError: null, lastErrorAtMs: null, updatedAtMs: committedAtMs});
         });
@@ -207,8 +209,14 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
         const session = (await wr.collection("sessions").doc(operation.sessionId).get()).data();
         if (session?.ownerUid !== operation.ownerUid || session.generation !== operation.descriptor.generation) throw httpError(409, "vm_session_mismatch");
         const environment = await resolveVmEnvironment({db, ownerUid: operation.ownerUid, entryIds: session.environmentEntryIds || []});
+        if (operation.desiredDiskSizeGb !== null && operation.desiredDiskSizeGb !== undefined) {
+          if (typeof compute.resizeDataDisk !== "function") throw httpError(409, "vm_data_disk_resize_unavailable");
+          await compute.resizeDataDisk(operation.descriptor, {sizeGb: operation.desiredDiskSizeGb,
+            operationId: `${operationId}-resize`, timeoutMs: 240000});
+        }
         await compute.start(operation.descriptor, {operationId: `${operationId}-create`, timeoutMs: 240000,
-          allowCreateDisk: false, allowInitializeDisk: operation.action === "create" && operation.descriptor.generation === 1 &&
+          allowCreateDisk: false, expectedSizeGb: operation.desiredDiskSizeGb || undefined,
+          allowInitializeDisk: operation.action === "create" && operation.descriptor.generation === 1 &&
             currentWorkspace.initialOperationId === operationId && !currentWorkspace.bootId,
           runnerImage: operation.runnerImage,
           subnetwork: "projects/pi-agents-cloud/regions/us-central1/subnetworks/mapache-vm-v2-us-central1",
