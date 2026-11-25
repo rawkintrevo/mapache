@@ -319,17 +319,30 @@ function createVmBackupRecoveryRuntimeService({
   }
 
   async function requestJson(context, pathname) {
-    let response;
-    try {
-      response = await fetchImpl(`https://${context.host}${pathname}`, {method: "GET", redirect: "error",
-        headers: {"x-shutdown-token": context.credentials?.shutdownToken || (await readContext(context)).credentials.shutdownToken},
-        signal: AbortSignal.timeout(30_000)});
-    } catch { throw runtimeError(pathname === "/runner/health" ? "vm_backup_recovery_health_unavailable" : "vm_backup_recovery_digest_unavailable"); }
-    if (!response.ok) {
-      await response.body?.cancel?.();
-      throw runtimeError(pathname === "/runner/health" ? "vm_backup_recovery_health_unavailable" : "vm_backup_recovery_digest_unavailable");
+    const failureCode = pathname === "/runner/health" ? "vm_backup_recovery_health_unavailable" : "vm_backup_recovery_digest_unavailable";
+    const deadline = Math.min(context.deadlineMs, now() + startTimeoutMs);
+    let lastError;
+    while (now() < deadline) {
+      let response;
+      try {
+        response = await fetchImpl(`https://${context.host}${pathname}`, {method: "GET", redirect: "error",
+          headers: {"x-shutdown-token": context.credentials?.shutdownToken || (await readContext(context)).credentials.shutdownToken},
+          signal: AbortSignal.timeout(30_000)});
+      } catch (error) {
+        lastError = error;
+      }
+      if (response?.ok) {
+        try { return await response.json(); } catch { throw runtimeError("vm_backup_recovery_response_invalid"); }
+      }
+      if (response) {
+        await response.body?.cancel?.();
+        if (Number(response.status) < 500) throw runtimeError(failureCode);
+        lastError = runtimeError(failureCode);
+      }
+      if (now() >= deadline) break;
+      await sleep(Math.min(2000, Math.max(1, deadline - now())));
     }
-    try { return await response.json(); } catch { throw runtimeError("vm_backup_recovery_response_invalid"); }
+    throw lastError?.code === failureCode ? lastError : runtimeError(failureCode);
   }
 
   function runnerEnvironment(context, credentials) {

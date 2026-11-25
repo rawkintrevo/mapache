@@ -21,6 +21,7 @@ test("recovery runtime refuses missing dedicated gateway configuration before cr
 
 test("recovery runtime stages isolated lease and route records, verifies digests, then cleans exact resources", async () => {
   const db = memoryDb();
+  let gatewayCalls = 0;
   let resources = {instance: null, disk: {id: "123", labels: labels("operation", 2), users: []}};
   const compute = {
     inspect: async () => ({instance: resources.instance, disk: resources.disk}),
@@ -35,12 +36,16 @@ test("recovery runtime stages isolated lease and route records, verifies digests
     deleteOwnedDisk: async () => { resources.disk = null; },
   };
   const service = createVmBackupRecoveryRuntimeService({db, compute, gatewayHost: "backup-recovery---abc-uc.a.run.app",
-    runnerImage: IMAGE, now: () => 1000, sleep: async () => {}, fetchImpl: async (url) => ({ok: true, json: async () =>
-      url.endsWith("/health") ? {ok: true, workspaceId: "workspace", sessionId: "vm-backup-" + createHash("sha256").update("operation").digest("hex").slice(0, 24), agentRuntime: {ready: true, state: "ready"}} :
+    runnerImage: IMAGE, now: () => 1000, sleep: async () => {}, fetchImpl: async (url) => {
+      if (gatewayCalls++ === 0) throw new Error("runner_starting");
+      return {ok: true, json: async () => url.endsWith("/health") ?
+        {ok: true, workspaceId: "workspace", sessionId: "vm-backup-" + createHash("sha256").update("operation").digest("hex").slice(0, 24), agentRuntime: {ready: true, state: "ready"}} :
         {ok: true, workspaceId: "workspace", sessionId: "vm-backup-" + createHash("sha256").update("operation").digest("hex").slice(0, 24),
-          fileDigest: "sha256:" + "b".repeat(64), entryCount: 4, byteCount: 10}})});
+          fileDigest: "sha256:" + "b".repeat(64), entryCount: 4, byteCount: 10}};
+    }});
   const evidence = await service.verify(RECEIPT, {workspaceId: "workspace", ownerUid: "owner", operationId: "operation"});
   assert.equal(evidence.runtimeReady, true);
+  assert.equal(gatewayCalls, 3);
   assert.equal(db.value("vmGatewayRoutes_v2/backup-recovery---abc-uc.a.run.app").enabled, true);
   const cleaned = await service.cleanup(RECEIPT, {workspaceId: "workspace", ownerUid: "owner", operationId: "operation"});
   assert.deepEqual(cleaned.instanceDeleted, true);
