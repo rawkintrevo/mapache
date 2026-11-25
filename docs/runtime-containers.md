@@ -267,18 +267,22 @@ reuse a validated artifact for identical inputs.
 `artifactCache.mjs` stores a runtime archive in the dedicated, private
 `pi-agents-cloud-build-cache` bucket. Cache objects are written under their
 full SHA-256 key with a create-only generation precondition. A missing,
-tampered, stale, or otherwise unverifiable object is a miss. On a miss,
-`build.mjs` runs the existing typecheck, full upstream suite, and web build,
-then the finished image is started and `bin/pi-web-ui-smoke.js` verifies that
-`/agent/` serves HTML plus every referenced JavaScript application bundle.
+tampered, stale, or otherwise unverifiable object is a miss. On a miss, a
+release build runs the existing typecheck, full upstream suite, and web build;
+pull-request builds pass `MAPACHE_SKIP_UPSTREAM_TESTS=1` and intentionally skip
+only that upstream suite while retaining typecheck and web-build validation.
+In both cases the finished image is started and `bin/pi-web-ui-smoke.js` verifies
+that `/agent/` serves HTML plus every referenced JavaScript application bundle.
 The build-only smoke container sets `MAPACHE_STARTUP_SMOKE=1`, which skips
 workspace checkpoint coordination and authority persistence because the image
 has no session document; it does not change normal Cloud Run startup behavior.
 Only after those checks pass is the runtime packaged and the cache object
 published. On a verified hit, the runtime is restored and the three upstream
-checks are skipped. Both paths log the cache key, decision, reason, and
-elapsed time; changing a managed patch, resolved dependency tree, release, or
-builder environment produces a miss.
+checks are skipped. Fast pull-request builds do not restore or publish the
+validated artifact cache, so an untested runtime can never become the shared
+cache. Both paths log the cache key, decision, reason, and elapsed time;
+changing a managed patch, resolved dependency tree, release, or builder
+environment produces a miss.
 
 A future release that cannot accept the managed patch fails the candidate
 build; it does not silently fall back to the previous release. Use the
@@ -853,6 +857,19 @@ files/Git, model selection, skills, extensions, subagents, and native Goals. Pi
 JSONL history is captured and restored as storage state, but the runner does not
 tail it into a second Chat UI or inject prompts through a Mapache Chat socket.
 The only managed child is the upstream pi-web-ui process on the marked path.
+
+Remote-libvirt guests reuse the same managed process and health contract. The
+guest image sets `MAPACHE_RUNTIME_PROVIDER=remote-libvirt`, which selects the
+retained-disk path in `lib/config.js`, and passes a lifecycle-assigned
+`RUNNER_BIND_HOST` so the HTTP/WebSocket server listens only on the private
+libvirt interface. The image does not change the upstream child listener:
+pi-web-ui remains on loopback port 8787 and the canonical runner health route is
+`/runner/health`. Remote guests set capabilities to terminal-only in v1; Chrome,
+Preview, and Cloud Storage checkpoint loops are not part of this image.
+Building the guest image does not replace an existing Cloud Run revision; it is
+an additional versioned artifact consumed only by the remote-libvirt provider.
+Changes to the shared runner still require the normal `gcp-runner` rebuild and
+revision rollout described below.
 
 ## Managed gcp-runner runtime
 

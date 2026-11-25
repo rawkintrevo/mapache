@@ -293,3 +293,34 @@ test("compute-engine config maps all durable roots to the retained disk", () => 
     }
   }
 });
+
+test("remote-libvirt config uses the retained-disk contract and requires an explicit bind host", () => {
+  const names = [
+    "MAPACHE_RUNTIME_PROVIDER",
+    "WORKSPACE_STORAGE_MODE",
+    "MAPACHE_RETAINED_DISK_ROOT",
+    "RUNNER_BIND_HOST",
+  ];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  Object.assign(process.env, {
+    MAPACHE_RUNTIME_PROVIDER: "remote-libvirt",
+    WORKSPACE_STORAGE_MODE: "",
+    MAPACHE_RETAINED_DISK_ROOT: "/var/lib/mapache/workspace",
+    RUNNER_BIND_HOST: "192.168.250.42",
+  });
+  try {
+    const config = createConfig();
+    assert.equal(config.remoteGuestMode, true);
+    assert.equal(config.retainedDiskMode, true);
+    assert.equal(config.workspaceStorageMode, "retained-disk");
+    assert.equal(config.runtimeStorageMode, "retained-disk");
+    assert.equal(config.bindHost, "192.168.250.42");
+    assert.equal(config.workspaceDir, "/var/lib/mapache/workspace/workspace");
+    assert.equal(config.homeDir, "/var/lib/mapache/workspace/home");
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});

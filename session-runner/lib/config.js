@@ -80,7 +80,8 @@ function parseJsonObject(value, fallback = null) {
 
 function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS} = {}) {
   const runtimeProvider = normalizeEnvString(process.env.MAPACHE_RUNTIME_PROVIDER || process.env.RUNTIME_PROVIDER || "cloud-run").toLowerCase() || "cloud-run";
-  const retainedDiskMode = runtimeProvider === "compute-engine" ||
+  const remoteGuestMode = runtimeProvider === "remote-libvirt";
+  const retainedDiskMode = runtimeProvider === "compute-engine" || remoteGuestMode ||
     normalizeEnvString(process.env.WORKSPACE_STORAGE_MODE).toLowerCase() === RETAINED_DISK_STORAGE_MODE;
   const retainedDiskRoot = retainedDiskMode ? path.resolve(process.env.MAPACHE_RETAINED_DISK_ROOT || "/var/lib/mapache/workspace") : "";
   const retainedPaths = retainedDiskMode ? retainedDiskPaths(retainedDiskRoot) : null;
@@ -191,6 +192,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     browserQaHeadless: envFlag(process.env.BROWSER_QA_HEADLESS, true),
     browserQaNavigationTimeoutMs: positiveNumber(process.env.BROWSER_QA_NAVIGATION_TIMEOUT_MS, 15000),
     browserQaStatePath: path.join(browserQaDir, "last-run.json"),
+    bindHost: normalizeEnvString(process.env.RUNNER_BIND_HOST),
     browserActivityUrl: chromeEnabled ?
       normalizeEnvString(process.env.MAPACHE_BROWSER_ACTIVITY_URL) || `http://127.0.0.1:${process.env.PORT || 8080}/browser/activity` : "",
     browserCdpUrl: chromeEnabled ?
@@ -325,6 +327,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     workspaceSyncPolicyMode,
     runtimeIdentity,
     runtimeProvider,
+    remoteGuestMode,
     retainedDiskMode,
     retainedDiskRoot,
     retainedDiskPaths: retainedPaths,

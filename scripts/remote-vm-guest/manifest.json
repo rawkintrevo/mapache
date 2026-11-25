@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "imageVersion": "ubuntu-24.04-v1",
+  "distribution": {
+    "id": "ubuntu",
+    "version": "24.04",
+    "codename": "noble",
+    "architecture": "amd64"
+  },
+  "base": {
+    "filename": "ubuntu-24.04-server-cloudimg-amd64.img",
+    "url": "https://cloud-images.ubuntu.com/releases/noble/release-20260725/ubuntu-24.04-server-cloudimg-amd64.img",
+    "sha256": "d1940f7d69d343355e183dff1e08a59852d32e7309baa7a4bad8365b11b005ac",
+    "format": "qcow2"
+  },
+  "resources": {
+    "vcpus": 2,
+    "memoryMiB": 8192,
+    "diskGiB": 40,
+    "diskFormat": "qcow2",
+    "thinProvisioned": true
+  },
+  "runtime": {
+    "source": "session-runner/Dockerfile.gcp-runner",
+    "agentUiVersion": "pi-web-ui-v1",
+    "nodeMajor": 24,
+    "listenHost": "private-guest-interface",
+    "listenPort": 8080,
+    "healthPath": "/runner/health",
+    "upstreamHost": "127.0.0.1",
+    "upstreamPort": 8787,
+    "capabilities": {
+      "terminal": true,
+      "preview": false,
+      "previewQa": false,
+      "functions": false,
+      "chrome": false
+    }
+  },
+  "network": {
+    "name": "mapache-vm",
+    "cidr": "192.168.250.0/24",
+    "serviceListener": "private-guest-interface",
+    "publicListener": false
+  },
+  "durablePaths": [
+    "/var/lib/mapache/workspace/home",
+    "/var/lib/mapache/workspace/workspace",
+    "/var/lib/mapache/workspace/agent",
+    "/var/lib/mapache/workspace/credentials",
+    "/var/lib/mapache/workspace/uploads",
+    "/var/lib/mapache/workspace/caches"
+  ],
+  "payload": {
+    "schemaVersion": 1,
+    "runtimeNode": "runtime/bin/node",
+    "runnerEntry": "session-runner/server.js",
+    "piWebUiRoot": "pi-web-ui",
+    "credentialPolicy": "no-baked-credentials"
+  },
+  "build": {
+    "requiredTools": ["qemu-img", "virt-customize"],
+    "upgradePolicy": "new-workspaces-only-unless-explicit-migration"
+  }
+}

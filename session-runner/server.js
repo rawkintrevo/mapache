@@ -229,7 +229,9 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   checkpointScheduler,
   config,
   git,
-  listen: (onListening) => server.listen(config.port, onListening),
+  listen: (onListening) => config.bindHost ?
+    server.listen(config.port, config.bindHost, onListening) :
+    server.listen(config.port, onListening),
   piWebUi,
   resourceMetrics: resourceMetricsSocket,
   piModelScope,

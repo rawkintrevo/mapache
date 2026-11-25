@@ -31,6 +31,17 @@ test("runner image builds resolve and verify the pi-web-ui cache before packagin
   assert.match(cloudbuild, /--if-generation-match=0/);
 });
 
+test("pull-request runner builds use the fast upstream test path while releases stay full", () => {
+	assert.match(dockerfile, /ARG MAPACHE_SKIP_UPSTREAM_TESTS=1/);
+	assert.match(dockerfile, /FROM mapache-base AS pi-web-ui-builder\nARG MAPACHE_BUILD_RESOLUTION_KEY/);
+	assert.match(dockerfile, /MAPACHE_SKIP_UPSTREAM_TESTS.*--skip-tests/s);
+	assert.match(cloudbuild, /_SKIP_UPSTREAM_TESTS: ["']1["']/);
+	assert.match(cloudbuild, /MAPACHE_SKIP_UPSTREAM_TESTS=\$\{_SKIP_UPSTREAM_TESTS\}/);
+	assert.match(workflow, /skip_upstream_tests=1/);
+	assert.match(workflow, /skip_upstream_tests=0/);
+	assert.match(workflow, /_SKIP_UPSTREAM_TESTS=\$skip_upstream_tests/);
+});
+
 test("runner image publication is gated by the pi-web-ui page and bundle smoke test", () => {
   const smokeIndex = cloudbuild.indexOf("id: smoke-test-pi-web-ui");
   const imageIndex = cloudbuild.indexOf("images:");

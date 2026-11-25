@@ -156,6 +156,38 @@ session records. It is never accepted from a browser request. The canonical
 runner health path remains `/runner/health`; `/healthz` is not an alias or
 fallback.
 
+### Versioned guest image (child #638)
+
+The checked-in `scripts/remote-vm-guest/manifest.json` defines guest image
+`ubuntu-24.04-v1`: Ubuntu 24.04 LTS amd64, 2 vCPU, 8192 MiB RAM, and a 40 GiB
+thin-provisioned QCOW2 disk. `build-image.py` verifies the dated Ubuntu cloud
+image SHA-256 before producing a standalone QCOW2, validates an immutable
+`gcp-runner` payload, and records a sidecar manifest with the source and
+payload hashes. `prepare-payload.sh` requires a content-addressed runner image;
+mutable tags are not accepted.
+
+The payload reuses the pinned `pi-web-ui-v1` runtime and session runner, so the
+guest has the existing pi-web-ui experience and native terminal protocol. The
+guest systemd unit binds the runner to the lifecycle-assigned
+`192.168.250.x` address, keeps pi-web-ui's upstream child on `127.0.0.1:8787`,
+and disables Chrome for v1. The bootstrap fails closed for a public/loopback
+listener, an unexpected retained-disk root, an unsupported runtime version, or
+missing payload files. `/etc/mapache-vm/guest.env` is written only after guest
+creation; no owner, host, Firebase, model-provider, or SSH credentials are
+baked into the image.
+
+The durable guest roots are `/var/lib/mapache/workspace/{home,workspace,agent,
+credentials,uploads,caches}`. They remain on the retained disk across stop,
+start, and reboot; sockets, PID files, and other process state are recreated.
+The image starts a blank workspace and seeds no repository metadata. The 40 GiB
+value is virtual capacity, not promised host allocation: QCOW2 metadata and the
+guest filesystem consume some space immediately and allocation grows with
+writes. An image-version change applies only to new workspaces unless a future
+explicit migration is approved; existing disks are never silently rebased.
+Image construction requires `qemu-img`, `virt-customize`, and a KVM-capable
+libvirt host. The real boot, authenticated readiness, and reboot-persistence
+proof is part of #643.
+
 ## Authenticated gateway and SSH transport
 
 The gateway authenticates the Firebase owner/access policy, workspace/session

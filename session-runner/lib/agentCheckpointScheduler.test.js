@@ -116,6 +116,27 @@ test("debounces completed turns into one agent capture and publishes it", async 
   ]);
 });
 
+test("remote-libvirt guests keep agent state on disk instead of publishing checkpoints", async () => {
+  const events = [];
+  const {scheduler} = harness({
+    config: {agentRuntimeEnabled: true, remoteGuestMode: true},
+    agentSnapshot: {capture: async () => { events.push("capture"); return {stagingDir: ""}; }},
+    checkpointPublisher: {
+      uploadCapture: async () => { events.push("upload"); },
+      commitCheckpoint: async () => { events.push("commit"); },
+    },
+    piModelScope: {persist: async () => {}},
+    workspaceSync: {
+      flush: async () => {},
+      syncUp: async () => { events.push("sync"); },
+    },
+  });
+  scheduler.start();
+  await scheduler.finalize();
+  assert.deepEqual(events, ["sync"]);
+  assert.equal(scheduler.status().agentEnabled, false);
+});
+
 test("automation checkpoint captures transcript and status artifacts before its checkpoint", async () => {
   const events = [];
   const {scheduler} = harness({

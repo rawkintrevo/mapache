@@ -95,6 +95,15 @@ It runs:
 
 Firebase preview and production workflows should keep mirroring this fast set: install root, `community/`, `functions/`, and `session-runner/` dependencies; run Functions tests; run runner syntax checks; run frontend smoke tests; then build. Live Cloud Run provisioning, browser E2E, and LLM-assisted regressions stay out of the default PR path.
 
+The `Runner Images` workflow has a separate fast-path guard for pull requests:
+Cloud Build passes `MAPACHE_SKIP_UPSTREAM_TESTS=1` to the `gcp-runner` Dockerfile,
+which still resolves the pinned release, installs dependencies, runs the upstream
+typecheck and web build, and executes the image startup smoke test, but skips the
+upstream repository's full test suite. Pushes to `main` and manually dispatched
+release builds pass `MAPACHE_SKIP_UPSTREAM_TESTS=0` and retain the full suite.
+For a local fast build, use `--build-arg MAPACHE_SKIP_UPSTREAM_TESTS=1`; use `0`
+when reproducing release validation.
+
 ## Slower Checks
 
 Disposable VM provider fixtures and retained-disk migration contracts are
@@ -114,6 +123,12 @@ Run slower checks when a change touches the related subsystem:
   fixture through the real pi-web-ui server, gateway, WebSocket, terminal, Goal, checkpoint,
   and restart paths; it does not require paid model or cloud credentials. This is local
   integration coverage, not hosted/browser QA.
+- Remote-libvirt guest-image changes: run `python3 -m unittest discover -s
+  scripts/remote-vm-guest -p 'test_*.py'` and
+  `scripts/remote-vm-guest/build-image.py --dry-run`. A real build additionally
+  requires the pinned Ubuntu artifact, an immutable `gcp-runner` payload,
+  `qemu-img`, and `virt-customize`; an isolated KVM boot/readiness/reboot proof
+  is reserved for the #643 rollout gate.
 - Runner image cache changes: provision the private `pi-agents-cloud-build-cache` bucket as
   described in [Deployment](./deployment.md), then run three Cloud Builds with the same
   source inputs. The first build is the cold miss; a second build submitted from a fresh

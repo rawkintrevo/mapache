@@ -33,7 +33,10 @@ function createAgentCheckpointScheduler({
   setTimeoutImpl = setTimeout,
   workspaceSync,
 } = {}) {
-  const agentEnabled = config.agentRuntimeEnabled === true || config.agentUiVersion === "pi-web-ui-v1";
+  // A remote-libvirt guest owns its agent state on the retained disk. It must
+  // not start the Cloud Storage checkpoint publisher used by Cloud Run.
+  const agentEnabled = config.remoteGuestMode !== true &&
+    (config.agentRuntimeEnabled === true || config.agentUiVersion === "pi-web-ui-v1");
   const workspaceIntervalMs = positiveNumber(config.syncIntervalMs, DEFAULT_WORKSPACE_INTERVAL_MS);
   const agentIntervalMs = positiveNumber(config.agentSnapshotIntervalMs, DEFAULT_AGENT_INTERVAL_MS);
   const turnDebounceMs = positiveNumber(config.agentCompletedTurnDebounceMs, DEFAULT_COMPLETED_TURN_DEBOUNCE_MS);
