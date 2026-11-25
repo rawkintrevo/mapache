@@ -9,6 +9,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 ARG MAPACHE_BUILD_RESOLUTION_KEY=local
+ARG MAPACHE_SKIP_UPSTREAM_TESTS=1
 
 RUN echo "Mapache build resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
   && npm install --global --no-fund --no-audit @earendil-works/pi-coding-agent@1.6.0 \
@@ -24,10 +25,19 @@ COPY upstream ./upstream
 COPY pi-web-ui-build-inputs.json /app/pi-web-ui-build-inputs.json
 COPY pi-web-ui-cache.tar.gz /app/pi-web-ui-cache.tar.gz
 RUN echo "Mapache pi-web-ui resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
-  && MAPACHE_REQUIRE_ADAPTER_INSPECTION=1 node /app/upstream/pi-web-ui/build.mjs \
-    --output-dir /opt/mapache/pi-web-ui \
-    --build-inputs /app/pi-web-ui-build-inputs.json \
-    --cache-archive /app/pi-web-ui-cache.tar.gz
+  && if [ "${MAPACHE_SKIP_UPSTREAM_TESTS}" = "1" ]; then \
+    echo "Skipping upstream pi-web-ui tests for this fast image build"; \
+    MAPACHE_REQUIRE_ADAPTER_INSPECTION=1 node /app/upstream/pi-web-ui/build.mjs \
+      --skip-tests \
+      --output-dir /opt/mapache/pi-web-ui \
+      --build-inputs /app/pi-web-ui-build-inputs.json \
+      --cache-archive /app/pi-web-ui-cache.tar.gz; \
+  else \
+    MAPACHE_REQUIRE_ADAPTER_INSPECTION=1 node /app/upstream/pi-web-ui/build.mjs \
+      --output-dir /opt/mapache/pi-web-ui \
+      --build-inputs /app/pi-web-ui-build-inputs.json \
+      --cache-archive /app/pi-web-ui-cache.tar.gz; \
+  fi
 
 FROM mapache-base
 COPY package*.json ./

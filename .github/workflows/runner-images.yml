@@ -87,13 +87,18 @@ jobs:
           else
             source_tag=$(node scripts/runner-image-release.mjs --variant=gcp-runner --sha="$GITHUB_SHA")
           fi
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            skip_upstream_tests=1
+          else
+            skip_upstream_tests=0
+          fi
           image="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${source_tag}"
           build_id=$(gcloud builds submit session-runner \
             --async \
             --config session-runner/cloudbuild.gcp-runner.yaml \
             --format='value(id)' \
             --project pi-agents-cloud \
-            --substitutions="_IMAGE=$image")
+            --substitutions="_IMAGE=$image,_SKIP_UPSTREAM_TESTS=$skip_upstream_tests")
           if [ -z "$build_id" ]; then
             echo "::error::Cloud Build submission did not return a build ID"
             exit 1

@@ -95,6 +95,15 @@ It runs:
 
 Firebase preview and production workflows should keep mirroring this fast set: install root, `community/`, `functions/`, and `session-runner/` dependencies; run Functions tests; run runner syntax checks; run frontend smoke tests; then build. Live Cloud Run provisioning, browser E2E, and LLM-assisted regressions stay out of the default PR path.
 
+The `Runner Images` workflow has a separate fast-path guard for pull requests:
+Cloud Build passes `MAPACHE_SKIP_UPSTREAM_TESTS=1` to the `gcp-runner` Dockerfile,
+which still resolves the pinned release, installs dependencies, runs the upstream
+typecheck and web build, and executes the image startup smoke test, but skips the
+upstream repository's full test suite. Pushes to `main` and manually dispatched
+release builds pass `MAPACHE_SKIP_UPSTREAM_TESTS=0` and retain the full suite.
+For a local fast build, use `--build-arg MAPACHE_SKIP_UPSTREAM_TESTS=1`; use `0`
+when reproducing release validation.
+
 ## Slower Checks
 
 Disposable VM provider fixtures and retained-disk migration contracts are

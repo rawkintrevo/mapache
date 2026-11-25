@@ -2,6 +2,7 @@ substitutions:
   _IMAGE: us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner
   _CACHE_BUCKET: pi-agents-cloud-build-cache
   _CACHE_PREFIX: pi-web-ui
+  _SKIP_UPSTREAM_TESTS: "1"
 
 steps:
   - name: node:24-bookworm-slim
@@ -43,6 +44,7 @@ steps:
           -f Dockerfile.gcp-runner \
           -t "${_IMAGE}" \
           --build-arg "MAPACHE_BUILD_RESOLUTION_KEY=$${key}" \
+          --build-arg "MAPACHE_SKIP_UPSTREAM_TESTS=${_SKIP_UPSTREAM_TESTS}" \
           .
 
   - name: gcr.io/cloud-builders/docker
