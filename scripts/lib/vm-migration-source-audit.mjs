@@ -124,10 +124,19 @@ function sourceAuditEvidenceSha256(audit) {
     sourceRetained: audit.sourceRetained, completeness: audit.completeness})).digest('hex');
 }
 
+function validateProofBinding(binding, {workspaceId, ownerUid, sourceGeneration, observationSha256,
+  sourceObservationSha256, scope}) {
+  if (!binding || binding.schemaVersion !== 1 || binding.workspaceId !== workspaceId ||
+      binding.ownerUid !== ownerUid || binding.sourceGeneration !== sourceGeneration ||
+      binding.observationSha256 !== observationSha256 || binding.sourceObservationSha256 !== sourceObservationSha256 ||
+      JSON.stringify(binding.scope) !== JSON.stringify(scope)) fail('source_audit_proof_binding_invalid');
+}
+
 // Builds a durable admission proof. A blocked result is intentionally useful:
 // it records exactly which source-evidence gate is still missing without ever
 // making an incomplete source eligible for a migration fence.
-export function buildSourceAudit({preflight, inventory, storageMetadata, scope, coverage, costDowntime, now = Date.now()}) {
+export function buildSourceAudit({preflight, inventory, storageMetadata, scope, coverage, costDowntime,
+  proofBinding, now = Date.now()}) {
   if (!preflight || preflight.readOnly !== true) fail('source_audit_preflight_invalid');
   const workspaceId = identity(preflight.workspaceId, 'workspace');
   const ownerUid = identity(preflight.ownerUid, 'owner');
@@ -136,6 +145,8 @@ export function buildSourceAudit({preflight, inventory, storageMetadata, scope, 
   const sourceGeneration = boundedInteger(preflight.sourceGeneration, 'source_audit_source_generation', {allowNull: true});
   if (inventory && (inventory.workspaceId !== workspaceId || inventory.ownerUid !== ownerUid)) fail('source_audit_inventory_identity_invalid');
   const normalizedScope = safeScope(scope);
+  validateProofBinding(proofBinding, {workspaceId, ownerUid, sourceGeneration, observationSha256,
+    sourceObservationSha256, scope: normalizedScope});
   const normalizedStorage = normalizeStorage(storageMetadata);
   const required = requiredCoverage({inventory, storageMetadata});
   const normalizedCoverage = normalizeCoverage(coverage, required);

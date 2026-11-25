@@ -68,7 +68,7 @@ try {
     if (!source.exists || source.get('ownerUid') !== options.get('--owner')) throw Error('source_audit_source_not_found');
     const scope = resolveMigrationPrefix(source.data(), options.get('--owner'), DEFAULT_BUCKET);
     const audit = buildSourceAudit({preflight: observed, inventory, storageMetadata: inventory.storageMetadata, scope,
-      coverage: evidence.coverage, costDowntime: evidence.costDowntime});
+      coverage: evidence.coverage, costDowntime: evidence.costDowntime, proofBinding: evidence});
     const auditRef = db.collection('vmMigrationSourceAudits_v2').doc(workspaceId);
     const result = await db.runTransaction(async transaction => {
       const existing = await transaction.get(auditRef);

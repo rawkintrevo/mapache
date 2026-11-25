@@ -31,6 +31,9 @@ const base = () => ({
   },
   costDowntime: {approved: true, currency: 'USD', estimatedCostUsd: 2.5, maxDowntimeSeconds: 180,
     estimateSha256: digest('a')},
+  proofBinding: {schemaVersion: 1, workspaceId: 'workspace', ownerUid: 'owner', sourceGeneration: 4,
+    observationSha256: digest('a'), sourceObservationSha256: digest('b'),
+    scope: {bucket: 'bucket', prefix: 'workspaces/owner/workspace', workspaceKey: 'workspace'}},
   now: 42,
 });
 
@@ -74,4 +77,16 @@ test('a changed source observation invalidates a ready audit', () => {
   assert.throws(() => assertReadySourceAudit(audit, {workspaceId: 'workspace', ownerUid: 'owner', sourceGeneration: 5,
     observationSha256: digest('a'),
     sourceObservationSha256: digest('b'), scope: {bucket: 'bucket', prefix: 'workspaces/owner/workspace', workspaceKey: 'workspace'}}), {message: 'source_audit_not_ready'});
+});
+
+test('proof binding rejects evidence from another workspace or observation', () => {
+  const input = base();
+  input.proofBinding = {...input.proofBinding, workspaceId: 'other'};
+  assert.throws(() => buildSourceAudit(input), {message: 'source_audit_proof_binding_invalid'});
+});
+
+test('proof binding is required even when coverage and cost fields are otherwise valid', () => {
+  const input = base();
+  delete input.proofBinding;
+  assert.throws(() => buildSourceAudit(input), {message: 'source_audit_proof_binding_invalid'});
 });

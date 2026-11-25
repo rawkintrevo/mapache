@@ -854,6 +854,12 @@ The evidence digest now also covers the audit state, decision, blockers,
 observation digest and source-retention flag. The coordinator emulator covers
 the reservation-then-audit-mutation refusal path (12/12 cases pass).
 
+The source-proof file is now bound to the same workspace, owner, source
+generation, observation digests and resolved Storage scope before it can be
+recorded. A valid coverage/cost digest from another workspace or an earlier
+preflight therefore fails closed instead of becoming a ready audit. Source
+audit unit coverage passes 7/7; no production audit was rewritten.
+
 ## Continuation implementation — flat-prefix payload verification
 
 The read-only inventory now accepts `--verify-flat-prefix-bytes` alongside
