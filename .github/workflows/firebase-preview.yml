@@ -16,6 +16,10 @@ jobs:
   preview:
     name: Build and deploy preview
     runs-on: ubuntu-latest
+    # Exercise the opt-in VM crossover client in PR previews. Production keeps
+    # its independent rollout flag and is not changed by this workflow.
+    env:
+      VITE_VM_WORKSPACES_ENABLED: "true"
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
 
     steps:

@@ -46,7 +46,9 @@ are loaded by that runtime surface. Workspace lifecycle actions are
 server-authoritative and use the shared pending-operation boundary.
 
 The VM crossover client is opt-in at build time with
-`VITE_VM_WORKSPACES_ENABLED=true`. `src/services/vmWorkspaceApi.js` wraps the
+`VITE_VM_WORKSPACES_ENABLED=true`. The Firebase PR preview workflow sets this
+flag so hosted previews exercise the crossover adapter; production keeps its
+own rollout setting. `src/services/vmWorkspaceApi.js` wraps the
 existing API client, merges owner-admitted VM listings, and routes current
 session reads, rename, pause/start/replacement, and signed access to
 `vmApi_v2`.
