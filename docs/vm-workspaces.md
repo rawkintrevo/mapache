@@ -1719,8 +1719,13 @@ The same real-source import was also interrupted after its first durable root
 publication. The disk then contained `agent`, three staged roots, and no final
 receipt; resuming the same operation completed all 495 entries. A device-level
 read-only remount reverified the complete tree, and the second disposable VM
-and disk were deleted. This closes interruption/resume evidence for the
-selected real source set, but not ENOSPC or application behavior.
+and disk were deleted. A separate fresh-disk run filled the ext4 filesystem
+before object staging; the importer returned `disk_import_out_of_space` with
+no completion receipt and left resumable stage state. Removing only the exact
+disposable filler and resuming the same operation completed all 495 entries,
+after which the block-device read-only remount reverified every root. This
+closes interruption/resume and real capacity-failure evidence for the selected
+source set, but not application behavior.
 
 The same 2026-11-25 read-only source audit narrows the `vm-test`-specific
 reconciliation boundary: its Firestore source is explicitly `blank` with blank
