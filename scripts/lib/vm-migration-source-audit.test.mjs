@@ -10,7 +10,8 @@ const base = () => ({
       'untracked_legacy_upload_sessions_unverified'],
     compute: {recordedComputeClear: true, blockers: [], discovery: {scannedRegionsClear: true}},
     storage: {stable: true, blockers: [], firstSha256: digest('c'), secondSha256: digest('c')}},
-  inventory: {workspaceId: 'workspace', ownerUid: 'owner', formats: []},
+  inventory: {workspaceId: 'workspace', ownerUid: 'owner', formats: [], sourceGeneration: 4,
+    observationSha256: digest('a'), sourceObservationSha256: digest('b')},
   storageMetadata: {unresolved: [], sourceTotalsMayOverlap: true, listedObjects: 3, maxObjects: 10, sources: [
     {roles: ['workspace'], prefixSha256: digest('d'), status: 'listed-payloads-unverified', objects: 1, storedBytes: 4, metadataEvidenceSha256: digest('e'),
       payloadVerification: {status: 'verified', objects: 1, storedBytes: 4, evidenceSha256: digest('a')}},
@@ -89,4 +90,10 @@ test('proof binding is required even when coverage and cost fields are otherwise
   const input = base();
   delete input.proofBinding;
   assert.throws(() => buildSourceAudit(input), {message: 'source_audit_proof_binding_invalid'});
+});
+
+test('stale inventory observation cannot become a ready audit', () => {
+  const input = base();
+  input.inventory.sourceObservationSha256 = digest('c');
+  assert.throws(() => buildSourceAudit(input), {message: 'source_audit_inventory_observation_stale'});
 });

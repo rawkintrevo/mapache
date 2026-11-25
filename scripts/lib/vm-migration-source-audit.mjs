@@ -143,7 +143,9 @@ export function buildSourceAudit({preflight, inventory, storageMetadata, scope, 
   const observationSha256 = digest(preflight.observationSha256, 'source_audit_observation');
   const sourceObservationSha256 = digest(preflight.sourceObservationSha256, 'source_audit_source_observation');
   const sourceGeneration = boundedInteger(preflight.sourceGeneration, 'source_audit_source_generation', {allowNull: true});
-  if (inventory && (inventory.workspaceId !== workspaceId || inventory.ownerUid !== ownerUid)) fail('source_audit_inventory_identity_invalid');
+  if (!inventory || inventory.workspaceId !== workspaceId || inventory.ownerUid !== ownerUid) fail('source_audit_inventory_identity_invalid');
+  if (inventory.observationSha256 !== observationSha256 || inventory.sourceObservationSha256 !== sourceObservationSha256 ||
+      inventory.sourceGeneration !== sourceGeneration) fail('source_audit_inventory_observation_stale');
   const normalizedScope = safeScope(scope);
   validateProofBinding(proofBinding, {workspaceId, ownerUid, sourceGeneration, observationSha256,
     sourceObservationSha256, scope: normalizedScope});

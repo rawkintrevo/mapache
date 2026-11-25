@@ -1161,8 +1161,10 @@ cannot become ready. Compute and Storage preflight evidence must also be clear
 and stable. A proof from another workspace or an earlier observation is
 rejected before the durable audit is written.
 
-The command reruns preflight and transactionally compares the source before
-writing the audit. A source blocker is recorded as `state: "blocked"`,
+The inventory report also carries the Firestore `observationSha256`,
+`sourceObservationSha256`, and `sourceGeneration` captured for each workspace.
+The command reruns preflight and rejects a report whose per-workspace binding is
+stale before transactionally comparing the source. A source blocker is recorded as `state: "blocked"`,
 `decision: "source-retained"`, and never enables reservation. The production
 operator command `vm-migration-reserve.mjs reserve` enables the audit gate and
 fails with `vm_migration_source_audit_required` when the audit is absent,

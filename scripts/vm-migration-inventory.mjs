@@ -10,6 +10,7 @@ import {verifyGzipTar} from './lib/vm-archive-verifier.mjs';
 import {inspectSharedTreeAuthority} from './lib/vm-shared-tree-authority.mjs';
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
+const {observeVmMigration} = require('../functions/vmMigrationPreflight.service.js');
 const PROJECT = 'pi-agents-cloud';
 const DEFAULT_BUCKET = 'pi-agents-cloud.firebasestorage.app';
 const workspaceFields = ['ownerUid', 'source', 'imageKey', 'runtimeProvider.backend', 'status', 'lifecycle', 'deleted',
@@ -122,6 +123,18 @@ async function main() {
         },
       }) : undefined,
       verifyPayloads: options['--verify-bytes'] ? (manifest, manifestRef) => verifyCheckpointPayloads({manifest, manifestRef, openObject, budget}) : undefined});
+    if (typeof doc.get('ownerUid') === 'string' && doc.get('ownerUid')) {
+      try {
+        const observed = await db.runTransaction(transaction => observeVmMigration(transaction, {
+          db, workspaceId: doc.id, ownerUid: doc.get('ownerUid'),
+        }), {readOnly: true});
+        record.observationSha256 = observed.observationSha256;
+        record.sourceObservationSha256 = observed.sourceObservationSha256;
+        record.sourceGeneration = observed.sourceGeneration;
+      } catch {
+        record.blockers = [...new Set([...(record.blockers || []), 'migration_observation_unavailable'])].sort();
+      }
+    }
     const blocked = await db.collection('vmMigrationBlockedReports_v2').doc(doc.id).get();
     if (blocked.exists) {
       const data = blocked.data() || {};

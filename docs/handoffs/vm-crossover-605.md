@@ -860,6 +860,12 @@ recorded. A valid coverage/cost digest from another workspace or an earlier
 preflight therefore fails closed instead of becoming a ready audit. Source
 audit unit coverage passes 7/7; no production audit was rewritten.
 
+Inventory records now carry the same per-workspace Firestore observation and
+source-observation digests plus source generation. Recording an audit rejects a
+stale inventory report rather than combining old source metadata with a fresh
+preflight. The inventory remains read-only and no production source was
+rewritten.
+
 ## Continuation implementation — flat-prefix payload verification
 
 The read-only inventory now accepts `--verify-flat-prefix-bytes` alongside
