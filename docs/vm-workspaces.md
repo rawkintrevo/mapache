@@ -631,7 +631,9 @@ retried using the lifecycle backoff, so an uncertain resize is not silently
 reissued under a new operation. The Compute adapter normalizes provider quota
 and attachment-conflict responses to stable retry codes rather than persisting
 raw provider errors. CPU/memory resource presets still have no documented
-Compute machine-type mapping and are not applied by this path.
+Compute machine-type mapping and are not applied by this path; explicit VM
+resource changes therefore fail closed at configuration save time instead of
+being reported as applied without changing the VM.
 
 The VM workspace editor now supports provider/environment selections and
 pending/applied/conflict status; see [Frontend architecture](./frontend-architecture.md).
