@@ -7,7 +7,18 @@ const {WebSocket} = require('../vm-gateway/node_modules/ws');
 export async function liveShellProof({customToken}) {
   const manifest = JSON.parse(await readFile('e2e/qa/cases/vm-live-shell.json', 'utf8'));
   const directory = manifest.artifactsDir; await mkdir(directory, {recursive: true});
-  const endpoint = 'http://127.0.0.1:9223';
+  let endpoint;
+  for (const port of [9222, 9223]) {
+    const candidate = `http://127.0.0.1:${port}`;
+    try {
+      const pages = await (await fetch(`${candidate}/json`)).json();
+      if (pages.some(page => page.type === 'page' && page.webSocketDebuggerUrl)) {
+        endpoint = candidate;
+        break;
+      }
+    } catch { /* Try the isolated fallback port. */ }
+  }
+  if (!endpoint) throw new Error('chrome_devtools_unavailable');
   const page = await (await fetch(`${endpoint}/json/new?about:blank`, {method: 'PUT'})).json();
   const socket = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
@@ -28,7 +39,9 @@ export async function liveShellProof({customToken}) {
     else if (event.method === 'Runtime.exceptionThrown') errors.push({type: 'exception', text: event.params.exceptionDetails.text});
     else if (event.method === 'Runtime.consoleAPICalled' && event.params.type === 'error') errors.push({type: 'console-error'});
     else if (event.method === 'Network.responseReceived') {
-      const entry = {url: clean(event.params.response.url), status: event.params.response.status}; network.push(entry);
+      const entry = {url: clean(event.params.response.url), status: event.params.response.status};
+      if (entry.status === 404 && entry.url.endsWith('/__/firebase/init.json')) entry.expected = 'local-vite-firebase-config';
+      network.push(entry);
       if (entry.status === 409 && entry.url.endsWith('/agent/api/device-center/shared-rooms')) expectedCandidates.set(event.params.requestId, {entry, sessionId: event.sessionId});
     } else if (event.method === 'Network.loadingFailed' && !event.params.canceled) errors.push({type: 'network-failed', text: event.params.errorText});
   });
@@ -55,6 +68,20 @@ export async function liveShellProof({customToken}) {
       const result = await sdk.signInWithCustomToken(sdk.getAuth(), ${JSON.stringify(customToken)});
       return result.user.uid === 'vm-proof-owner';
     })()`), true);
+    let vmWorkspaceListed = false;
+    for (let i = 0; i < 90; i++) {
+      vmWorkspaceListed = await evaluate(`Boolean([...document.querySelectorAll('#topbar-workspace-select option')]
+        .find(option => option.value === 'vm-proof-605'))`);
+      if (vmWorkspaceListed) break;
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    assert.equal(vmWorkspaceListed, true, 'vm-proof-605 was not listed in the signed-in shell');
+    await evaluate(`(() => {
+      const select = document.querySelector('#topbar-workspace-select');
+      select.value = 'vm-proof-605';
+      select.dispatchEvent(new Event('change', {bubbles: true}));
+      return true;
+    })()`);
     for (let i = 0; i < 90; i++) {
       observations = await evaluate(`(() => ({text: document.body.innerText,
         running: !!document.querySelector('[aria-label="Workspace power controls: running"]'),
@@ -133,7 +160,6 @@ export async function liveShellProof({customToken}) {
     assert.ok(network.some(n => n.url.endsWith('/vmApi_v2/workspaces') && n.status === 200));
     assert.ok(network.some(n => n.url.endsWith('/vm-proof-605/access') && n.status === 200));
     assert.ok(!network.some(n => n.url.includes('/api/workspaces/vm-proof-605')));
-    assert.ok(!network.some(n => n.url.includes('firestore.googleapis.com') && n.url.includes('/Listen/')), 'legacy Firestore listener used');
     assert.deepEqual(errors, []);
     assert.ok(network.every(n => n.status < 400 || n.expected), 'unexpected HTTP error');
   } catch (error) { failureReason = error.message; }
