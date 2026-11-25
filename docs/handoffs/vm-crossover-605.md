@@ -632,3 +632,12 @@ the runner. The two exact synthetic test files were removed through the
 disposable VM and the retained disk was preserved. This live subcase remains
 unclaimed until gateway-to-private-VM convergence is repaired; it does not
 invalidate the successful generation-26/27 ingress and resume proof above.
+
+The pushed handoff commit `b153114` also passed all hosted PR checks. Its
+hosted runner build used the PR `upstream_test_mode=fast` path and published
+unpromoted digest
+`sha256:0f8c7d4ecc50dc27ebcf3258263dcf0ab9b0c13bbf0471c05f700dd10f2dc934`.
+Cloud Build `ccda18da-a391-49bd-a59c-30d5756fe17e` took **14m31s** wall
+clock, including a **9m16s** Docker step; the GitHub job took **15m01s**. The
+earlier direct full-mode build remains the full upstream-suite validation for
+the publish-recovery code.
