@@ -71,6 +71,38 @@ test("VM startup creates a labeled retained disk and a private instance without 
   assert.equal(instanceRequest.data.networkInterfaces[0].accessConfigs, undefined);
 });
 
+test("Compute quota responses become actionable retry codes", async () => {
+  const service = createComputeEngineService({
+    request: async (request) => {
+      if (request.method === "GET" && request.url.includes("/disks/")) {
+        throw Object.assign(new Error("rate limit"), {response: {status: 429}});
+      }
+      throw new Error(`unexpected ${request.method} ${request.url}`);
+    },
+  });
+
+  await assert.rejects(service.start(descriptor(), {runnerImage: "pinned-image"}), error =>
+    error.code === "runtime_compute_quota_exhausted" && /lifecycle retry/.test(error.message));
+});
+
+test("failed Compute operations normalize attachment conflicts before lifecycle retry", async () => {
+  const d = descriptor();
+  const service = createComputeEngineService({
+    request: async (request) => {
+      if (request.method === "GET" && request.url.includes("/disks/")) {
+        throw Object.assign(new Error("missing"), {response: {status: 404}});
+      }
+      if (request.method === "POST" && request.url.endsWith("/disks")) {
+        return {data: {status: "DONE", error: {errors: [{reason: "resourceInUseByAnotherResource"}]}}};
+      }
+      throw new Error(`unexpected ${request.method} ${request.url}`);
+    },
+  });
+
+  await assert.rejects(service.start(d, {allowCreateDisk: true, runnerImage: "pinned-image"}), error =>
+    error.code === "runtime_compute_attachment_conflict" && /attachment is busy/.test(error.message));
+});
+
 test("ownership labels prevent cleanup of another workspace", async () => {
   const service = createComputeEngineService({
     request: async (request) => {

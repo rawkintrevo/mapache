@@ -18,6 +18,25 @@ function computeError(code, message, details = {}) {
   return error;
 }
 
+function normalizeComputeProviderError(error) {
+  const status = Number(error?.response?.status || error?.status || error?.code);
+  const entries = [
+    ...(Array.isArray(error?.response?.data?.error?.errors) ? error.response.data.error.errors : []),
+    ...(Array.isArray(error?.response?.data?.errors) ? error.response.data.errors : []),
+    ...(Array.isArray(error?.error?.errors) ? error.error.errors : []),
+    ...(Array.isArray(error?.errors) ? error.errors : []),
+  ];
+  const reason = entries.map(entry => `${entry?.reason || ""} ${entry?.message || ""}`).join(" ").toLowerCase();
+  const message = String(error?.response?.data?.error?.message || error?.message || "").toLowerCase();
+  if (status === 429 || /quota|ratelimit|rate limit|resource.?exhausted/.test(`${reason} ${message}`)) {
+    return computeError("runtime_compute_quota_exhausted", "Compute quota is temporarily exhausted; lifecycle retry is required", {cause: error});
+  }
+  if (status === 409 || /resourceinuse|resource in use|already.?attached|attachment|disk.*users|operation.*conflict/.test(`${reason} ${message}`)) {
+    return computeError("runtime_compute_attachment_conflict", "Compute resource attachment is busy; lifecycle retry is required", {cause: error});
+  }
+  return error;
+}
+
 function createComputeEngineService(dependencies = {}) {
   const auth = dependencies.auth || new GoogleAuth({scopes: ["https://www.googleapis.com/auth/cloud-platform"]});
   const projectId = String(dependencies.projectId || process.env.GCLOUD_PROJECT || "pi-agents-cloud").trim();
@@ -30,6 +49,13 @@ function createComputeEngineService(dependencies = {}) {
   const runnerServiceAccount = String(dependencies.runnerServiceAccount || "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com").trim();
   const markSessionStopped = dependencies.markSessionStopped;
   const markMachineConfigurationApplied = dependencies.markMachineConfigurationApplied;
+  const requestCompute = async (options) => {
+    try {
+      return await requestImpl(options);
+    } catch (error) {
+      throw normalizeComputeProviderError(error);
+    }
+  };
 
   return {
     ensureDataDisk: (descriptor, options) => ensureDataDisk(descriptor, options),
@@ -235,7 +261,7 @@ function createComputeEngineService(dependencies = {}) {
     if (requestedSizeGb === currentSizeGb) {
       return {resized: false, diskName: disk.name, diskId: disk.id || null, sizeGb: currentSizeGb};
     }
-    const response = await requestImpl({
+    const response = await requestCompute({
       url: `${zoneUrl(descriptor)}/disks/${encodeURIComponent(descriptor.dataDiskName)}/resize`,
       method: "POST",
       params: {requestId: operationId(`resize:${descriptor.dataDiskName}:${operationKey}`)},
@@ -254,7 +280,7 @@ function createComputeEngineService(dependencies = {}) {
     const items = [];
     let pageToken = null;
     do {
-      const response = await requestImpl({url: `${COMPUTE_API}/projects/${encodeURIComponent(projectId)}/aggregated/${kind}`,
+      const response = await requestCompute({url: `${COMPUTE_API}/projects/${encodeURIComponent(projectId)}/aggregated/${kind}`,
         method: "GET", params: {maxResults: Math.min(limit - items.length, 500), ...(pageToken ? {pageToken} : {})}});
       const entries = response.data?.items && typeof response.data.items === "object" ? Object.values(response.data.items) : [];
       for (const entry of entries) {
@@ -289,7 +315,7 @@ function createComputeEngineService(dependencies = {}) {
     if (!Number.isSafeInteger(sizeGb) || sizeGb < 10 || sizeGb > 4096) {
       throw computeError("runtime_data_disk_size_invalid", "Data disk size is outside the supported range");
     }
-    const response = await requestImpl({
+    const response = await requestCompute({
       url: `${zoneUrl(descriptor)}/disks`,
       method: "POST",
       params: {requestId: operationId(`disk:${descriptor.dataDiskName}:${options.operationId || descriptor.generation}`)},
@@ -438,7 +464,7 @@ function createComputeEngineService(dependencies = {}) {
     });
     const sourceUrl = zoneUrl(source) + "/disks/" + source.dataDiskName;
     if (!clone) {
-      const response = await requestImpl({url: zoneUrl(target) + "/disks", method: "POST",
+      const response = await requestCompute({url: zoneUrl(target) + "/disks", method: "POST",
         params: {requestId: diskCloneRequestId(operationId, sourceDiskId)},
         data: {name: cloneDiskName, sourceDisk: sourceUrl, type: sourceDisk.diskType || zoneUrl(source) + "/diskTypes/" + dataDiskType,
           labels: {...ownershipLabels(target, {operationId}), "mapache-created-generation": String(target.generation),
@@ -567,7 +593,7 @@ function createComputeEngineService(dependencies = {}) {
     }
     const disk = options.disk || await ensureDataDisk(descriptor, options);
     if (disk.users?.length) throw computeError("runtime_data_disk_attached", "Retained disk still has a writer attachment; replacement must wait");
-    const response = await requestImpl({
+    const response = await requestCompute({
       url: `${zoneUrl(descriptor)}/instances`,
       method: "POST",
       params: {requestId: operationId(`instance:${descriptor.instanceName}:${options.operationId || descriptor.generation}`)},
@@ -604,7 +630,7 @@ function createComputeEngineService(dependencies = {}) {
 
   async function getResource(url) {
     try {
-      const response = await requestImpl({url, method: "GET"});
+      const response = await requestCompute({url, method: "GET"});
       return response.data;
     } catch (error) {
       if (error?.response?.status === 404 || error?.code === 404) throw computeError("compute_not_found", "Compute resource was not found");
@@ -613,17 +639,17 @@ function createComputeEngineService(dependencies = {}) {
   }
 
   async function deleteResource(url, options = {}, descriptor = null) {
-    const response = await requestImpl({url, method: "DELETE", params: {requestId: operationId(`delete:${url}:${options.operationId || descriptor?.generation}`)}});
+    const response = await requestCompute({url, method: "DELETE", params: {requestId: operationId(`delete:${url}:${options.operationId || descriptor?.generation}`)}});
     await waitForOperation(response.data, descriptor, options);
   }
 
   async function waitForOperation(operation, descriptor, options = {}) {
     if (!operation?.name || operation.status === "DONE") {
-      if (operation?.error?.errors?.length) throw computeError("compute_operation_failed", "Compute operation failed", {operation});
+      if (operation?.error?.errors?.length) throw computeOperationFailure(operation);
       return operation || null;
     }
     const poll = options.pollOperation || (async (name) => {
-      const response = await requestImpl({url: operationUrl(operation, descriptor), method: "GET"});
+      const response = await requestCompute({url: operationUrl(operation, descriptor), method: "GET"});
       return response.data;
     });
     const deadline = Date.now() + Number(options.timeoutMs || 120000);
@@ -633,8 +659,21 @@ function createComputeEngineService(dependencies = {}) {
       await new Promise((resolve) => setTimeout(resolve, Math.min(1000, Math.max(1, deadline - Date.now()))));
       current = await poll(operation.name);
     }
-    if (current.error?.errors?.length) throw computeError("compute_operation_failed", "Compute operation failed", {operation: current});
+    if (current.error?.errors?.length) throw computeOperationFailure(current);
     return current;
+  }
+
+  function computeOperationFailure(operation) {
+    const normalized = normalizeComputeProviderError({
+      message: "Compute operation failed",
+      response: {data: {error: {errors: operation.error.errors}}},
+    });
+    if (normalized !== undefined && normalized !== null && normalized.code !== undefined &&
+        normalized.code !== "compute_operation_failed") {
+      normalized.operation = operation;
+      return normalized;
+    }
+    return computeError("compute_operation_failed", "Compute operation failed", {operation});
   }
 
   function descriptorFor(raw) {

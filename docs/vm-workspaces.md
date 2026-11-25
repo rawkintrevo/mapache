@@ -628,8 +628,10 @@ then starts the new VM with the requested capacity as an additional invariant.
 Expansion is monotonic; shrink is rejected. A quota, attachment, or provider
 failure remains in the provision phase with writer admission held and is
 retried using the lifecycle backoff, so an uncertain resize is not silently
-reissued under a new operation. CPU/memory resource presets still have no
-documented Compute machine-type mapping and are not applied by this path.
+reissued under a new operation. The Compute adapter normalizes provider quota
+and attachment-conflict responses to stable retry codes rather than persisting
+raw provider errors. CPU/memory resource presets still have no documented
+Compute machine-type mapping and are not applied by this path.
 
 The VM workspace editor now supports provider/environment selections and
 pending/applied/conflict status; see [Frontend architecture](./frontend-architecture.md).
