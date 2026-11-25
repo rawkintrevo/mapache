@@ -1048,7 +1048,7 @@ Pass `checkStorage=1` to compare two paginated listings of the
 workspace's owned prefix on the default bucket. The observer uses the same
 prefix validator as the reservation coordinator. A conflicting bucket or
 prefix in session metadata blocks the observation. Each pass covers up to
-3,000 live objects and hashes sorted names, generations, metagenerations,
+8,000 live objects and hashes sorted names, generations, metagenerations,
 sizes and CRC32C metadata. The response exposes digests and counts.
 Duplicate objects, repeated page cursors and exceeded limits block the
 result. Changes in the Firestore observation invalidate the comparison.
@@ -1531,7 +1531,7 @@ can commit. It writes the ordered object inventory in chunks under the
 operation's private `prefixInventory` subcollection and updates the phase
 to `prefix-captured` in the same transaction. The inventory identifies the
 exact name, generation, metageneration, length and CRC32C of each object.
-The capture is capped at 3,000 objects and 4 MiB of serialized chunk data.
+The capture is capped at 8,000 objects and 4 MiB of serialized chunk data.
 The internal `getCapturedPrefix` reader checks the record, source and
 fences and reconstructs the inventory only when it hashes to the receipt.
 An abort leaves the chunks for operator inspection and disables this

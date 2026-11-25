@@ -4,7 +4,11 @@ const {createHash} = require("node:crypto");
 const {covers, resolveMigrationPrefix} = require("./vmMigrationStorageScope.helpers");
 
 const PAGE_SIZE = 500;
-const MAX_PAGES = 6;
+// Keep the observation bounded, but do not reject ordinary workspaces merely
+// because their retained prefix has more than 3,000 objects. The coordinator
+// writes at most one small inventory row per object and remains below the
+// Firestore transaction/write budget at this cap.
+const MAX_PAGES = 16;
 const CAPTURE_CHUNK_ROWS = 64;
 const MAX_CAPTURE_CHUNKS = Math.ceil(PAGE_SIZE * MAX_PAGES / CAPTURE_CHUNK_ROWS);
 const MAX_CAPTURE_BYTES = 4 * 1024 * 1024;

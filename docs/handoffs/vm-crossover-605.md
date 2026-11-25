@@ -778,3 +778,14 @@ real canary source is currently eligible for an authority switch. The VM
 authority path remains disabled while those records are reconciled.
 The refreshed inventory also reports `explicitlyBlocked: 1`, matching the
 durable `vm-test` source-retained report.
+
+## Continuation implementation — 2026-11-25 bounded Storage observation
+
+The migration Storage observer and capture bound increased from 3,000 to
+8,000 objects while remaining explicitly bounded. Focused coverage now accepts
+a multi-page retained prefix. A live read-only preflight of inactive workspace
+`83t09pcpJ44mRs9RkILg` (owner `lzbp4xahITXWWgtrWpmGgAvzzmU2`) now observes
+4,788 stable objects with matching inventory digests; it no longer fails with
+`legacy_storage_listing_limit_exceeded`. That source still correctly reports
+`legacy_persistent_home_archive_missing`, so it remains ineligible for
+cutover and no migration mutation was attempted.
