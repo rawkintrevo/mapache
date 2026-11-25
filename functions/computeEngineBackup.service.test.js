@@ -53,6 +53,9 @@ test("backup restore creates a fresh owned disk receipt and rejects undersized t
   assert.equal(restored.kind, "compute-engine-restore");
   assert.equal(restored.sourceGeneration, 2);
   assert.equal(restored.targetDiskSizeGb, 96);
+  assert.match(calls.at(-1).data.labels["mapache-owner-uid"], /^[a-f0-9]{63}$/);
+  assert.match(calls.at(-1).data.labels["mapache-workspace-id"], /^[a-f0-9]{63}$/);
+  assert.notEqual(calls.at(-1).data.labels["mapache-owner-uid"], "owner-1");
   assert.equal(calls.at(-1).data.labels["mapache-backup-state"], "restoring");
 });
 

@@ -129,7 +129,7 @@ function createComputeEngineBackupService(dependencies = {}) {
         name: target,
         sizeGb: requestedSizeGb,
         sourceSnapshot: snapshot.selfLink,
-        labels: {...labels(descriptor, restoreOperationId, snapshot.labels?.["mapache-retention-days"] || 14, {
+        labels: {...restoreDiskLabels(descriptor, restoreOperationId, snapshot.labels?.["mapache-retention-days"] || 14, {
           consistency: snapshot.labels?.["mapache-consistency"] || "crash-consistent",
           sourceGeneration,
           backupState: "restoring",
@@ -226,6 +226,21 @@ function createComputeEngineBackupService(dependencies = {}) {
       ...(extra.sourceGeneration ? {"mapache-source-generation": String(extra.sourceGeneration)} : {}),
       ...(extra.backupState ? {"mapache-backup-state": String(extra.backupState)} : {}),
     };
+  }
+  function restoreDiskLabels(descriptor, operationId, retentionDays, extra = {}) {
+    return {
+      "mapache-owner-uid": identityLabel(descriptor.ownerUid),
+      "mapache-workspace-id": identityLabel(descriptor.workspaceId),
+      "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND,
+      "mapache-operation-id": identityLabel(operationId || "restore"),
+      "mapache-retention-days": String(retentionDays || 14),
+      ...(extra.consistency ? {"mapache-consistency": String(extra.consistency)} : {}),
+      ...(extra.sourceGeneration ? {"mapache-source-generation": String(extra.sourceGeneration)} : {}),
+      ...(extra.backupState ? {"mapache-backup-state": String(extra.backupState)} : {}),
+    };
+  }
+  function identityLabel(value) {
+    return createHash("sha256").update(String(value)).digest("hex").slice(0, 63);
   }
   function assertOwnership(resource, descriptor) {
     const actual = resource?.labels || {};

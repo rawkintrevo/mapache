@@ -106,7 +106,10 @@ async function main() {
   const app = admin.initializeApp({projectId: PROJECT_ID}, "vm-backup-recovery-proof");
   const db = app.firestore();
   const backup = createComputeEngineBackupService({projectId: PROJECT_ID});
-  const compute = createComputeEngineService({projectId: PROJECT_ID});
+  const computeAuth = new (require("google-auth-library").GoogleAuth)({scopes: ["https://www.googleapis.com/auth/cloud-platform"]});
+  const compute = createComputeEngineService({projectId: PROJECT_ID,
+    request: async options => (await computeAuth.getClient()).request({...options, timeout: 30_000}),
+  });
   const startedAtMs = Date.now();
   const operationId = createHash("sha256").update(`${options.workspace}:backup-recovery:${options.backup}`).digest("hex");
   const sessionId = `recovery-${operationId.slice(0, 24)}`;
