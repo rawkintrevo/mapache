@@ -39,11 +39,29 @@ uses a separate shared-storage bucket. It is outside workspace snapshots, restor
 Git, and sync. Uploads survive runner shutdown, restart, and automation cleanup;
 workspace deletion removes them with the workspace's internal storage prefix.
 
+The retained-disk runtime path is implemented by the runner's
+`diskUpload.service.js`. The Compute API authorizes the current-generation
+gateway URL, then the runner streams bounded chunks directly into the retained
+`/uploads` directory. Per-operation state is stored under the retained cache
+directory; temporary files use an operation-specific `.part` name, same-operation
+writes are serialized, temporary paths reject symlinks, and completed files are
+checksum-verified before an atomic rename. Duplicate destinations are rejected,
+cancellation removes the temporary state, and `ENOSPC` is reported as the
+explicit `upload_storage_full` response while preserving any valid prefix for a
+probe or retry.
+
+This does not yet make an upload token valid across VM replacement: a browser
+must obtain a new authorized current-generation upload flow after replacement.
+Paused-machine UX, replacement/reauthorization behavior, and full real-ingress
+failure testing remain part of the #622 acceptance work.
+
 Deploy Functions with `firebase deploy --only functions --project pi-agents-cloud`
-and deploy the frontend through the normal Hosting release. No runner image rebuild
-is required. Existing sessions need pause/start to receive the new volume. New
-sessions receive it immediately. The UI explains this one-time restart requirement;
-it never restarts active work automatically. Keep `/runner/health` unchanged.
+and deploy the frontend through the normal Hosting release. The GCS-mounted
+Cloud Run path requires no runner image rebuild; changes to the retained-disk
+upload service do require a new runner image. Existing sessions need pause/start
+to receive a new volume or runner revision. New sessions receive it immediately.
+The UI explains this one-time restart requirement; it never restarts active work
+automatically. Keep `/runner/health` unchanged.
 
 ## Verification
 

@@ -521,3 +521,30 @@ detached and READY. This resolves the prior retained-disk Chrome startup
 blocker, while unified source capture, missing HOME/private-Git/live-only
 reconciliation, full browser/application acceptance, authority switch and
 rollback/canary gates remain open.
+
+## Continuation evidence — 2026-11-25 retained-disk uploads
+
+The direct Compute upload path received a safety and recovery increment in the
+runner's `diskUpload.service.js`. Same-operation `begin`, `append`, and
+`cancel` calls are serialized; chunk bodies are counted against their declared
+`Content-Range` and malformed bodies are rolled back to the prior offset;
+temporary paths use `O_NOFOLLOW` and reject/remove symlink or non-file entries;
+and `ENOSPC` is mapped to the resumable `upload_storage_full` 507 response.
+Completed files remain checksum-verified and atomically renamed, while duplicate
+destinations remain create-only. Six focused upload tests pass, including
+concurrent chunks, malformed-body rollback, symlink-target protection, and the
+storage-full mapping. `npm run check:fast`, `npm run docs:check`, syntax checks,
+and `git diff --check` pass.
+
+The changed runner was validated by full Cloud Build
+`5bbb56f1-2c0c-4556-bb25-4eb043fd8147` in **13m40.287s** wall clock and
+published as
+`us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner-pr-629-upload-harden-20261125`
+with digest
+`sha256:2324b2974c80732bc25f80bb4293c681e2a7d7eb1092461c352b458e33081842`.
+This build passed the checked-in upstream/full Docker and runner smoke path; it
+is not production compatibility-tagged. Real gateway ingress, paused-machine
+UX, upload-token reauthorization after VM replacement, disk-full recovery on a
+live retained disk, and automation/request input compatibility remain open
+#622 acceptance work. No production authority switch or existing workspace was
+changed.
