@@ -20,6 +20,7 @@ test("backup service labels snapshots and reports known storage cost", async () 
   const result = await service.createSnapshot(descriptor, {snapshotName: "snapshot-1", operationId: "op-1"});
   assert.equal(result.name, "snapshot-1");
   assert.equal(calls[0].data.labels["mapache-workspace-id"], "workspace-1");
+  assert.match(calls[0].data.labels["mapache-operation-id"], /^[a-f0-9]{63}$/);
   assert.equal(calls[0].data.labels["mapache-consistency"], "crash-consistent");
   assert.equal(calls[0].data.labels["mapache-source-generation"], "1");
   assert.equal(result.state, "creating");

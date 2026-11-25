@@ -218,7 +218,9 @@ function createComputeEngineBackupService(dependencies = {}) {
       "mapache-owner-uid": descriptor.ownerUid,
       "mapache-workspace-id": descriptor.workspaceId,
       "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND,
-      "mapache-operation-id": String(operationId || "snapshot"),
+      // Compute label values are limited to 63 characters; durable operation
+      // IDs are SHA-256 strings, so keep the label deterministic but bounded.
+      "mapache-operation-id": operationLabel(operationId || "snapshot"),
       "mapache-retention-days": String(retentionDays || 14),
       ...(extra.consistency ? {"mapache-consistency": String(extra.consistency)} : {}),
       ...(extra.sourceGeneration ? {"mapache-source-generation": String(extra.sourceGeneration)} : {}),
