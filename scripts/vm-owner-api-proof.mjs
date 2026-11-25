@@ -129,7 +129,7 @@ async function main() {
         const before = await call('vm-proof-605/configuration');
         assert.equal(before.status, 200);
         // Never erase an operator's independently configured fixture selection.
-        assert.deepEqual(before.body.desired, {authSelection: {harness: 'pi', providers: {}}, environmentEntryIds: []});
+        assert.deepEqual(before.body.desired, {authSelection: {harness: 'pi', providers: {}}, environmentEntryIds: [], resources: null, diskSizeGb: null});
         assert.equal((await call('vm-proof-605/configuration', 'GET', undefined, tokens.outsider)).status, 404);
         const patch = {expectedGeneration: generation, expectedVersion: before.body.desiredVersion,
           authSelection: {harness: 'pi', providers: {}}, environmentEntryIds: []};
