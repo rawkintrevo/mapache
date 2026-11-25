@@ -124,7 +124,8 @@ test("lifecycle dispatch derives owner from auth and forbids caller-selected run
   const f = fixture();
   const result = await f.call("/workspaces/workspace/replace", {expectedGeneration: 7, requestId: "request"});
   assert.equal(result.status, 202);
-  assert.deepEqual(f.calls[0], {workspaceId: "workspace", ownerUid: "owner", action: "replace", expectedGeneration: 7, requestId: "request", requireApiAdmission: true});
+  assert.deepEqual(f.calls[0], {workspaceId: "workspace", ownerUid: "owner", action: "replace", expectedGeneration: 7, requestId: "request", requireApiAdmission: true,
+    runtimeScheduleManualPause: false, runtimeScheduleManualStart: false});
   for (const extra of [{ownerUid: "foreign"}, {runnerImage: "attacker"}, {address: "169.254.169.254"}, {allowCreateDisk: true}]) {
     await assert.rejects(f.call("/workspaces/workspace/start", {expectedGeneration: 7, requestId: "request", ...extra}), /invalid_vm_request/);
   }

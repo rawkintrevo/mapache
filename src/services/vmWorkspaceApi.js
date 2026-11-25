@@ -29,6 +29,20 @@ export function withVmWorkspaces(legacy, request, {requestId = () => crypto.rand
     },
     getMachineConfiguration: id => vmRequest(id, "/configuration"),
     updateMachineConfiguration: (id, body) => vmRequest(id, "/configuration", {method: "PATCH", body}),
+    getWorkspaceRuntimePolicy: id => vmRequest(id, "/runtime-policy"),
+    updateWorkspaceRuntimePolicy: async (id, body) => {
+      const data = await read(id);
+      const result = await vmRequest(id, "/runtime-policy", {method: "PATCH", body: {
+        ...(body || {}), expectedGeneration: data.workspace.generation,
+      }});
+      if (result.workspace) machines.set(id, {...data.workspace, ...result.workspace});
+      return result;
+    },
+    setSessionLongRunning: async (id, sessionId, enabled) => {
+      const data = await read(id);
+      if (data.workspace.currentSessionId !== sessionId) throw new Error("The runtime changed. Refresh before trying again.");
+      return routed.updateWorkspaceRuntimePolicy(id, {mode: enabled ? "keep-running" : "idle", schedule: null});
+    },
     getSessions: id => read(id),
     restartSession: (id, sessionId) => lifecycle(id, sessionId, "restart"),
     stopSession: (id, sessionId) => lifecycle(id, sessionId, "pause"),

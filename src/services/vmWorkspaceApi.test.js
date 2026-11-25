@@ -5,6 +5,7 @@ function fixture() {
   const workspace = {id: "vm", backend: "compute-engine", generation: 8, state: "active", currentSessionId: "s8"};
   const legacy = {getWorkspaces: vi.fn(async () => ({workspaces: [{id: "old"}]})), getSessions: vi.fn(), renameWorkspace: vi.fn(),
     getMachineConfiguration: vi.fn(), updateMachineConfiguration: vi.fn(),
+    getWorkspaceRuntimePolicy: vi.fn(), updateWorkspaceRuntimePolicy: vi.fn(), setSessionLongRunning: vi.fn(),
     stopSession: vi.fn(), restartSession: vi.fn(), getSessionAccessUrls: vi.fn(), deleteWorkspace: vi.fn()};
   const request = vi.fn(async (url, options) => {
     if (url.endsWith("/workspaces")) return {workspaces: [workspace], nextCursor: null};
@@ -47,6 +48,22 @@ describe("VM frontend provider routing", () => {
     f.request.mockResolvedValue({workspaces: [], nextCursor: null}); await f.api.getWorkspaces();
     expect(f.api.isVmWorkspace("vm")).toBe(true);
     await expect(f.api.deleteWorkspace("vm")).rejects.toThrow("not available");
+  });
+  it("routes runtime policy reads and generation-fenced saves to the VM API", async () => {
+    const f = fixture(); await f.api.getWorkspaces();
+    await f.api.getWorkspaceRuntimePolicy("vm");
+    expect(f.request).toHaveBeenLastCalledWith(expect.stringMatching(/\/vm\/runtime-policy$/), undefined);
+    await f.api.updateWorkspaceRuntimePolicy("vm", {mode: "scheduled", schedule: {
+      days: [1], startTime: "08:00", endTime: "18:00", timezone: "UTC",
+    }});
+    expect(f.request).toHaveBeenLastCalledWith(expect.stringMatching(/\/vm\/runtime-policy$/), {
+      method: "PATCH", body: {mode: "scheduled", schedule: {days: [1], startTime: "08:00", endTime: "18:00", timezone: "UTC"}, expectedGeneration: 8},
+    });
+    await f.api.setSessionLongRunning("vm", "s8", true);
+    expect(f.request).toHaveBeenLastCalledWith(expect.stringMatching(/\/vm\/runtime-policy$/), {
+      method: "PATCH", body: {mode: "keep-running", schedule: null, expectedGeneration: 8},
+    });
+    expect(f.legacy.updateWorkspaceRuntimePolicy).not.toHaveBeenCalled();
   });
   it("rejects provider collisions and pagination loops", async () => {
     const f = fixture(); f.legacy.getWorkspaces.mockResolvedValue({workspaces: [{id: "vm"}]});

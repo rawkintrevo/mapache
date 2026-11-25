@@ -6,6 +6,7 @@ const {httpError} = require("./backendUtils.helpers");
 const {resolveVmEnvironment} = require("./vmEnvironment.service");
 const {recordVmUsageInTransaction} = require("./vmUsage.service");
 const {vmMachineTypeForResources} = require("./vmMachineResources.helpers");
+const {getNextRuntimeScheduleStart, getRuntimeScheduleState} = require("./runtimeSchedule.helpers");
 
 const OPERATIONS = "vmLifecycleOperations_v2";
 // Workers have a hard 540-second platform timeout. Do not reclaim an uncertain
@@ -21,7 +22,8 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
   claimMs = CLAIM_MS, afterEffect = async () => {}}) {
   const workspaceRef = id => db.collection("vmRuntimes_v2").doc(identifier(id));
   const opRef = id => db.collection(OPERATIONS).doc(identifier(id));
-  async function request({workspaceId, ownerUid, requestId, action, expectedGeneration, requireApiAdmission = false}) {
+  async function request({workspaceId, ownerUid, requestId, action, expectedGeneration, requireApiAdmission = false,
+    runtimeScheduleManualPause = false, runtimeScheduleManualStart = false}) {
     identifier(ownerUid); identifier(requestId);
     if (!["start", "pause", "replace"].includes(action)) throw httpError(400, "invalid_vm_action");
     const wr = workspaceRef(workspaceId);
@@ -52,11 +54,13 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       const operation = {workspaceId, ownerUid, action, oldGeneration: ws.generation,
         oldWorkspaceState: ws.state, oldSessionState: ss.state,
         oldSessionId: ws.currentSessionId, descriptor, runnerImage: ws.runnerImage, gatewayHost: ws.gatewayHost,
+        ...(runtimeScheduleManualPause && action === "pause" ? {runtimeScheduleManualPause: true} : {}),
         phase: action === "start" ? "delete" : "quiesce", status: "pending", claim: null,
         phaseStartedAtMs: startedAtMs, phaseTimingsMs: {}, phaseAttempts: {},
         lastError: null, lastErrorAtMs: null, createdAtMs: startedAtMs, updatedAtMs: startedAtMs};
       tx.set(ref, operation);
-      tx.update(wr, {activeOperationId: id, state: "stopping"});
+      tx.update(wr, {activeOperationId: id, state: "stopping",
+        ...(runtimeScheduleManualStart && action === "start" ? {runtimeScheduleManualPauseWindowKey: null} : {})});
       tx.update(wr.collection("sessions").doc(ws.currentSessionId), {state: "stopping"});
       return {operationId: id, status: "pending"};
     });
@@ -151,7 +155,11 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
       tx.update(ref, {phase: nextPhase, claim: null, phaseStartedAtMs: completedAtMs,
         phaseTimingsMs: recordPhaseTiming(op, completedAtMs), lastError: null, lastErrorAtMs: null,
         updatedAtMs: completedAtMs, ...fields});
-      if (Object.keys(workspaceFields).length) tx.update(wr, workspaceFields);
+      if (Object.keys(workspaceFields).length) {
+        const manualScheduleFields = operation.runtimeScheduleManualPause && operation.action === "pause" && nextPhase === "complete" ?
+          manualSchedulePauseFields(w.data(), completedAtMs) : {};
+        tx.update(wr, {...workspaceFields, ...manualScheduleFields});
+      }
       if (workspaceFields.state === "stopped") tx.update(wr.collection("sessions").doc(op.oldSessionId), {state: "stopped", leaseExpiresAt: 0});
     });
     try {
@@ -272,6 +280,18 @@ function createVmLifecycleService({db, compute, quiesce, publishRoute, health, n
     }
   }
   return {request, retry, step};
+}
+
+function manualSchedulePauseFields(workspace = {}, nowMs) {
+  const policy = workspace.runtimePolicy;
+  if (policy?.mode !== "scheduled" || !policy.schedule) return {};
+  try {
+    const state = getRuntimeScheduleState(policy.schedule, new Date(nowMs));
+    if (!state.active) return {};
+    const next = getNextRuntimeScheduleStart(policy.schedule, new Date(nowMs));
+    return {runtimeScheduleManualPauseWindowKey: state.windowKey, runtimeScheduleStatus: "manually_paused",
+      runtimeScheduleNextEvent: {action: next.action, at: next.at, windowKey: next.windowKey, timezone: policy.schedule.timezone}};
+  } catch { return {}; }
 }
 
 function recordPhaseTiming(operation, completedAtMs) {

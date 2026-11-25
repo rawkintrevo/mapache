@@ -50,7 +50,7 @@ The VM crossover client is opt-in at build time with
 flag so hosted previews exercise the crossover adapter; production keeps its
 own rollout setting. `src/services/vmWorkspaceApi.js` wraps the
 existing API client, merges owner-admitted VM listings, and routes current
-session reads, rename, pause/start/replacement, and signed access to
+session reads, rename, runtime-policy reads/saves, pause/start/replacement, and signed access to
 `vmApi_v2`.
 Legacy workspace calls retain their existing endpoints. VM identity is retained
 for the lifetime of the authenticated client even if later listing omits it,
@@ -67,7 +67,10 @@ records. Global account credential management remains available; unsupported
 VM-scoped actions return an explicit unavailable error. This is temporary
 crossover coverage, not removal of the central configuration requirements.
 Creation UI, deletion, remaining configuration/automation/request/upload
-routing and full-shell creation/lifecycle acceptance remain unfinished. Builds
+routing and full-shell creation/lifecycle acceptance remain unfinished. VM
+scheduled-policy reconciliation is server-authoritative: the one-minute VM
+lifecycle reconciler starts stopped admitted machines inside a configured
+window and pauses active machines at the strict closing boundary. Builds
 without the flag keep the old behavior.
 
 VM workspace editing selects `VmWorkspaceEditModal` from `ModalStack`, while

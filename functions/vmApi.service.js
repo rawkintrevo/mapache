@@ -7,6 +7,7 @@ const {createVmCreationService} = require("./vmCreation.service");
 const {createVmReadService, checkOwned, publicWorkspace} = require("./vmRead.service");
 const {createVmConfigurationService} = require("./vmConfiguration.service");
 const {createVmBackupStatusService} = require("./vmBackupStatus.service");
+const {createVmRuntimePolicyService} = require("./vmRuntimePolicy.service");
 
 const ACCESS_TTL_MS = 15 * 60 * 1000;
 function createVmApiService({db, requireUser, lifecycle, requestBackupRestore, now = Date.now}) {
@@ -16,7 +17,7 @@ function createVmApiService({db, requireUser, lifecycle, requestBackupRestore, n
     if (!uid) throw httpError(401, "invalid_auth_token");
     const reads = createVmReadService({db, now});
     if (/^\/workspaces\/?$/.test(req.path || "") && req.method === "GET") return {status: 200, body: await reads.list(uid, req.query)};
-    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(backup|create|configuration|sessions|access|rename|start|pause|replace|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
+    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(backup|create|configuration|runtime-policy|sessions|access|rename|start|pause|replace|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
     if (!match) throw httpError(404, "not_found");
     const [, workspaceId, action, operationId] = match;
     const wr = db.collection("vmRuntimes_v2").doc(workspaceId);
@@ -24,6 +25,11 @@ function createVmApiService({db, requireUser, lifecycle, requestBackupRestore, n
       if (req.method === "PATCH" && req.body === undefined) throw httpError(400, "invalid_vm_configuration");
       return {status: 200, body: await createVmConfigurationService({db, now})({workspaceId, ownerUid: uid,
         patch: req.method === "PATCH" ? req.body : undefined})};
+    }
+    if (action === "runtime-policy" && !operationId && ["GET", "PATCH"].includes(req.method)) {
+      const runtimePolicy = createVmRuntimePolicyService({db, lifecycle, now});
+      if (req.method === "GET") return {status: 200, body: await runtimePolicy.getWorkspaceRuntimePolicy({workspaceId, ownerUid: uid})};
+      return {status: 200, body: await runtimePolicy.updateWorkspaceRuntimePolicy({workspaceId, ownerUid: uid, patch: req.body})};
     }
     if (action === "rename" && !operationId && req.method === "PATCH") {
       const body = req.body;
@@ -97,7 +103,8 @@ function createVmApiService({db, requireUser, lifecycle, requestBackupRestore, n
       // Owner is derived solely from Firebase Auth. Request bodies cannot select
       // an owner, image, upstream, credentials, runtime generation or disk.
       const result = await lifecycle.request({workspaceId, ownerUid: uid, action,
-        requestId: body.requestId, expectedGeneration: body.expectedGeneration, requireApiAdmission: true});
+        requestId: body.requestId, expectedGeneration: body.expectedGeneration, requireApiAdmission: true,
+        runtimeScheduleManualPause: action === "pause", runtimeScheduleManualStart: action === "start"});
       return {status: 202, body: result};
     }
     return db.runTransaction(async tx => {

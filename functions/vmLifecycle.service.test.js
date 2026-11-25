@@ -115,6 +115,16 @@ test("stopped machine retains environment references and resolves edited values 
   assert.equal(f.creates[0].env.MY_API_KEY, "edited-while-stopped");
 });
 
+test("manual pause during scheduled hours stays paused until the next opening", async () => {
+  const f = fixture();
+  f.ws().runtimePolicy = {mode: "scheduled", schedule: {days: [4], startTime: "00:00", endTime: "23:59", timezone: "UTC"}};
+  const pause = await f.request({action: "pause", runtimeScheduleManualPause: true});
+  await finish(f, pause.operationId);
+  assert.equal(f.ws().runtimeScheduleManualPauseWindowKey, "1970-01-01");
+  assert.equal(f.ws().runtimeScheduleStatus, "manually_paused");
+  assert.equal(f.op(pause.operationId).runtimeScheduleManualPause, true);
+});
+
 test("desired machine selections override old-session selections and become applied only after health", async () => {
   const f = fixture();
   f.ws().machineConfig = {desiredVersion: 3, appliedVersion: 2, state: "pending-restart",

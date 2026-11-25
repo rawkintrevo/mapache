@@ -1,14 +1,39 @@
 "use strict";
 const {httpError} = require("./backendUtils.helpers");
+const {normalizeRuntimePolicy} = require("./runtimeSchedule.helpers");
 
 function checkOwned(ws, uid) {
   if (!ws || ws.ownerUid !== uid || ws.backend !== "compute-engine" || ws.apiEnabled !== true) throw httpError(404, "not_found");
 }
 function publicWorkspace(id, ws, time) {
+  const runtimePolicy = safeRuntimePolicy(ws);
   return {id, name: ws.name || "Workspace", backend: "compute-engine", generation: ws.generation, state: ws.state,
     canonicalSessionId: ws.currentSessionId || null, currentSessionId: ws.currentSessionId || null,
     activeOperationId: ws.activeOperationId || null,
+    runtimePolicy, runtimePolicyRevision: Number.isSafeInteger(ws.runtimePolicyRevision) ? ws.runtimePolicyRevision : 0,
+    runtimeScheduleError: safeRuntimeScheduleError(ws.runtimeScheduleError),
+    runtimeScheduleManualPauseWindowKey: safeWindowKey(ws.runtimeScheduleManualPauseWindowKey),
+    runtimeScheduleNextEvent: safeRuntimeScheduleEvent(ws.runtimeScheduleNextEvent),
+    runtimeScheduleStatus: ["open", "closed", "manually_paused"].includes(ws.runtimeScheduleStatus) ? ws.runtimeScheduleStatus : null,
     ready: ws.state === "active" && !ws.activeOperationId && ws.lifecycleReadyGeneration === ws.generation && !!ws.bootId && ws.leaseExpiresAt > time};
+}
+function safeRuntimePolicy(ws = {}) {
+  if (!ws.runtimePolicy) return {mode: "idle", schedule: null};
+  try { return normalizeRuntimePolicy(ws.runtimePolicy); }
+  catch { return {mode: "idle", schedule: null}; }
+}
+function safeWindowKey(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+function safeRuntimeScheduleEvent(value) {
+  if (!value || typeof value !== "object" || !["start", "stop"].includes(value.action) || !safeWindowKey(value.windowKey) ||
+      typeof value.timezone !== "string" || value.timezone.length > 100 || value.at == null) return null;
+  return {action: value.action, at: value.at, windowKey: value.windowKey, timezone: value.timezone};
+}
+function safeRuntimeScheduleError(value) {
+  if (!value || typeof value !== "object" || !["start", "stop", "pause", "reconcile"].includes(value.action) ||
+      typeof value.code !== "string" || !/^[A-Za-z0-9_.:-]{1,120}$/.test(value.code)) return null;
+  return {action: value.action, code: value.code, ...(value.at == null ? {} : {at: value.at})};
 }
 function createVmReadService({db, now = Date.now}) {
   return {
@@ -41,6 +66,8 @@ function createVmReadService({db, now = Date.now}) {
           ["stopped", "released"].includes(ws.state) ? "stopped" : ws.activeOperationId ? "provisioning" : "unavailable";
         return {workspace, sessions: [{id: ws.currentSessionId, workspaceId, name: ws.name || "Workspace",
           backend: "compute-engine", generation: ws.generation, runtimeKind: "main", agentUiVersion: "pi-web-ui-v1",
+          longRunning: ws.runtimePolicy?.mode === "keep-running",
+          idleTimeoutMinutes: Number.isSafeInteger(ws.machineConfig?.desired?.idleStopMinutes) ? ws.machineConfig.desired.idleStopMinutes : null,
           status, agentRuntimeState: ready ? "ready" : status, activeOperationId: ws.activeOperationId || null,
           // Access URLs are minted separately; no direct VM address or stored secret.
           serviceUrl: ready && /^[a-z0-9][a-z0-9.-]{0,252}$/.test(ws.gatewayHost || "") ? `https://${ws.gatewayHost}` : null,

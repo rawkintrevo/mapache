@@ -473,6 +473,8 @@ address from the caller. All responses use `Cache-Control: no-store`.
 | `GET /workspaces/{id}/operations/{operationId}` | Safe progress/error fields only for the same owner and workspace |
 | `GET /workspaces/{id}/backup` | Owner-scoped backup inventory, cost-known/unknown components, stranded-resource state, and sanitized recovery diagnostics |
 | `PATCH /workspaces/{id}/rename` | `{name, expectedGeneration}`; trims and validates the owner-scoped display name and refuses stale generations |
+| `GET /workspaces/{id}/runtime-policy` | Safe idle/keep-running/scheduled policy and bounded schedule status/next-event fields |
+| `PATCH /workspaces/{id}/runtime-policy` | `{expectedGeneration, mode, schedule}`; owner/generation/fence checked and scheduled changes reconcile immediately |
 
 Access credentials expire after 15 minutes. The same agent-audience/generation
 credential is used for Agent, Shell and Preview URLs so a sibling surface cannot
@@ -482,8 +484,8 @@ signing secrets, shutdown/control credentials and private VM addresses never
 appear in owner API responses. The gateway continues checking current
 generation/boot/lease on requests and long connections. A signed runner token
 is not a Firebase API credential. Chrome URLs are returned only when the
-session records that capability. This endpoint does not yet replace the
-frontend's legacy API wiring or admit/migrate an existing workspace. Workspace
+session records that capability. This endpoint does not yet admit/migrate an
+existing workspace. Workspace
 deletion and the remaining workspace-scoped compatibility operations still
 stay on the legacy path until their VM-specific lifecycle and retained-disk
 cleanup contracts are implemented.
@@ -654,13 +656,17 @@ for the provider contract.
 
 The VM workspace editor now supports provider/environment selections, validated
 Compute Engine resource presets, monotonic durable-disk growth, description,
-validated idle-stop policy, and pending/applied/conflict status; see
+validated idle-stop policy, runtime policy routing, and pending/applied/conflict
+status; see
 [Frontend architecture](./frontend-architecture.md). An explicit idle-stop policy
 is enforced by the bounded VM lifecycle reconciliation tick: it requests a pause
 only after the configured activity window has elapsed and no terminal/browser
-socket is open. A missing policy never pauses a VM automatically. Remaining
-machine properties, reusable defaults, schedules, hot application, and other central
-bindings below remain release work. `node scripts/vm-owner-api-proof.mjs
+socket is open. A missing idle-stop policy never pauses a VM automatically.
+Scheduled policy reconciliation is separate from idle timeout: inside an open
+window it starts a stopped admitted VM, at the closing boundary it pauses an
+active VM, and an owner Stop during open hours records a manual pause until the
+next opening. Remaining machine properties, reusable defaults, hot application,
+and other central bindings below remain release work. `node scripts/vm-owner-api-proof.mjs
 configuration` checks stopped saves, stale/foreign rejection, pending status,
 and applied version after a real pause/start of the fixed synthetic fixture.
 

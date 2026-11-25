@@ -7,6 +7,7 @@ const {createVmLifecycleAdapter} = require("./vmLifecycle.adapter");
 const {OPERATIONS, startupDeadlineForOperation} = require("./vmLifecycle.service");
 const logger = require("firebase-functions/logger");
 const {reconcileIdleVmWorkspaces} = require("./vmIdleReconcile.service");
+const {createVmRuntimePolicyService} = require("./vmRuntimePolicy.service");
 const serviceAccount = "mapache-api@pi-agents-cloud.iam.gserviceaccount.com";
 const RECONCILE_PAGE_SIZE = 100;
 const RECONCILE_MAX_PAGES = 10;
@@ -45,6 +46,7 @@ const service = createVmLifecycleAdapter({db,
   claimMs: Number.isSafeInteger(qaClaimMs) && qaClaimMs >= 1000 ? qaClaimMs : undefined,
   afterEffect: qaCrashAfterEffect,
 });
+const vmRuntimePolicyService = createVmRuntimePolicyService({db, lifecycle: service});
 
 /**
  * Find a bounded batch of pending operations, walking past claimed or delayed
@@ -169,7 +171,15 @@ exports.vmLifecycleReconcile_v2 = onSchedule({schedule: "every 1 minutes", servi
     skipped: idle.skipped,
     failed: idle.failed,
   });
+  const scheduled = await vmRuntimePolicyService.reconcileScheduledVmWorkspaces();
+  logger.info("VM scheduled runtime reconciliation complete", {
+    scanned: scheduled.scanned,
+    requested: scheduled.requested,
+    skipped: scheduled.skipped,
+    failed: scheduled.failed,
+  });
 });
 
 exports.reconcilePendingLifecycleOperations = reconcilePendingLifecycleOperations;
 exports.handleVmLifecycleWorkerEvent = handleVmLifecycleWorkerEvent;
+exports.reconcileScheduledVmWorkspaces = (...args) => vmRuntimePolicyService.reconcileScheduledVmWorkspaces(...args);
