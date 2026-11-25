@@ -78,6 +78,28 @@ const ROUTE_DISPATCHERS = Object.freeze({
       handlers.saveSshGatewayAssignments(user.uid, route.gatewayId, req.body || {})
     ))],
   ]),
+  remoteHosts: Object.freeze([
+    ["GET", "remoteHosts", jsonResult(({handlers, user}) => handlers.listRemoteHosts(user.uid))],
+    ["POST", "remoteHosts", createdNamedJsonResult("host", ({handlers, req, user}) => (
+      handlers.registerRemoteHost(user.uid, req.body || {})
+    ))],
+  ]),
+  remoteHost: Object.freeze([
+    ["GET", "remoteHost", namedJsonResult("host", ({handlers, route, user}) => (
+      handlers.getRemoteHost(user.uid, route.hostId)
+    ))],
+    ["PATCH", "remoteHost", namedJsonResult("host", ({handlers, req, route, user}) => (
+      handlers.updateRemoteHost(user.uid, route.hostId, req.body || {})
+    ))],
+    ["DELETE", "remoteHost", jsonResult(({handlers, route, user}) => (
+      handlers.removeRemoteHost(user.uid, route.hostId)
+    ))],
+  ]),
+  remoteHostTest: Object.freeze([
+    ["POST", "remoteHostTest", jsonResult(({handlers, route, user}) => (
+      handlers.testRemoteHost(user.uid, route.hostId)
+    ))],
+  ]),
   workspaceStorage: Object.freeze([
     ["POST", "workspaceUploads", createdJsonResult(({handlers, req, route, user}) =>
       handlers.createWorkspaceUpload(user.uid, route.workspaceId, req.body || {}, req.get?.("origin")))],

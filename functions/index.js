@@ -2,6 +2,7 @@
 
 const {createWorkspaceUploadsService} = require("./workspaceUploads.service");
 const {createBrowserEgressManagementService} = require("./browserEgressManagement.service");
+const {createRemoteHostService} = require("./remoteHost.service");
 
 const {onRequest} = require("firebase-functions/v2/https");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
@@ -126,6 +127,7 @@ const {
 const automationAdmissionService = createAutomationAdmissionService({admin, db});
 const activeInstancesService = createActiveInstancesService({db});
 const browserEgressManagementService = createBrowserEgressManagementService({admin, db});
+const remoteHostService = createRemoteHostService({admin, db});
 let automationRetryService;
 const {
   assertMainAdmissionAllowed,
@@ -522,6 +524,7 @@ const API_HANDLERS = createApiHandlers({
   automationHistoryService,
   automationRunsService,
   browserEgressService: browserEgressManagementService,
+  remoteHostService,
   workspaceTicketsService,
   workspaceRequestGrantsService,
   environmentKeysService,

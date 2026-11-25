@@ -36,6 +36,7 @@ Workspaces](./vm-workspaces.md); this page remains the control-plane owner map.
 - Owner-wide active compute inventory: `functions/activeInstances.service.js`
 - Disposable VM provider and migration boundary: [VM Workspaces](./vm-workspaces.md)
 - Remote-host libvirt provider contract and ownership boundary: [Remote-host VM workspaces](./remote-vm-workspaces.md)
+- Remote host registry and generated SSH-key lifecycle: `functions/remoteHost.service.js`
 
 ## Current API boundary
 
@@ -57,6 +58,9 @@ Retained authenticated responsibilities are:
   SSH records;
 - Mapache-owned credential selection, generic environment keys, workspace MCP,
   Google Workspace connections, and GitHub account/repository connections.
+- Owner-scoped remote host registration, trust verification and key revocation;
+  remote-libvirt guest lifecycle remains separately gated by the remote VM
+  child issues.
 
 The embedded upstream application owns the agent protocol and its live files,
 Git, models, skills, extensions, subagents, and native Goals. Mapache does not

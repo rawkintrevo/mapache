@@ -5,6 +5,12 @@ under #630. It is a design boundary for the implementation tickets; it does not
 make the provider available and does not change the existing Cloud Run,
 Compute Engine, or retained SSH providers.
 
+The host registry portion is implemented by `functions/remoteHost.service.js`
+and the authenticated API route composition in `functions/apiRouteManifest.js`,
+`functions/apiRoutes.helpers.js`, `functions/apiDispatch.helpers.js`, and
+`functions/apiHandlers.helpers.js`. It remains a registry-only capability until
+the bootstrap, guest, lifecycle and gateway children are complete.
+
 ## Product boundary
 
 The existing authenticated `/app` remains the entry point. Workspace creation
@@ -69,6 +75,16 @@ that host, records the observed result, and can safely resume after process
 loss. Repeated requests with the same idempotency key return the existing
 operation. A lost SSH response is always reconciled by inspecting the backend's
 owned guest and disk identity before retrying a side effect.
+
+The implemented host registry endpoints are `GET /api/remote-hosts`,
+`POST /api/remote-hosts`, `GET|PATCH|DELETE /api/remote-hosts/{hostId}`, and
+`POST /api/remote-hosts/{hostId}/test`. They are behind the same Firebase Auth
+and allowlist gate as the rest of `/api`. Registration returns the generated
+public key and setup metadata only. A host-key fingerprint can be pinned only
+with an explicit confirmation flag; a connection test with no pin reports the
+observed fingerprint for owner verification and does not trust it implicitly.
+The private key is stored in the backend-only Firestore private subtree and is
+deleted on removal. The host registry never starts or deletes a guest.
 
 V1 lifecycle states are `provisioning`, `starting`, `running`, `stopping`,
 `stopped`, `unreachable`, `error`, and `deleting`. `unreachable` means the host
