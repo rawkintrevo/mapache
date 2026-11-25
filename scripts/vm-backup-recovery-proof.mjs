@@ -233,23 +233,30 @@ async function main() {
 }
 
 async function remoteEvidence(descriptor, sessionId, shutdownToken, timeoutMs) {
-  const attempts = Math.max(1, Math.min(180, Math.ceil(Math.max(30_000, timeoutMs) / 5_000)));
   const token = shellQuote(shutdownToken);
   const command = [
     "set -eu",
     `TOKEN=${token}`,
-    `for attempt in $(seq 1 ${attempts}); do`,
-    "health=$(curl -fsS --max-time 10 -H \"x-shutdown-token: $TOKEN\" http://127.0.0.1:8080/runner/health 2>/dev/null) || { sleep 5; continue; }",
-    "digest=$(curl -fsS --max-time 30 -H \"x-shutdown-token: $TOKEN\" http://127.0.0.1:8080/runner/recovery-digest 2>/dev/null) || { sleep 5; continue; }",
+    "health=$(curl -fsS --max-time 10 -H \"x-shutdown-token: $TOKEN\" http://127.0.0.1:8080/runner/health 2>/dev/null)",
+    "digest=$(curl -fsS --max-time 30 -H \"x-shutdown-token: $TOKEN\" http://127.0.0.1:8080/runner/recovery-digest 2>/dev/null)",
     "printf 'MAPACHE_HEALTH %s\\nMAPACHE_DIGEST %s\\n' \"$health\" \"$digest\"",
     "exit 0",
-    "done",
-    "exit 42",
   ].join("\n");
-  const result = await run("gcloud", ["compute", "ssh", descriptor.instanceName, "--project", PROJECT_ID,
-    "--zone", descriptor.zone, "--tunnel-through-iap", "--strict-host-key-checking=no", "--quiet", "--command", command],
-  {encoding: "utf8", maxBuffer: 2 * 1024 * 1024});
-  return parseRemoteEvidence(result.stdout, {workspaceId: descriptor.workspaceId, sessionId});
+  const deadline = Date.now() + Math.max(30_000, timeoutMs);
+  let lastError;
+  while (Date.now() < deadline) {
+    const remaining = Math.max(1_000, deadline - Date.now());
+    try {
+      const result = await run("gcloud", ["compute", "ssh", descriptor.instanceName, "--project", PROJECT_ID,
+        "--zone", descriptor.zone, "--tunnel-through-iap", "--strict-host-key-checking=no", "--quiet", "--command", command],
+      {encoding: "utf8", timeout: Math.min(60_000, remaining), maxBuffer: 2 * 1024 * 1024});
+      return parseRemoteEvidence(result.stdout, {workspaceId: descriptor.workspaceId, sessionId});
+    } catch (error) {
+      lastError = error;
+      await new Promise(resolve => setTimeout(resolve, Math.min(5_000, Math.max(1_000, deadline - Date.now()))));
+    }
+  }
+  throw recoveryError("recovery_remote_evidence_unavailable", lastError);
 }
 
 async function deleteDisk(descriptor) {
