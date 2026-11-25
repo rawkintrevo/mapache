@@ -96,20 +96,22 @@ exports.vmLifecycle_v2 = onRequest({invoker: "private", serviceAccount, timeoutS
   }
 });
 
-exports.vmLifecycleWorker_v2 = onDocumentWritten({document: `${OPERATIONS}/{operationId}`,
-  serviceAccount, timeoutSeconds: 540, memory: "512MiB", concurrency: 1, maxInstances: 4, retry: true}, async event => {
+async function handleVmLifecycleWorkerEvent(event, {lifecycle = service, now = Date.now} = {}) {
   const after = event.data?.after?.data();
   const before = event.data?.before?.data();
-  if (!after || after.status !== "pending" || after.claim || after.nextAttemptAtMs > Date.now() ||
+  if (!after || after.status !== "pending" || after.claim || after.nextAttemptAtMs > now() ||
       (before && before.phase === after.phase)) return;
   try {
-    await service.step(event.params.operationId);
+    await lifecycle.step(event.params.operationId);
   } catch (error) {
     // Gaxios errors may contain instance bootstrap metadata and credentials.
     // Never hand those objects to the platform's automatic error serializer.
     throw new Error(`vm_lifecycle_worker_failed:${error.publicMessage || error.code || "operation_failed"}`);
   }
-});
+}
+
+exports.vmLifecycleWorker_v2 = onDocumentWritten({document: `${OPERATIONS}/{operationId}`,
+  serviceAccount, timeoutSeconds: 540, memory: "512MiB", concurrency: 1, maxInstances: 4, retry: true}, handleVmLifecycleWorkerEvent);
 
 exports.vmLifecycleReconcile_v2 = onSchedule({schedule: "every 1 minutes", serviceAccount,
   timeoutSeconds: 540, memory: "512MiB", maxInstances: 1}, async () => {
@@ -129,3 +131,4 @@ exports.vmLifecycleReconcile_v2 = onSchedule({schedule: "every 1 minutes", servi
 });
 
 exports.reconcilePendingLifecycleOperations = reconcilePendingLifecycleOperations;
+exports.handleVmLifecycleWorkerEvent = handleVmLifecycleWorkerEvent;

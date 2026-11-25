@@ -561,12 +561,13 @@ uncertain acknowledgements, and VM replacement. An uncertain external side
 effect is not replayed automatically. Pause waits for admitted work according
 to the existing exclusion policy; it does not silently kill a scheduled task.
 Usage records distinguish active VM time, retained disk, and background work.
-The test-only `functions/vmLifecycle.worker-crash.test.js` harness kills a real
-child process after each lifecycle effect at the quiesce, pause, resize, start,
-route, and health boundaries, then resumes the persisted operation from the
-parent. It verifies claim retention and idempotent destructive effects against
-a file-backed Firestore/Compute fixture; it is not a substitute for the same
-matrix through the deployed Functions worker and scheduler.
+The test-only `functions/vmLifecycle.worker-crash.test.js` harness enters
+through the Firestore worker handler, kills a real child process after each
+lifecycle effect at the quiesce, pause, resize, start, route, and health
+boundaries, then resumes the persisted operation from the parent. It verifies
+claim retention and idempotent destructive effects against a file-backed
+Firestore/Compute fixture; it is not a substitute for the same matrix through
+the deployed Functions worker and scheduler.
 The VM bootstrap also injects the Functions-owned automation-agent token and
 API URLs. Token minting joins the nested VM session with its separate
 credential record and validates the current generation, boot ID, lease, and

@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {reconcilePendingLifecycleOperations} = require("./vmLifecycle.functions");
+const {handleVmLifecycleWorkerEvent, reconcilePendingLifecycleOperations} = require("./vmLifecycle.functions");
 
 function documentSnapshot(id, data) {
   return {id, data: () => data};
@@ -30,6 +30,21 @@ function pagedDb(pages) {
     queries,
   };
 }
+
+test("worker handler ignores claimed, delayed, and unchanged lifecycle writes", async () => {
+  const stepped = [];
+  const lifecycle = {step: async operationId => stepped.push(operationId)};
+  const operation = {status: "pending", phase: "delete"};
+  const event = (before, after) => ({data: {
+    before: before === null ? null : {data: () => before},
+    after: after === null ? null : {data: () => after},
+  }, params: {operationId: "operation"}});
+  await handleVmLifecycleWorkerEvent(event(operation, operation), {lifecycle, now: () => 100});
+  await handleVmLifecycleWorkerEvent(event(null, {...operation, claim: {id: "claimed", expiresAt: 200}}), {lifecycle, now: () => 100});
+  await handleVmLifecycleWorkerEvent(event(null, {...operation, nextAttemptAtMs: 200}), {lifecycle, now: () => 100});
+  await handleVmLifecycleWorkerEvent(event(null, {...operation, phase: "provision"}), {lifecycle, now: () => 100});
+  assert.deepEqual(stepped, ["operation"]);
+});
 
 test("reconciliation paginates past claimed operations to find an eligible batch", async () => {
   const firstPage = Array.from({length: 100}, (_, index) => documentSnapshot(`claimed-${index}`, {

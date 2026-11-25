@@ -8,6 +8,7 @@ const os = require("node:os");
 const path = require("node:path");
 const {createRuntimeDescriptor} = require("./runtimeProvider.helpers");
 const {createVmLifecycleService, OPERATIONS} = require("./vmLifecycle.service");
+const {handleVmLifecycleWorkerEvent} = require("./vmLifecycle.functions");
 
 function createFileDb(filename) {
   let serial = Promise.resolve();
@@ -100,8 +101,12 @@ function lifecycleDependencies(filename, {killBoundary = null} = {}) {
 async function runChild(filename, operationId, boundary) {
   const service = createVmLifecycleService(lifecycleDependencies(filename, {killBoundary: boundary}));
   const targetPhase = {quiesce: "quiesce", pause: "delete", resize: "provision", start: "provision", route: "route", health: "health"}[boundary];
-  while ((await serviceStatus(filename, operationId)).phase !== targetPhase) await service.step(operationId);
-  await service.step(operationId);
+  const invokeWorker = async () => {
+    const after = await serviceStatus(filename, operationId);
+    await handleVmLifecycleWorkerEvent({data: {before: null, after: {data: () => after}}, params: {operationId}}, {lifecycle: service, now: () => 1000});
+  };
+  while ((await serviceStatus(filename, operationId)).phase !== targetPhase) await invokeWorker();
+  await invokeWorker();
 }
 
 async function serviceStatus(filename, operationId) {
