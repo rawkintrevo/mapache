@@ -116,6 +116,14 @@ function normalizeCost(costDowntime) {
   return {approved: true, currency: 'USD', estimatedCostUsd, maxDowntimeSeconds, estimateSha256};
 }
 
+function sourceAuditEvidenceSha256(audit) {
+  return createHash('sha256').update(JSON.stringify({schemaVersion: audit.schemaVersion,
+    state: audit.state, decision: audit.decision, workspaceId: audit.workspaceId, ownerUid: audit.ownerUid,
+    sourceGeneration: audit.sourceGeneration, observationSha256: audit.observationSha256,
+    sourceObservationSha256: audit.sourceObservationSha256, scope: audit.scope, blockers: audit.blockers,
+    sourceRetained: audit.sourceRetained, completeness: audit.completeness})).digest('hex');
+}
+
 // Builds a durable admission proof. A blocked result is intentionally useful:
 // it records exactly which source-evidence gate is still missing without ever
 // making an incomplete source eligible for a migration fence.
@@ -143,12 +151,11 @@ export function buildSourceAudit({preflight, inventory, storageMetadata, scope, 
       preflight.storage.firstSha256 !== preflight.storage.secondSha256) blockers.push('vm_migration_storage_scope_unverified');
   const uniqueBlockers = [...new Set(blockers)].sort();
   const completeness = {requiredCoverage: required, coverage: normalizedCoverage, storage: normalizedStorage, costDowntime: normalizedCost};
-  const evidenceSha256 = createHash('sha256').update(JSON.stringify({workspaceId, ownerUid, sourceGeneration,
-    sourceObservationSha256, scope: normalizedScope, completeness})).digest('hex');
-  return {schemaVersion: 1, state: uniqueBlockers.length ? 'blocked' : 'ready',
+  const audit = {schemaVersion: 1, state: uniqueBlockers.length ? 'blocked' : 'ready',
     decision: uniqueBlockers.length ? 'source-retained' : 'admit-reservation', workspaceId, ownerUid, sourceGeneration,
     observationSha256, sourceObservationSha256, scope: normalizedScope, blockers: uniqueBlockers,
-    completeness, evidenceSha256, sourceRetained: true, recordedAtMs: now};
+    completeness, sourceRetained: true, recordedAtMs: now};
+  return {...audit, evidenceSha256: sourceAuditEvidenceSha256(audit)};
 }
 
 export function assertReadySourceAudit(audit, {workspaceId, ownerUid, sourceGeneration, observationSha256, sourceObservationSha256, scope}) {
@@ -157,9 +164,7 @@ export function assertReadySourceAudit(audit, {workspaceId, ownerUid, sourceGene
       audit.observationSha256 !== observationSha256 || audit.sourceObservationSha256 !== sourceObservationSha256 ||
       JSON.stringify(audit.scope) !== JSON.stringify(scope) ||
       audit.sourceRetained !== true || !audit.completeness || !DIGEST.test(String(audit.evidenceSha256 || '')) ||
-      audit.evidenceSha256 !== createHash('sha256').update(JSON.stringify({workspaceId: audit.workspaceId, ownerUid: audit.ownerUid,
-        sourceGeneration: audit.sourceGeneration, sourceObservationSha256: audit.sourceObservationSha256, scope: audit.scope,
-        completeness: audit.completeness})).digest('hex') ||
+      audit.evidenceSha256 !== sourceAuditEvidenceSha256(audit) ||
       !Array.isArray(audit.blockers) || audit.blockers.length) fail('source_audit_not_ready');
   return audit;
 }

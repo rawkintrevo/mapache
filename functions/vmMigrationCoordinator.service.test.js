@@ -38,6 +38,9 @@ test("operator reservation requires a current ready source audit", {
     const {observationSha256, sourceObservationSha256, sourceGeneration} = await createVmMigrationPreflight({db})(target);
     const input = {...target, operationId: "audit-gated", observationSha256};
     const coordinator = createVmMigrationCoordinator({db, defaultBucket: bucket, requireSourceAudit: true,
+      inspectCompute: async () => ({recordedComputeClear: true, providerObservationSha256: "a".repeat(64),
+        blockers: [], discovery: {scannedRegionsClear: true, evidenceSha256: "b".repeat(64)}}),
+      inspectStorage: async () => ({stable: true, firstSha256: "c".repeat(64), secondSha256: "c".repeat(64), blockers: []}),
       authorize: async () => true});
     await assert.rejects(coordinator.reserve(input), {publicMessage: "vm_migration_source_audit_required"});
     const audit = {
@@ -51,6 +54,41 @@ test("operator reservation requires a current ready source audit", {
     const reserved = await coordinator.reserve(input);
     assert.equal(reserved.phase, "reserved");
     assert.equal(reserved.sourceAuditSha256, audit.evidenceSha256);
+  } finally {
+    await app.delete();
+  }
+});
+
+test("fenced migration phases revalidate the bound source audit", {
+  skip: !process.env.FIRESTORE_EMULATOR_HOST,
+}, async () => {
+  const app = admin.initializeApp({projectId: "demo-mapache-cutover"}, randomUUID());
+  try {
+    const db = app.firestore();
+    const ownerUid = "owner-" + randomUUID();
+    const workspaceId = "workspace-" + randomUUID();
+    const bucket = "fixture-bucket";
+    await db.collection("workspaces").doc(workspaceId).create({ownerUid, bucket,
+      storagePrefix: `workspaces/${ownerUid}/staging`, agentRuntimeGeneration: 7});
+    const target = {workspaceId, ownerUid};
+    const {observationSha256, sourceObservationSha256, sourceGeneration} = await createVmMigrationPreflight({db})(target);
+    const scope = {bucket, prefix: `workspaces/${ownerUid}/staging`, workspaceKey: "staging"};
+    const audit = {schemaVersion: 1, state: "ready", decision: "admit-reservation", workspaceId, ownerUid,
+      sourceGeneration, observationSha256, sourceObservationSha256, scope,
+      completeness: {requiredCoverage: ["workspace", "liveState"], coverage: {}, storage: {}, costDowntime: {}},
+      blockers: [], sourceRetained: true};
+    audit.evidenceSha256 = sourceAuditEvidenceSha256(audit);
+    await db.collection("vmMigrationSourceAudits_v2").doc(workspaceId).create(audit);
+    const input = {...target, operationId: "bound-audit", observationSha256};
+    const coordinator = createVmMigrationCoordinator({db, defaultBucket: bucket, requireSourceAudit: true,
+      inspectCompute: async () => ({recordedComputeClear: true, providerObservationSha256: "a".repeat(64),
+        blockers: [], discovery: {scannedRegionsClear: true, evidenceSha256: "b".repeat(64)}}),
+      inspectStorage: async () => ({stable: true, firstSha256: "c".repeat(64), secondSha256: "c".repeat(64), blockers: []}),
+      authorize: async () => true});
+    const reserved = await coordinator.reserve(input);
+    assert.equal(reserved.phase, "reserved");
+    await db.collection("vmMigrationSourceAudits_v2").doc(workspaceId).update({state: "blocked", decision: "source-retained"});
+    await assert.rejects(coordinator.confirmQuiesced(input), {publicMessage: "vm_migration_source_audit_required"});
   } finally {
     await app.delete();
   }

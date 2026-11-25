@@ -276,6 +276,17 @@ function createVmMigrationCoordinator({
       transaction.get(prefixFence),
       transaction.get(db.collection("workspaces").where("ownerUid", "==", input.ownerUid).limit(ALIAS_LIMIT + 1)),
     ]);
+    if (record.sourceAuditSha256) {
+      const sourceAudit = await transaction.get(vmMigrationSourceAuditRef(db, input.workspaceId));
+      requireReadyVmMigrationSourceAudit(sourceAudit.data(), {
+        workspaceId: input.workspaceId, ownerUid: input.ownerUid, sourceGeneration: observation.sourceGeneration,
+        observationSha256: observation.observationSha256, sourceObservationSha256: observation.sourceObservationSha256,
+        scope,
+      });
+      if (sourceAudit.get("evidenceSha256") !== record.sourceAuditSha256) {
+        throw httpError(409, "vm_migration_source_audit_required");
+      }
+    }
     if (!ownsFence(workspaceFence, input) || !ownsFence(prefix, input) ||
         observation.sourceGeneration !== record.sourceGeneration || JSON.stringify(scope) !== JSON.stringify(record.scope)) {
       throw httpError(409, "vm_migration_authority_changed");

@@ -1127,6 +1127,11 @@ reserve a migration. The guarded operator path additionally requires
 same workspace owner, source generation, source-observation digest,
 observation digest, and resolved Storage scope. A changed source therefore
 invalidates an audit before a migration fence can be created.
+When reservation stores the audit evidence digest, every later fenced phase
+rechecks that same durable audit and its full evidence digest before proceeding;
+changing the audit to blocked, changing its bound observations, or changing its
+completeness evidence fails closed rather than allowing a stale reservation to
+capture or import.
 
 Record the audit only after a fresh inventory report and separately reviewed
 proof file are available:

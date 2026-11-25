@@ -842,9 +842,17 @@ audits.
 
 `vm-migration-reserve.mjs reserve` now requires a current `ready` audit before
 creating the migration and Storage fences; stale, missing, blocked, or
-scope-mismatched audits fail closed. Focused source-audit coverage passes 4/4,
+scope-mismatched audits fail closed. Focused source-audit coverage passes 5/5,
 and the coordinator gate is covered by the Firestore emulator test. No real
 workspace has a ready audit or has been reserved through this new gate yet.
+
+The coordinator now revalidates the operation-bound audit before every later
+fenced phase. A durable audit mutation, changed source observation, or altered
+evidence digest therefore blocks quiesce/capture/import/validation instead of
+letting an earlier reservation continue on stale source-completeness proof.
+The evidence digest now also covers the audit state, decision, blockers,
+observation digest and source-retention flag. The coordinator emulator covers
+the reservation-then-audit-mutation refusal path (12/12 cases pass).
 
 ## Continuation implementation — flat-prefix payload verification
 

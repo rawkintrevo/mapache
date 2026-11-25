@@ -10,9 +10,11 @@ function vmMigrationSourceAuditRef(db, workspaceId) {
 }
 
 function sourceAuditEvidenceSha256(audit) {
-  return createHash("sha256").update(JSON.stringify({workspaceId: audit.workspaceId, ownerUid: audit.ownerUid,
-    sourceGeneration: audit.sourceGeneration, sourceObservationSha256: audit.sourceObservationSha256, scope: audit.scope,
-    completeness: audit.completeness})).digest("hex");
+  return createHash("sha256").update(JSON.stringify({schemaVersion: audit.schemaVersion,
+    state: audit.state, decision: audit.decision, workspaceId: audit.workspaceId, ownerUid: audit.ownerUid,
+    sourceGeneration: audit.sourceGeneration, observationSha256: audit.observationSha256,
+    sourceObservationSha256: audit.sourceObservationSha256, scope: audit.scope, blockers: audit.blockers,
+    sourceRetained: audit.sourceRetained, completeness: audit.completeness})).digest("hex");
 }
 
 function requireReadyVmMigrationSourceAudit(audit, {workspaceId, ownerUid, sourceGeneration, observationSha256,
