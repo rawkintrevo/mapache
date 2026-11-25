@@ -1715,6 +1715,13 @@ selected entries remained byte-identical, while the expected `credentials`,
 storage/bootstrap evidence for the real imported state; it is not application
 acceptance or a production VM authority switch.
 
+The same real-source import was also interrupted after its first durable root
+publication. The disk then contained `agent`, three staged roots, and no final
+receipt; resuming the same operation completed all 495 entries. A device-level
+read-only remount reverified the complete tree, and the second disposable VM
+and disk were deleted. This closes interruption/resume evidence for the
+selected real source set, but not ENOSPC or application behavior.
+
 The same 2026-11-25 read-only source audit narrows the `vm-test`-specific
 reconciliation boundary: its Firestore source is explicitly `blank` with blank
 sync policy and no repository, installation, branch or commit configured. Its
