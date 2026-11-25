@@ -1,6 +1,6 @@
 # VM crossover #605 handoff
 
-Handoff date: 2026-11-25 (America/Chicago). The validation-boot continuation, VM automation-agent authority boundary and deployed lifecycle-worker recovery proof are complete; the broader migration remains open.
+Handoff date: 2026-11-25 (America/Chicago). The validation-boot continuation, VM automation-agent authority boundary, deployed lifecycle-worker recovery proof and synthetic abrupt-loss/open-write recovery proof are complete; the broader migration remains open.
 
 ## Start here
 
@@ -13,6 +13,7 @@ Handoff date: 2026-11-25 (America/Chicago). The validation-boot continuation, VM
 - This boundary is now reproducible with `node scripts/vm-automation-agent-proof.mjs`; the live report is sanitized at `artifacts/qa/vm-automation-agent/proof.json` and confirms temporary admission restoration.
 - A live authenticated shell proof now passes with `node scripts/vm-owner-api-proof.mjs shell`: the owner selects `vm-proof-605` at generation 24, reaches the VM Agent iframe and CPU/RAM meters through the signed gateway, and preserves owner, stale-generation, and cross-owner denial checks. The expected synthetic `NOT_PAIRED` device response was the only allowed application error; temporary API admission and fixture auth state were restored. Evidence remains local under `artifacts/qa/vm-live-shell/` and `artifacts/qa/vm-owner-api/shell.json`.
 - The same generation also passed `node scripts/vm-gateway-fixture.mjs browser 24` and `node scripts/vm-gateway-fixture.mjs probe 24`: the gateway browser rendered with 43 responses, authenticated `/runner/health` returned 200 with `agentReady=true`, 17 bundles loaded, the TLS shell WebSocket exercised retained workspace/home paths, and unauthorized/stale-generation requests were rejected. Evidence remains local under `artifacts/qa/vm-gateway-fixture/`.
+- A synthetic abrupt-loss proof then wrote and fsynced an open stream on generation 24, deleted only its exact VM, and recovered through lifecycle operation `170e3980857f84ad81d8a83df6d8a242274328b0e90e6be2002dddde20a2e2d9` to generation 25. The replacement preserved 1,286 ordered lines / 13,036 bytes through the interrupted writer with no completion marker; the proof directory was removed afterward. Firestore records the operation `succeeded`/`complete`, `lifecycleReadyGeneration=25`, and the retained 65 GiB disk remains READY and attached.
 - The current continuation also closes a VM automation admission race: a main-exclusive run now reads the canonical VM runtime in the same Firestore transaction, so a stopped legacy session cannot mask an active or transitioning Compute Engine machine. Focused admission coverage proves it remains queued until the VM is stopped.
 - The scheduler now applies the migration fence to its direct run/pointer transaction as well. A fenced tick leaves the due occurrence and `nextRunAt` untouched, then resumes it after fence release; focused coverage proves no run or queue wake is emitted while fenced.
 - Automation definition and workspace concurrency-setting CRUD now checks the migration fence in the same transaction as each create, update, delete, or settings write, so schedule control cannot change after migration admission.
@@ -32,9 +33,9 @@ The VM paths skip ordinary HOME/workspace/profile checkpoint restore/upload; mig
 
 ## Live state rechecked at handoff
 
-- Synthetic workspace `vm-proof-605`, generation 24, registry state `active`, desired/applied configuration version 4, no active operation. `apiEnabled=false`; `lifecycleEnabled=true`. The live owner proof paused generation 23, applied a validated 64-to-65 GiB disk expansion, replaced the VM successfully after worker crashes at every exercised boundary, reached authenticated readiness, and restored temporary API admission.
-- Current session: `vm-32b56596e4121e4f41ba7d64-g24`. Its current boot ID and lease were accepted by the live lifecycle health gate; no temporary QA marker or crash-injection environment remains.
-- VM `mapache-vm-d681fdb754c93f7d6292b0f3` is RUNNING in `us-central1-a`, machine type `e2-standard-2`.
+- Synthetic workspace `vm-proof-605`, generation 25, registry state `active`, desired/applied configuration version 4, no active operation. `apiEnabled=false`; `lifecycleEnabled=true`. The live owner proof applied a validated 64-to-65 GiB disk expansion, replaced the VM successfully after worker crashes at every exercised boundary, then recovered a hard VM loss with an open retained-disk write through generation 25 and restored temporary API admission.
+- Current session: `vm-170e3980857f84ad81d8a83d-g25`. Its current boot ID and lease were accepted by the live lifecycle health gate; no temporary QA marker or crash-injection environment remains.
+- VM `mapache-vm-bd7bedc0edf6162573ff9ffb` is RUNNING in `us-central1-a`, machine type `e2-standard-2`.
 - Attached retained disk `mapache-ws-efaf283eb879545a0e7ba4d3`: 65 GiB `pd-balanced`, READY and attached to the generation-24 VM. The running VM, retained disk and private networking continue to incur costs. Nothing was deleted for this handoff.
 - Dedicated gateway: `mapache-vm-gateway-v2`. The IAM-private read-only Functions `vmMigrationPreflight_v2` and `vmMigrationStatus_v2` are ACTIVE in `pi-agents-cloud`. Firebase created `vmMigrationValidationControl_v2` and updated `vmMigrationStatus_v2` before the pause. The validation broker accepts runner requests over public HTTPS using a validation-session bearer token. A GET returned 405 and a POST for an unknown validation session returned 404. Anonymous status returned 403. Legacy writer guards and Firestore/Storage rules remain staged, and the opt-in frontend remains off production Hosting.
 - Pinned runner image: `us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:885a04f85bc34d8987523624f2c7bd9fe704b0121d483971adfe227299c7b3b8`.
@@ -105,11 +106,11 @@ Remaining: Finish concrete owner-wide sharing/automation decisions, measured cos
 
 Fully evidenced original acceptance criteria: 1, 3.
 
-### #607: Partial — clean replacement proof passed
+### #607: Partial — clean replacement and abrupt-loss proof passed
 
-Evidence: The actual retained Linux disk preserved dirty/untracked Git, SQLite, a native executable, modes, symlinks, rename and locking through repeated VM replacements. Initial disk creation/marker fencing and functional /runner/health checks passed.
+Evidence: The actual retained Linux disk preserved dirty/untracked Git, SQLite, a native executable, modes, symlinks, rename and locking through repeated VM replacements. A separate hard-loss proof deleted the exact synthetic VM while a process had an open fsynced writer, recovered through the persisted lifecycle operation, and verified ordered data on the replacement VM. Initial disk creation/marker fencing and functional /runner/health checks passed.
 
-Remaining: Complete abrupt compute loss with open writes, representative install/history/browser acceptance, measured I/O/memory/cost and the complete go/no-go report. The synthetic fixture remains running.
+Remaining: Complete representative install/history/browser acceptance, measured I/O/memory/cost and the complete go/no-go report. The synthetic fixture remains running.
 
 Fully evidenced original acceptance criteria: 2, 3.
 
