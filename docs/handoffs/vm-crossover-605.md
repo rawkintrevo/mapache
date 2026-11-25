@@ -654,3 +654,35 @@ Cloud Build `ccda18da-a391-49bd-a59c-30d5756fe17e` took **14m31s** wall
 clock, including a **9m16s** Docker step; the GitHub job took **15m01s**. The
 earlier direct full-mode build remains the full upstream-suite validation for
 the publish-recovery code.
+
+## Continuation evidence — 2026-11-25 live disk-full normalization
+
+Commit `cd6f0e3` closes the remaining ENOSPC response boundary in the runner:
+the upload handler now applies the same error normalization when the initial
+operation-state JSON write fails, before an append stream exists. The focused
+runner upload suite passes **9/9**; `npm run check:fast` also passes the
+developer-doc check, **103 Functions tests**, **59 runner tests**, syntax checks,
+and diff checks.
+
+Two direct full-mode Cloud Builds were attempted against this head. Both
+completed the upstream suite with **14,565 passing tests** but each exposed a
+different unrelated timing-sensitive upstream failure: `global-interactions`
+in `dea15bfa-2862-40f1-a95e-85f16d17c2a3` after **33m03.99s**, and
+`universal-commands` in `d8364070-4e59-478c-8c15-a0bf5b3dcea7` after
+**34m19.98s**. The supported fast build then succeeded: Cloud Build
+`358ccde6-95d5-46c5-83f0-c98bed75cdeb` took **14m09.99s** wall clock, its
+embedded UI smoke test returned HTTP 200, and it published the unpromoted
+digest
+`sha256:24156c8a266da4b34a8fb6023b938a02c35b43f1c83992add10c1905932701a0`.
+
+The fixed image was installed on generation 31 of the retained-disk synthetic
+workspace `vm-proof-605` without changing the 65 GiB disk. After the gateway
+was routed only after the runner was listening on port 8080, exact QA filler
+files exhausted the workspace filesystem. A real 4 MiB gateway upload returned
+HTTP **507** with `{"error":"upload_storage_full"}`. Removing only those
+fillers restored **63,591,915,520** available bytes; reusing the same operation
+then resumed and committed with HTTP **200**, the committed probe returned
+HTTP **200**, cancellation returned HTTP **204**, and the exact upload and
+operation-state paths were absent afterward. This is live evidence for the
+initial-state ENOSPC boundary and recovery behavior on the fixed image. No
+production workspace or authority switch was changed.
