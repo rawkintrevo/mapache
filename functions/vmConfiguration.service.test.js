@@ -76,6 +76,17 @@ test("saving on a running machine leaves the active configuration and applied re
   assert.deepEqual(f.session(), before);
 });
 
+test("saves Compute Engine resources and only permits monotonic disk growth", async () => {
+  const f = fixture();
+  const saved = await f.call({expectedGeneration: 2, expectedVersion: 0,
+    resources: {cpu: "2", memory: "4Gi"}, diskSizeGb: 128});
+  assert.deepEqual(saved.body.desired.resources, {cpu: "2", memory: "4Gi"});
+  assert.equal(saved.body.desired.diskSizeGb, 128);
+  await assert.rejects(f.call({expectedGeneration: 2, expectedVersion: 1, diskSizeGb: 64}), /vm_disk_shrink_unsupported/);
+  assert.equal(f.ws().machineConfig.desiredVersion, 1);
+  assert.equal(f.ws().machineConfig.desired.diskSizeGb, 128);
+});
+
 test("strict references reject secrets, infrastructure overrides and missing or mismatched credentials atomically", async () => {
   const f = fixture();
   const patch = {expectedGeneration: 2, expectedVersion: 0, environmentEntryIds: []};

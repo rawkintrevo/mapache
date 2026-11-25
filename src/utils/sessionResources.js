@@ -55,6 +55,17 @@ export function formatEstimatedHourlyPrice(cpu, memory) {
   return price === null ? "Price unavailable" : `$${price.toFixed(4)}/hr estimate`;
 }
 
+export function formatComputeEngineMachineType(cpu, memory) {
+  if (!isValidSessionResourcePair(cpu, memory)) return "Unsupported VM shape";
+  const cpuCount = Number(cpu);
+  const memoryGiB = parseMemoryGiB(memory);
+  const memoryMb = memoryGiB === null ? NaN : memoryGiB * 1024;
+  if (!Number.isSafeInteger(memoryMb)) return "Unsupported VM shape";
+  if (cpuCount === 1) return `e2-custom-medium-${memoryMb}`;
+  if (cpuCount % 2 !== 0) return "Unsupported VM shape";
+  return `e2-custom-${cpuCount}-${memoryMb}`;
+}
+
 export function formatSessionMemory(value) {
   const normalized = normalizeResourceValue(value);
   return normalized.replace(/GiB?$/i, " GiB").replace(/Mi$/i, " MiB");

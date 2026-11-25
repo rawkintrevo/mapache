@@ -2,11 +2,16 @@ import {useEffect, useRef, useState} from "react";
 import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 import {piAuthProviderLabel} from "../../config/piAuthProviders.js";
+import {SessionResourceSelector} from "../sessions/SessionResourceSelector.jsx";
+
+const DEFAULT_VM_RESOURCES = {cpu: "2", memory: "8Gi"};
 
 function message(error) {
   if (/vm_configuration_version_mismatch|vm_generation_mismatch/.test(error.message || "")) return "This workspace changed since you opened its settings. Reload saved settings before saving again.";
   if (/vm_operation_in_progress/.test(error.message || "")) return "The workspace is starting or stopping. Wait for it to finish, then reload saved settings.";
   if (/vm_auth_entry_unavailable|vm_environment_entry_unavailable/.test(error.message || "")) return "A selected credential or variable is no longer available. Reload saved settings and update your selections.";
+  if (/invalid_session_resources|invalid_vm_disk_size_gb/.test(error.message || "")) return "Choose a supported VM size and disk size, then save again.";
+  if (/vm_disk_shrink_unsupported/.test(error.message || "")) return "Durable disk size can only grow. Reload saved settings and choose a larger size.";
   return "Could not load or save workspace settings. Please try again.";
 }
 
@@ -16,6 +21,9 @@ export function VmWorkspaceEditModal({workspace, api, onClose}) {
   const [environmentIds, setEnvironmentIds] = useState([]);
   const [entries, setEntries] = useState([]);
   const [environment, setEnvironment] = useState([]);
+  const [resources, setResources] = useState(DEFAULT_VM_RESOURCES);
+  const [resourcesChanged, setResourcesChanged] = useState(false);
+  const [diskSizeGb, setDiskSizeGb] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -28,6 +36,8 @@ export function VmWorkspaceEditModal({workspace, api, onClose}) {
       if (request !== sequence.current) return;
       setConfig(next); setProviders({...next.desired.authSelection.providers});
       setEnvironmentIds([...next.desired.environmentEntryIds]);
+      setResources(next.desired.resources || DEFAULT_VM_RESOURCES); setResourcesChanged(false);
+      setDiskSizeGb(next.desired.diskSizeGb == null ? "" : String(next.desired.diskSizeGb));
       const available = Object.entries(auth.entries || {}).map(([id, entry]) => ({id, providerKey: entry.providerKey, label: entry.label}));
       for (const providerKey of Object.keys(auth.providers || {})) {
         if (!available.some(entry => entry.providerKey === providerKey)) available.push({id: `legacy-${providerKey}`, providerKey, label: piAuthProviderLabel(providerKey)});
@@ -45,10 +55,13 @@ export function VmWorkspaceEditModal({workspace, api, onClose}) {
     const request = sequence.current;
     setBusy(true); setError(""); setSaved(false);
     try {
-      const next = await api.updateMachineConfiguration(workspace.id, {
+      const patch = {
         expectedGeneration: config.generation, expectedVersion: config.desiredVersion,
         authSelection: {harness: "pi", providers}, environmentEntryIds: environmentIds,
-      });
+      };
+      if (diskSizeGb !== "" || config.desired.diskSizeGb != null) patch.diskSizeGb = diskSizeGb === "" ? null : Number(diskSizeGb);
+      if (resourcesChanged || config.desired.resources) patch.resources = resources;
+      const next = await api.updateMachineConfiguration(workspace.id, patch);
       if (request === sequence.current) { setConfig(next); setSaved(true); }
     } catch (failure) { if (request === sequence.current) setError(message(failure)); }
     finally { if (request === sequence.current) setBusy(false); }
@@ -65,6 +78,15 @@ export function VmWorkspaceEditModal({workspace, api, onClose}) {
       {config ? <p role="status">{saved ? "Saved. " : ""}{config.restartRequired ? "Restart required to apply saved settings." : config.state === "applied" ? "Saved settings are applied." : "Current settings have not been tracked as an applied revision yet."}</p> : null}
       {busy ? <p role="status">Working…</p> : null}
       {config ? <form className="modal-form" onSubmit={save}>
+        <fieldset disabled={busy}><legend>Compute Engine resources</legend>
+          <SessionResourceSelector cpu={resources.cpu} memory={resources.memory} onChange={next => {
+            setSaved(false); setResources(next); setResourcesChanged(true);
+          }} pricingMode="compute-engine" sizeName="vmSize" />
+          {!config.desired.resources ? <p className="subtle">Current legacy VM type is e2-standard-2. Choose a size to opt into the validated E2 custom machine-type path.</p> : null}
+          <label><span>Durable disk size (GiB, 10–4096)</span>
+            <input inputMode="numeric" min="10" max="4096" type="number" value={diskSizeGb} onChange={event => {setSaved(false); setDiskSizeGb(event.target.value);}} />
+          </label>
+        </fieldset>
         <fieldset disabled={busy}><legend>Provider credentials</legend>
           {!keys.length ? <p>No saved provider credentials.</p> : keys.map(key => <label key={key}>
             <span>{piAuthProviderLabel(key)}</span>

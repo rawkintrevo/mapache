@@ -639,7 +639,8 @@ and startup verification. See [Compute Engine custom machine types](https://docs
 and [E2 machine-type limits](https://docs.cloud.google.com/compute/docs/general-purpose-machines#custom_machine_types)
 for the provider contract.
 
-The VM workspace editor now supports provider/environment selections and
+The VM workspace editor now supports provider/environment selections, validated
+Compute Engine resource presets, monotonic durable-disk growth, and
 pending/applied/conflict status; see [Frontend architecture](./frontend-architecture.md).
 Remaining machine properties, reusable defaults, hot application, and other central
 bindings below remain release work. `node scripts/vm-owner-api-proof.mjs

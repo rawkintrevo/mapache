@@ -1,6 +1,7 @@
 import {useState} from "react";
 import {
   formatEstimatedHourlyPrice,
+  formatComputeEngineMachineType,
   formatSessionMemory,
   formatSessionSizeLabel,
   inferSessionSize,
@@ -17,11 +18,13 @@ export function SessionResourceSelector({
   cpuName = "cpu",
   memoryName = "memory",
   onChange,
+  pricingMode = "cloud-run",
   sizeName = "sessionSize",
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const selectedSize = inferSessionSize(cpu, memory);
   const customPrice = formatEstimatedHourlyPrice(cpu, memory);
+  const resourceDetail = pricingMode === "compute-engine" ? formatComputeEngineMachineType(cpu, memory) : customPrice;
 
   return (
     <fieldset className="session-resource-selector">
@@ -30,7 +33,7 @@ export function SessionResourceSelector({
         {sessionSizePresets.map((preset) => (
           <label className={`session-size-card ${selectedSize === preset.key ? "selected" : ""}`} key={preset.key}>
             <input
-              aria-label={`${preset.label}: ${preset.cpu} vCPU / ${formatSessionMemory(preset.memory)}, ${formatEstimatedHourlyPrice(preset.cpu, preset.memory)}`}
+              aria-label={`${preset.label}: ${preset.cpu} vCPU / ${formatSessionMemory(preset.memory)}, ${pricingMode === "compute-engine" ? formatComputeEngineMachineType(preset.cpu, preset.memory) : formatEstimatedHourlyPrice(preset.cpu, preset.memory)}`}
               checked={selectedSize === preset.key}
               name={sizeName}
               type="radio"
@@ -40,7 +43,7 @@ export function SessionResourceSelector({
             <span className="session-size-card__body">
               <strong>{preset.label}</strong>
               <span>{preset.cpu} vCPU / {formatSessionMemory(preset.memory)}</span>
-              <small>{formatEstimatedHourlyPrice(preset.cpu, preset.memory)}</small>
+              <small>{pricingMode === "compute-engine" ? formatComputeEngineMachineType(preset.cpu, preset.memory) : formatEstimatedHourlyPrice(preset.cpu, preset.memory)}</small>
             </span>
           </label>
         ))}
@@ -57,12 +60,12 @@ export function SessionResourceSelector({
           <span className="session-size-card__body">
             <strong>Custom</strong>
             <span>{cpu || "—"} vCPU / {formatSessionMemory(memory) || "—"}</span>
-            <small>{customPrice}</small>
+            <small>{resourceDetail}</small>
           </span>
         </label>
       </div>
       <p className="session-resource-estimate" aria-live="polite">
-        {formatSessionSizeLabel(selectedSize)} selection: {customPrice}. Compute-only estimate before free tier and discounts; excludes network, storage, build, and other charges. <a href="https://cloud.google.com/run/pricing" rel="noreferrer" target="_blank">Pricing details</a>
+        {pricingMode === "compute-engine" ? `${formatSessionSizeLabel(selectedSize)} selection: ${resourceDetail}. Compute Engine quota and final pricing are verified when the VM starts; disk, network, gateway, and snapshot charges are separate.` : `${formatSessionSizeLabel(selectedSize)} selection: ${customPrice}. Compute-only estimate before free tier and discounts; excludes network, storage, build, and other charges. `}<>{pricingMode === "compute-engine" ? null : <a href="https://cloud.google.com/run/pricing" rel="noreferrer" target="_blank">Pricing details</a>}</>
       </p>
       <details open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
         <summary>Advanced settings</summary>

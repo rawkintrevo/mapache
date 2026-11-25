@@ -60,4 +60,12 @@ describe("SessionResourceSelector", () => {
     expect(screen.getByRole("radio", {name: /Custom/})).toBeChecked();
     expect(screen.getByText(/Custom selection: \$0\.7488\/hr estimate/)).toBeInTheDocument();
   });
+
+  test("shows Compute Engine machine types without Cloud Run pricing", () => {
+    render(<SessionResourceSelector cpu="2" memory="4Gi" onChange={() => {}} pricingMode="compute-engine" />);
+
+    expect(screen.getByRole("radio", {name: /Medium.*e2-custom-2-4096/})).toBeChecked();
+    expect(screen.getByText(/quota and final pricing are verified when the VM starts/)).toBeInTheDocument();
+    expect(screen.queryByText(/\$0\.1584\/hr estimate/)).not.toBeInTheDocument();
+  });
 });

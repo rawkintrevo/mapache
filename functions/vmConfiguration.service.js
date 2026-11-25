@@ -4,6 +4,7 @@ const {checkOwned} = require("./vmRead.service");
 const {normalizeEnvironmentEntryIds} = require("./environmentKeys.service");
 const {normalizePiAuthEntries, normalizePiAuthProviders, normalizePiAuthSelection} = require("./agentAuth.service");
 const {resolveVmEnvironment} = require("./vmEnvironment.service");
+const {normalizeSessionResources} = require("./sessionResources.helpers");
 
 function object(value) { return value && typeof value === "object" && !Array.isArray(value); }
 function selections(value = {}) {
@@ -14,7 +15,14 @@ function selections(value = {}) {
       Object.keys(auth).some(k => !["harness", "providers"].includes(k)) ||
       Object.entries(auth.providers).some(([key, id]) => !/^[a-zA-Z0-9_.:-]{1,128}$/.test(key) || typeof id !== "string" || !/^[a-zA-Z0-9_.:-]{1,256}$/.test(id)) ||
       !Array.isArray(ids) || ids.length > 50) throw httpError(400, "invalid_vm_configuration");
-  return {authSelection: {harness: "pi", providers: {...auth.providers}}, environmentEntryIds: normalizeEnvironmentEntryIds(ids)};
+  let resources = null;
+  if (value.resources !== undefined && value.resources !== null) resources = normalizeSessionResources(value.resources, {defaultResources: null});
+  const diskSizeGb = value.diskSizeGb === undefined || value.diskSizeGb === null || value.diskSizeGb === "" ? null : Number(value.diskSizeGb);
+  if (diskSizeGb !== null && (!Number.isSafeInteger(diskSizeGb) || diskSizeGb < 10 || diskSizeGb > 4096)) {
+    throw httpError(400, "invalid_vm_disk_size_gb");
+  }
+  return {authSelection: {harness: "pi", providers: {...auth.providers}}, environmentEntryIds: normalizeEnvironmentEntryIds(ids),
+    resources, diskSizeGb};
 }
 
 function createVmConfigurationService({db, now = Date.now}) {
@@ -31,16 +39,20 @@ function createVmConfigurationService({db, now = Date.now}) {
       const desired = selections(existing?.desired || session);
       if (patch === undefined) return {generation: ws.generation, desiredVersion, appliedVersion, desired,
         state: existing?.state || "unversioned", restartRequired: desiredVersion !== appliedVersion};
-      if (!object(patch) || Object.keys(patch).some(k => !["expectedGeneration", "expectedVersion", "authSelection", "environmentEntryIds"].includes(k)) ||
+      if (!object(patch) || Object.keys(patch).some(k => !["expectedGeneration", "expectedVersion", "authSelection", "environmentEntryIds", "resources", "diskSizeGb"].includes(k)) ||
           !Number.isSafeInteger(patch.expectedGeneration) || !Number.isSafeInteger(patch.expectedVersion) || patch.expectedVersion < 0 ||
-          (!Object.hasOwn(patch, "authSelection") && !Object.hasOwn(patch, "environmentEntryIds")) ||
+          (!["authSelection", "environmentEntryIds", "resources", "diskSizeGb"].some(key => Object.hasOwn(patch, key))) ||
           (Object.hasOwn(patch, "authSelection") && !object(patch.authSelection)) ||
-          (Object.hasOwn(patch, "environmentEntryIds") && !Array.isArray(patch.environmentEntryIds))) throw httpError(400, "invalid_vm_configuration");
+          (Object.hasOwn(patch, "environmentEntryIds") && !Array.isArray(patch.environmentEntryIds)) ||
+          (Object.hasOwn(patch, "resources") && patch.resources !== null && !object(patch.resources))) throw httpError(400, "invalid_vm_configuration");
       if (ws.generation !== patch.expectedGeneration) throw httpError(409, "vm_generation_mismatch");
       if (desiredVersion !== patch.expectedVersion) throw httpError(409, "vm_configuration_version_mismatch");
       if (desiredVersion >= Number.MAX_SAFE_INTEGER) throw httpError(409, "vm_configuration_version_exhausted");
       if (ws.activeOperationId) throw httpError(409, "vm_operation_in_progress");
       const next = selections({...desired, ...patch});
+      if (desired.diskSizeGb !== null && next.diskSizeGb !== null && next.diskSizeGb < desired.diskSizeGb) {
+        throw httpError(409, "vm_disk_shrink_unsupported");
+      }
       // Validate owner-private references within the same transaction as the
       // version change. Neither secret values nor credentials enter the DTO.
       await resolveVmEnvironment({db, ownerUid, entryIds: next.environmentEntryIds, read: ref => tx.get(ref)});

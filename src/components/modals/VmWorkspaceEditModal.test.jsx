@@ -19,7 +19,7 @@ describe("VM workspace settings", () => {
     const f = fixture();
     await screen.findByText("Saved settings are applied.");
     expect(document.body.textContent).not.toContain("never-render-secret");
-    await f.user.selectOptions(screen.getByRole("combobox"), "key");
+    await f.user.selectOptions(screen.getByRole("combobox", {name: "OpenAI credential"}), "key");
     await f.user.click(screen.getByRole("checkbox", {name: /Service/}));
     await f.user.click(screen.getByRole("button", {name: "Save settings"}));
     await screen.findByText("Saved. Restart required to apply saved settings.");
@@ -30,14 +30,14 @@ describe("VM workspace settings", () => {
     const f = fixture();
     await screen.findByText("Saved settings are applied.");
     f.api.updateMachineConfiguration.mockRejectedValueOnce(new Error("vm_configuration_version_mismatch"));
-    await f.user.selectOptions(screen.getByRole("combobox"), "key");
+    await f.user.selectOptions(screen.getByRole("combobox", {name: "OpenAI credential"}), "key");
     await f.user.click(screen.getByRole("button", {name: "Save settings"}));
     expect(await screen.findByRole("alert")).toHaveTextContent("Reload saved settings");
-    expect(screen.getByRole("combobox")).toHaveValue("key");
+    expect(screen.getByRole("combobox", {name: "OpenAI credential"})).toHaveValue("key");
     f.config.desiredVersion = 4;
     await f.user.click(screen.getByRole("button", {name: "Reload saved settings"}));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
-    expect(screen.getByRole("combobox")).toHaveValue("");
+    expect(screen.getByRole("combobox", {name: "OpenAI credential"})).toHaveValue("");
     await f.user.click(screen.getByRole("button", {name: "Save settings"}));
     await waitFor(() => expect(f.api.updateMachineConfiguration.mock.lastCall[1].expectedVersion).toBe(4));
   });
