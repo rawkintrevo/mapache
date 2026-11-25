@@ -732,3 +732,13 @@ and records its provider identity through the existing fenced coordinator. It
 is idempotent for the same disk and rejects identity changes; no source,
 workspace authority, or destination runtime is changed. No production
 workspace invoked this action.
+
+## Continuation implementation — 2026-11-25 pre-cutover abort CLI
+
+The coordinator's safe pre-cutover `abort` transition now has the explicit
+operator entry point `scripts/vm-migration-abort.mjs`. With
+`--confirm migration-abort`, it releases only the operation-owned workspace
+and Storage-prefix fences after the coordinator confirms unchanged source
+authority and completed validation/imported-disk cleanup. It is idempotent,
+refuses after destination authority exists, and never deletes source data. No
+production workspace invoked it.

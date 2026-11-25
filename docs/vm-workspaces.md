@@ -1317,6 +1317,21 @@ node scripts/vm-migration-cleanup-destination.mjs --project pi-agents-cloud \
 This removes only the imported destination disk named by the coordinator's
 operation. It never deletes the source disk or changes workspace authority.
 
+After validation cleanup and destination-disk cleanup have both completed, an
+operator can release a pre-cutover operation:
+
+```bash
+node scripts/vm-migration-abort.mjs \
+  --project pi-agents-cloud --workspace WORKSPACE_ID --owner OWNER_UID \
+  --operation OPERATION_ID --confirm migration-abort
+```
+
+The abort command is idempotent and atomically releases only the operation's
+workspace and Storage-prefix fences when source generation and authority are
+unchanged. It refuses after destination authority exists, while validation or
+imported-disk cleanup is pending, or when a foreign operation owns either
+fence. It never deletes source data.
+
 After a complete imported disk has been retained and the disposable validation
 boot has been cleaned, an operator can perform a bounded, read-only review of
 the destination runtime:
