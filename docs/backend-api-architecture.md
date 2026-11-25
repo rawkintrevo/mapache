@@ -35,6 +35,7 @@ Workspaces](./vm-workspaces.md); this page remains the control-plane owner map.
 - Directional interworkspace grants and caller-safe broker requests: `functions/workspaceRequestGrants.service.js` and `functions/automationAgentApi.service.js`
 - Owner-wide active compute inventory: `functions/activeInstances.service.js`
 - Disposable VM provider and migration boundary: [VM Workspaces](./vm-workspaces.md)
+- Remote-host libvirt provider contract and ownership boundary: [Remote-host VM workspaces](./remote-vm-workspaces.md)
 
 ## Current API boundary
 
