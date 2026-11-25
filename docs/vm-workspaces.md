@@ -772,9 +772,12 @@ This is published-checkpoint recovery evidence, not a complete-machine export,
 archive verification, or migration. No cloud writes or deployments were needed.
 
 `--workspace <id> --list-objects <limit>` adds bounded, paginated current-object
-metadata inventory (maximum 100,000 entries). Provide `--default-bucket` and
-`--tools-bucket` from verified deployment configuration when needed; the tool
-does not silently guess owner-tool storage. `scripts/lib/vm-storage-metadata.mjs`
+metadata inventory (maximum 100,000 entries). `--default-bucket` and
+`--tools-bucket` override the configured `SESSION_BUCKET`/
+`USER_TOOLS_STORAGE_BUCKET` values; when those are absent, both default to the
+Firebase bucket for `pi-agents-cloud`. This keeps the owner-tools candidate in
+the inventory instead of turning an omitted optional flag into an artificial
+unresolved source. `scripts/lib/vm-storage-metadata.mjs`
 derives workspace, custom HOME, historical session, shared-tree, browser seed,
 uploads and owner-hashed tool candidates, including `.mapahce-internal` legacy
 spellings. It deduplicates identical prefixes, appends a slash to each listing

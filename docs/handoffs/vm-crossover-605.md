@@ -882,3 +882,24 @@ represented by an admitted active/stopped Compute Engine runtime or have an
 explicit durable source-retained blocker, with orphaned migrated runtimes
 reported separately. It does not change the migration decision or enable the
 VM feature. Focused cohort-audit coverage passes 6/6.
+
+## Continuation implementation — inventory bucket defaults
+
+The read-only inventory CLI now applies the same bucket fallback as the runtime:
+`USER_TOOLS_STORAGE_BUCKET`, then `SESSION_BUCKET`, then the Firebase bucket for
+`pi-agents-cloud`, unless an explicit `--tools-bucket` or `--default-bucket` is
+provided. Previously, omitting `--tools-bucket` made every owner-tools source
+appear unresolved even when the configured Firebase bucket was correct. The
+change affects only local inventory discovery; it performs no cloud writes.
+
+The corrected bounded scan of inactive blank workspace
+`Fl09y597EgcvMPxGp3io` (owner `KyOcBZ4bAZMaI8VE0SNbQXN4sFY2`) listed all ten
+discovered source roles, including owner-tools, with no unresolved descriptors:
+10 workspace objects / 5,389 bytes were payload-verified and HOME, browser,
+uploads and owner-tools prefixes were explicitly empty. The read-only preflight
+observed 2 stopped legacy sessions, no active runs, 2 absent recorded services,
+0 unfinished provider operations, 35 scanned regional services with 0 matches,
+and 10 stable Storage objects. It remains ineligible because unified
+flat-prefix/internal-format, live-state and approved cost/downtime evidence are
+still required; no fence, VM, disk, authority switch or source deletion was
+attempted.

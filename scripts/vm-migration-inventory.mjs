@@ -10,6 +10,8 @@ import {verifyGzipTar} from './lib/vm-archive-verifier.mjs';
 import {inspectSharedTreeAuthority} from './lib/vm-shared-tree-authority.mjs';
 const require = createRequire(import.meta.url);
 const admin = require('../functions/node_modules/firebase-admin');
+const PROJECT = 'pi-agents-cloud';
+const DEFAULT_BUCKET = 'pi-agents-cloud.firebasestorage.app';
 const workspaceFields = ['ownerUid', 'source', 'imageKey', 'runtimeProvider.backend', 'status', 'lifecycle', 'deleted',
   'bucket', 'storagePrefix', 'workspaceStorageBucket', 'workspaceStoragePrefix', 'homePolicy',
   'sharedStorage', 'agentRuntimeGeneration', 'agentRuntimeCheckpoint', 'agentRuntimeWorkspaceFiles'];
@@ -37,7 +39,9 @@ async function main() {
   const maxExpandedBytes = Number(options['--archive-expanded-bytes'] || 0);
   if ((options['--verify-archive-bytes'] || options['--archive-expanded-bytes']) && (!maxObjects || !Number.isSafeInteger(archiveBudget) || archiveBudget < 1 ||
       !Number.isSafeInteger(maxExpandedBytes) || maxExpandedBytes < 1)) throw Error('archive_verification_requires_listing_and_explicit_limits');
-  admin.initializeApp({projectId: 'pi-agents-cloud'});
+  const defaultBucket = options['--default-bucket'] || process.env.SESSION_BUCKET || DEFAULT_BUCKET;
+  const toolsBucket = options['--tools-bucket'] || process.env.USER_TOOLS_STORAGE_BUCKET || defaultBucket;
+  admin.initializeApp({projectId: PROJECT});
   const db = admin.firestore(); const storage = admin.storage();
   async function* pages(collection, fields) {
     let cursor;
@@ -132,7 +136,7 @@ async function main() {
       };
     }
     if (maxObjects) record.storageMetadata = await inventoryStorageMetadata({
-      ...storageCandidates({workspace: doc.data(), sessions, defaultBucket: options['--default-bucket'], toolsBucket: options['--tools-bucket']}), maxObjects,
+      ...storageCandidates({workspace: doc.data(), sessions, defaultBucket, toolsBucket}), maxObjects,
       listPage: async ({bucketName, prefix, pageToken, limit}) => {
         const [files, next] = await storage.bucket(bucketName).getFiles({prefix, pageToken, maxResults: limit, autoPaginate: false});
         return {objects: files.map(file => file.metadata), nextPageToken: next?.pageToken || null};
@@ -168,7 +172,7 @@ async function main() {
       ['ownerUid', 'backend', 'generation', 'state', 'apiEnabled', 'lifecycleEnabled', 'migrationAuthority', 'migrationOperationId'])) {
     if (!options['--workspace'] || options['--workspace'] === doc.id) vmRecords.push({workspaceId: doc.id, ...doc.data()});
   }
-  const report = {schemaVersion: 1, projectId: 'pi-agents-cloud', capturedAt: new Date().toISOString(), readOnly: true,
+  const report = {schemaVersion: 1, projectId: PROJECT, capturedAt: new Date().toISOString(), readOnly: true,
     scope: 'Firestore registry plus published checkpoint manifest validation; not a full storage inventory or cutover approval',
     workspaces: records, existingVmRecords: vmRecords};
   const destination = options['--output'] || `artifacts/qa/vm-migration-inventory/${Date.now()}.json`;
