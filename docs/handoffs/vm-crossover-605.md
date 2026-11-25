@@ -813,3 +813,16 @@ Hosted Firebase Preview and Runner Images checks for `90bc4c4` succeeded. The
 latest runner image Cloud Build `8d659e4a-ea96-4018-8a4f-47f95440385c` took
 13m29.137s wall clock (Docker step 9m21.587s) and published digest
 `sha256:dba9cc1eb92c1e0dde5bb99394c6aa9fc157389cb2f2134de8b1da3a85a65bf3`.
+
+## Continuation implementation — legacy flat-prefix staging
+
+The captured-prefix import path now includes
+`scripts/vm-import-captured-flat-prefix.mjs` and
+`scripts/lib/vm-captured-flat-prefix-import.mjs`. It verifies pinned object
+bytes, maps legacy directory markers and implicit parents under `workspace/`,
+and writes a resumable private `flat-prefix-tree.json` receipt. It rejects
+reserved HOME/browser internal paths instead of flattening them and records
+the explicit default-mode limitation (0644 files, 0755 directories). The
+staged tree can participate in the existing verified merge, but it is not a
+complete machine import or cutover approval. Focused flat-prefix and merge
+coverage passes 12/12; no production operation invoked the new importer.

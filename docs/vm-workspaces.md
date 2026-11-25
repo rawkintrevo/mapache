@@ -1545,6 +1545,25 @@ shared trees, requires separate authority and reconciliation.
 The operator CLI stages one published agent or workspace checkpoint against
 the captured prefix and writes a private tree, plan and verification receipt.
 
+Older workspaces can have durable files only in the legacy flat workspace
+prefix, without a published checkpoint manifest. The guarded flat-prefix
+importer stages that source against the same generation-pinned capture:
+
+```bash
+node scripts/vm-import-captured-flat-prefix.mjs --project pi-agents-cloud \
+  --workspace WORKSPACE_ID --owner OWNER_UID --operation OPERATION_ID \
+  --root /absolute/private/flat-prefix-stage --max-bytes 104857600
+```
+
+It verifies every captured object again, maps directory markers and implicit
+parents under the `workspace/` destination, and writes a resumable private
+`flat-prefix-tree.json` receipt. Reserved `.mapache-internal` and
+`.mapahce-internal` paths are rejected so HOME and browser archives cannot be
+silently flattened into the workspace. Legacy flat objects have no checkpoint
+mode manifest, so this stage uses 0644 file and 0755 directory modes and is
+never a complete machine import or cutover approval; HOME, browser, owner-tool,
+private-Git, upload and live-state reconciliation remain separate gates.
+
 ```bash
 node scripts/vm-import-captured-checkpoint.mjs --project pi-agents-cloud \
   --workspace WORKSPACE_ID --owner OWNER_UID --operation OPERATION_ID \

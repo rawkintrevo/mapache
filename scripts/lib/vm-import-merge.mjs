@@ -15,6 +15,7 @@ const receipts = {
   checkpoint: 'checkpoint-tree.json',
   archive: 'archive-tree.json',
   'owner-tools': 'owner-tools-tree.json',
+  'flat-prefix': 'flat-prefix-tree.json',
 };
 
 export function normalizePrefixCapture(value) {
@@ -51,13 +52,16 @@ async function loadSource(source, ownerUid, workspaceId) {
   } else {
     const plan = source.kind === 'owner-tools'
       ? (await readJson(path.join(source.root, 'owner-tools-plan.json'))).plan
-      : await readJson(source.planFile);
+      : source.kind === 'flat-prefix'
+        ? (await readJson(path.join(source.root, 'flat-prefix-plan.json'))).plan
+        : await readJson(source.planFile);
     if (digest(JSON.stringify(plan.document)) !== identity.sourcePlanSha256) fail('merge_source_plan_changed');
     entries = plan.document.entries;
     tombstones = plan.document.tombstones || [];
     prefixCapture = plan.document.prefixCapture;
     component = prefixCapture?.checkpointKind;
-    if (prefixCapture && (source.kind !== 'checkpoint' || !['agent', 'workspace'].includes(component))) fail('merge_capture_invalid');
+    if (prefixCapture && ((!['checkpoint', 'flat-prefix'].includes(source.kind)) ||
+        !['agent', 'workspace'].includes(component))) fail('merge_capture_invalid');
   }
   const tree = path.join(source.root, 'tree');
   await plainDirectory(tree);
