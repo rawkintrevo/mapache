@@ -405,7 +405,8 @@ function serializeRemoteHost(doc) {
     updatedAt: data.updatedAt || null,
     setupDirections: [
       "Install the generated appPublicKey on the managed account's authorized_keys file.",
-      "Run the versioned Mapache host bootstrap command, then verify the host fingerprint before testing.",
+      "Download install.py and helper.py from the same Mapache release, inspect both files, then run: sudo python3 install.py --public-key ./mapache-remote-host.pub",
+      "Verify the host fingerprint before testing the connection; remove the generated public key from authorized_keys when revoking access.",
     ],
   };
 }
