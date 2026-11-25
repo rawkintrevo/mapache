@@ -2182,8 +2182,10 @@ generation 2 (`mapache-vm-35530052c17c57f4310967d3`) to generation 3
 `9850d196d8e77c5e0ce1a72364cbb5a4f5b67217` and passed native executable,
 SQLite, mode, symlink, and locking checks. Verification ran as an offline
 container command from the pinned existing runner image, not as an authenticated
-user session. Hard-loss/open-write recovery, browser state,
-package installation, and backup restore remain separate unpassed gates.
+user session. The later synthetic generation-24-to-25 proof also covered an
+abrupt VM loss during an open fsynced write and verified ordered retained-disk
+data on the replacement. Browser state, package installation, and backup
+restore remain separate unpassed gates.
 The API-identity preflight now reports no missing checked Compute permissions.
 
 Canary build `e3dfe040-ecab-4bcd-8dc5-5396ce730736` succeeded and published
