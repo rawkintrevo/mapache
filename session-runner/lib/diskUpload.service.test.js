@@ -115,3 +115,25 @@ test("maps exhausted retained storage to a resumable upload error", () => {
   assert.equal(error.publicMessage, "upload_storage_full");
   assert.equal(error.status, 507);
 });
+
+test("maps operation-state ENOSPC to the resumable storage-full response", async () => {
+  const noSpace = Object.assign(new Error("no space"), {code: "ENOSPC"});
+  const fsImpl = {
+    promises: {
+      ...fs,
+      writeFile: async () => { throw noSpace; },
+    },
+  };
+  const service = createDiskUploadService({
+    config: {workspaceDir: "/tmp/mapache-upload-enospc", retainedDiskPaths: {uploads: "/tmp/mapache-upload-enospc/uploads", caches: "/tmp/mapache-upload-enospc/state"}},
+    fsImpl,
+  });
+  const response = {};
+  await service.handle({method: "PUT", params: {operationId: "operation-enospc"},
+    query: {name: "full.bin", size: "4"}, get: () => "bytes 0-3/4"}, {
+    status(code) { response.status = code; return this; },
+    json(body) { response.body = body; },
+  });
+  assert.equal(response.status, 507);
+  assert.deepEqual(response.body, {error: "upload_storage_full"});
+});

@@ -47,7 +47,8 @@ function createDiskUploadService({config, fsImpl = fs, maxBytes = MAX_UPLOAD_BYT
         res.status(308).set("Range", `bytes=0-${result.offset - 1}`).send();
       }
     } catch (error) {
-      res.status(error.status || 400).json({error: error.publicMessage || error.code || "upload_failed"});
+      const normalized = normalizeUploadError(error);
+      res.status(normalized.status || 400).json({error: normalized.publicMessage || normalized.code || "upload_failed"});
     }
   }
 

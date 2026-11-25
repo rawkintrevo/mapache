@@ -51,7 +51,10 @@ loss between the rename and the final `committed` state write. Duplicate
 destinations are rejected,
 cancellation removes the temporary state, and `ENOSPC` is reported as the
 explicit `upload_storage_full` response while preserving any valid prefix for a
-probe or retry.
+probe or retry. The HTTP handler applies that normalization both while writing
+the operation state and while streaming the body, so a disk that fills before
+the first body byte still returns the resumable 507 contract rather than a raw
+filesystem error.
 
 The browser retains the disk operation ID in memory. If a retained-disk gateway
 URL expires or belongs to a replaced generation, it asks the Compute API for a
