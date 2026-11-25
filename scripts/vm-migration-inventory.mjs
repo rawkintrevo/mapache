@@ -164,7 +164,8 @@ async function main() {
     records.push(record);
   }
   const vmRecords = [];
-  for await (const doc of pages(db.collection('vmRuntimes_v2'), ['ownerUid', 'generation', 'state'])) {
+  for await (const doc of pages(db.collection('vmRuntimes_v2'),
+      ['ownerUid', 'backend', 'generation', 'state', 'apiEnabled', 'lifecycleEnabled', 'migrationAuthority', 'migrationOperationId'])) {
     if (!options['--workspace'] || options['--workspace'] === doc.id) vmRecords.push({workspaceId: doc.id, ...doc.data()});
   }
   const report = {schemaVersion: 1, projectId: 'pi-agents-cloud', capturedAt: new Date().toISOString(), readOnly: true,

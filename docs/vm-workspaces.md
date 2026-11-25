@@ -713,6 +713,27 @@ validation categories, blockers, and any matching bounded
 file names or credential values. The aggregate output includes the count of
 explicitly blocked source-retained workspaces.
 
+For the parent issue's final cohort gate, run the local report through the
+read-only cohort audit:
+
+```bash
+node scripts/vm-migration-cohort-audit.mjs \
+  --project pi-agents-cloud \
+  --report artifacts/qa/vm-migration-inventory/latest.json \
+  --output artifacts/qa/vm-migration-inventory/cohort-audit.json \
+  --confirm migration-cohort-audit
+```
+
+The audit requires every eligible legacy workspace to be either backed by an
+active or stopped VM record with `migrationAuthority=compute-engine` and the
+API/lifecycle admissions enabled, or represented by a durable
+`blocked`/`source-retained` report. SSH and N64 records are explicitly outside
+automatic migration. It also reports orphaned VM-authority records. A
+`readyForCompletion` result is only a reconciliation result; it does not
+reserve a workspace, create a fence, switch authority, or delete legacy data.
+The output is local mode `0600` and contains only bounded IDs, statuses and
+blocker codes.
+
 `scripts/lib/vm-migration-inventory.mjs` recognizes per-file, workspace-bundle-v1,
 large-file-v1 and symlink entries; classifies Git/shared-tree references,
 never-started, active and failed-stop records; and excludes SSH and N64 from

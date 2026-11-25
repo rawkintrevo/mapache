@@ -866,3 +866,11 @@ Storage preflight remained stable at 10 objects and Compute discovery remained
 clear. The source still is not a canary: source/live-state reconciliation and
 approved cost/downtime proof remain open, and no fence, VM, disk, authority
 switch, or source deletion occurred.
+
+The read-only inventory now also includes the backend-owned VM authority fields
+needed by `scripts/vm-migration-cohort-audit.mjs`. That audit is the completion
+check for the parent issue: each eligible legacy workspace must be either
+represented by an admitted active/stopped Compute Engine runtime or have an
+explicit durable source-retained blocker, with orphaned migrated runtimes
+reported separately. It does not change the migration decision or enable the
+VM feature. Focused cohort-audit coverage passes 6/6.
