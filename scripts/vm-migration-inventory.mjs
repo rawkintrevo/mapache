@@ -92,6 +92,19 @@ async function main() {
         },
       }) : undefined,
       verifyPayloads: options['--verify-bytes'] ? (manifest, manifestRef) => verifyCheckpointPayloads({manifest, manifestRef, openObject, budget}) : undefined});
+    const blocked = await db.collection('vmMigrationBlockedReports_v2').doc(doc.id).get();
+    if (blocked.exists) {
+      const data = blocked.data() || {};
+      record.blockedReport = {
+        state: data.state === 'blocked' ? 'blocked' : 'unknown',
+        decision: data.decision === 'source-retained' ? 'source-retained' : 'unknown',
+        sourceGeneration: Number.isSafeInteger(data.sourceGeneration) ? data.sourceGeneration : null,
+        sourceObservationSha256: /^[a-f0-9]{64}$/.test(data.sourceObservationSha256 || '') ? data.sourceObservationSha256 : null,
+        blockers: Array.isArray(data.blockers) ? data.blockers.filter(value => /^[a-z0-9_]+$/.test(value)).sort() : [],
+        sourceRetained: data.sourceRetained === true,
+        recordedAtMs: Number.isSafeInteger(data.recordedAtMs) ? data.recordedAtMs : null,
+      };
+    }
     if (maxObjects) record.storageMetadata = await inventoryStorageMetadata({
       ...storageCandidates({workspace: doc.data(), sessions, defaultBucket: options['--default-bucket'], toolsBucket: options['--tools-bucket']}), maxObjects,
       listPage: async ({bucketName, prefix, pageToken, limit}) => {
@@ -136,6 +149,9 @@ async function main() {
   const classifications = {};
   for (const record of records) classifications[record.classification] = (classifications[record.classification] || 0) + 1;
   console.log(JSON.stringify({ok: true, readOnly: true, workspaces: records.length, vmRecords: vmRecords.length, classifications,
-    readyForCutover: records.filter(record => record.readyForCutover).length, report: destination}));
+    readyForCutover: records.filter(record => record.readyForCutover).length,
+    explicitlyBlocked: records.filter(record => record.blockedReport?.state === 'blocked' &&
+      record.blockedReport?.decision === 'source-retained' && record.blockedReport?.sourceRetained === true).length,
+    report: destination}));
 }
 main().catch(() => { console.error('VM inventory failed; no remote changes were made. Check arguments, access and local output path.'); process.exitCode = 1; });

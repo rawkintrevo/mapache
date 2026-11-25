@@ -776,3 +776,5 @@ It found 0 records ready for cutover. All records still carry at least the
 mandatory source-completeness/live-state and cost/downtime blockers, so no
 real canary source is currently eligible for an authority switch. The VM
 authority path remains disabled while those records are reconciled.
+The refreshed inventory also reports `explicitlyBlocked: 1`, matching the
+durable `vm-test` source-retained report.

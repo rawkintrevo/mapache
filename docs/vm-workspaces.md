@@ -708,7 +708,10 @@ checkpoint manifests, capped at 16 MiB each, using the observed object generatio
 and checking the published checksum, identity, schema and file descriptors.
 Console output contains aggregate counts; the local report has mode `0600` and
 contains stable workspace/owner IDs, capture/object generations, format counts,
-validation categories and blockers, without file names or credential values.
+validation categories, blockers, and any matching bounded
+`vmMigrationBlockedReports_v2/{workspaceId}` source-retained decision, without
+file names or credential values. The aggregate output includes the count of
+explicitly blocked source-retained workspaces.
 
 `scripts/lib/vm-migration-inventory.mjs` recognizes per-file, workspace-bundle-v1,
 large-file-v1 and symlink entries; classifies Git/shared-tree references,
