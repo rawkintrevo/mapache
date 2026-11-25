@@ -435,3 +435,30 @@ older records without a known disk-size cursor remain explicitly unknown.
 Focused VM usage, user-usage, VM lifecycle, and VM creation tests pass. This is
 an implementation and accounting proof only; live stopped-target execution,
 cross-machine tools, and release acceptance remain open.
+
+## Continuation evidence — 2026-11-25 UTC
+
+The live synthetic backup fixture now has a repaired Compute provider
+descriptor, an enabled daily backup policy, and a successfully completed
+crash-consistent backup. The backup record is `succeeded` and `verified`, the
+source runtime and file digests are present, and the corresponding Compute
+snapshot is `READY` with `storageBytesStatus=UP_TO_DATE`. The deployed backup
+and lifecycle functions run under the production API service account, with the
+minimum snapshot create/get/list/set-labels/delete and global-operation read
+permissions added to the project provisioner role.
+
+The recovery-proof hardening is committed in `9a7f761`, `41f3dea`, `c82feed`,
+`0c152e9`, and `51d8147`: Compute operation labels are bounded to the provider's
+63-character limit; restored-disk labels use the same hashed identity contract
+as lifecycle ownership checks; proof SSH retries tolerate eventual IAP instance
+visibility; instance creation waits for eventual Compute readback; and each
+disposable recovery run gets a fresh Compute request identity. The proof uses a
+known-good immutable runner image and exact VM/disk cleanup.
+
+The remaining live recovery proof is temporarily rate-limited by Compute when
+restoring repeatedly from the same source snapshot (`RESOURCE_OPERATION_RATE_EXCEEDED`).
+The failed attempts were cleaned up exactly: no proof VM or restore disk
+remains, and the source snapshot and source runtime are retained. The next
+attempt must wait for the provider window and then demonstrate fresh-disk,
+fresh-VM runtime/file verification plus measured RPO/RTO. This is still a
+synthetic-fixture proof and does not establish user-workspace migration.
