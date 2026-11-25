@@ -16,7 +16,7 @@ function createVmApiService({db, requireUser, lifecycle, requestBackupRestore, n
     if (!uid) throw httpError(401, "invalid_auth_token");
     const reads = createVmReadService({db, now});
     if (/^\/workspaces\/?$/.test(req.path || "") && req.method === "GET") return {status: 200, body: await reads.list(uid, req.query)};
-    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(backup|create|configuration|sessions|access|start|pause|replace|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
+    const match = String(req.path || "").match(/^\/workspaces\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/(backup|create|configuration|sessions|access|rename|start|pause|replace|operations)(?:\/([a-f0-9]{64}))?)?\/?$/);
     if (!match) throw httpError(404, "not_found");
     const [, workspaceId, action, operationId] = match;
     const wr = db.collection("vmRuntimes_v2").doc(workspaceId);
@@ -24,6 +24,24 @@ function createVmApiService({db, requireUser, lifecycle, requestBackupRestore, n
       if (req.method === "PATCH" && req.body === undefined) throw httpError(400, "invalid_vm_configuration");
       return {status: 200, body: await createVmConfigurationService({db, now})({workspaceId, ownerUid: uid,
         patch: req.method === "PATCH" ? req.body : undefined})};
+    }
+    if (action === "rename" && !operationId && req.method === "PATCH") {
+      const body = req.body;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).some(key => !["name", "expectedGeneration"].includes(key)) ||
+          !Number.isSafeInteger(body.expectedGeneration) || body.expectedGeneration < 1 ||
+          typeof body.name !== "string" || !body.name.trim() || body.name.trim().length > 100) {
+        throw httpError(400, "invalid_workspace_name");
+      }
+      return db.runTransaction(async tx => {
+        const snapshot = await tx.get(wr);
+        const ws = snapshot.data();
+        checkOwned(ws, uid);
+        if (ws.generation !== body.expectedGeneration) throw httpError(409, "vm_generation_mismatch");
+        const name = body.name.trim();
+        tx.update(wr, {name});
+        return {status: 200, body: {workspace: publicWorkspace(workspaceId, {...ws, name}, now())}};
+      });
     }
     if (action === "sessions" && !operationId && req.method === "GET") return {status: 200, body: await reads.sessions(uid, workspaceId)};
     if (action === "backup" && !operationId && req.method === "GET") {

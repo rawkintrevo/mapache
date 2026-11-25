@@ -18,6 +18,15 @@ export function withVmWorkspaces(legacy, request, {requestId = () => crypto.rand
     }});
   }
   const routed = {
+    renameWorkspace: async (id, body) => {
+      const data = await read(id);
+      const payload = typeof body === "string" ? {name: body} : body;
+      const result = await vmRequest(id, "/rename", {method: "PATCH", body: {
+        ...(payload || {}), expectedGeneration: data.workspace.generation,
+      }});
+      if (result.workspace) machines.set(id, {...data.workspace, ...result.workspace});
+      return result;
+    },
     getMachineConfiguration: id => vmRequest(id, "/configuration"),
     updateMachineConfiguration: (id, body) => vmRequest(id, "/configuration", {method: "PATCH", body}),
     getSessions: id => read(id),

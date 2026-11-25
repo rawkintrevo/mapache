@@ -472,6 +472,7 @@ address from the caller. All responses use `Cache-Control: no-store`.
 | `POST /workspaces/{id}/start`, `/pause`, `/replace` | `{expectedGeneration, requestId}`; queues the isolated lifecycle operation, with API admission rechecked in its reservation transaction |
 | `GET /workspaces/{id}/operations/{operationId}` | Safe progress/error fields only for the same owner and workspace |
 | `GET /workspaces/{id}/backup` | Owner-scoped backup inventory, cost-known/unknown components, stranded-resource state, and sanitized recovery diagnostics |
+| `PATCH /workspaces/{id}/rename` | `{name, expectedGeneration}`; trims and validates the owner-scoped display name and refuses stale generations |
 
 Access credentials expire after 15 minutes. The same agent-audience/generation
 credential is used for Agent, Shell and Preview URLs so a sibling surface cannot
@@ -482,7 +483,10 @@ appear in owner API responses. The gateway continues checking current
 generation/boot/lease on requests and long connections. A signed runner token
 is not a Firebase API credential. Chrome URLs are returned only when the
 session records that capability. This endpoint does not yet replace the
-frontend's legacy API wiring or admit/migrate an existing workspace.
+frontend's legacy API wiring or admit/migrate an existing workspace. Workspace
+deletion and the remaining workspace-scoped compatibility operations still
+stay on the legacy path until their VM-specific lifecycle and retained-disk
+cleanup contracts are implemented.
 
 The backup status projection is read-only. It combines the latest inventory
 report with bounded recovery-operation and recovery-report diagnostics, and

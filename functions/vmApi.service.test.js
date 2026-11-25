@@ -24,7 +24,10 @@ function fixture() {
       .map(([key, data]) => ({id: key.slice(path.length + 1), data: () => data}))})})});
   const calls = [];
   const restoreCalls = [];
-  const service = createVmApiService({now: () => time, db: {collection: ref, runTransaction: fn => fn({get: r => r.get()})},
+  const service = createVmApiService({now: () => time, db: {collection: ref, runTransaction: fn => fn({get: r => r.get(), update: (r, updates) => {
+    const current = docs.get(r.path) || {};
+    docs.set(r.path, {...current, ...updates});
+  }})},
     requireUser: async req => {
       if (!req.authenticatedUid) throw new Error("invalid_auth_token");
       if (req.authenticatedUid === "not-allowed") throw new Error("app_access_not_allowed");
@@ -126,6 +129,17 @@ test("lifecycle dispatch derives owner from auth and forbids caller-selected run
     await assert.rejects(f.call("/workspaces/workspace/start", {expectedGeneration: 7, requestId: "request", ...extra}), /invalid_vm_request/);
   }
   assert.equal(f.calls.length, 1);
+});
+
+test("rename is owner-scoped and generation-fenced", async () => {
+  const f = fixture();
+  const result = await f.call("/workspaces/workspace/rename", {name: "  Renamed VM  ", expectedGeneration: 7}, "PATCH");
+  assert.equal(result.status, 200);
+  assert.equal(result.body.workspace.name, "Renamed VM");
+  assert.equal(f.docs.get("vmRuntimes_v2/workspace").name, "Renamed VM");
+  await assert.rejects(f.call("/workspaces/workspace/rename", {name: "Stale", expectedGeneration: 6}, "PATCH"), /vm_generation_mismatch/);
+  await assert.rejects(f.call("/workspaces/workspace/rename", {name: "   ", expectedGeneration: 7}, "PATCH"), /invalid_workspace_name/);
+  await assert.rejects(f.call("/workspaces/workspace/rename", {name: "Nope", expectedGeneration: 7}, "PATCH", "foreign"), /not_found/);
 });
 
 test("status exposes only safe fields and operation status cannot cross workspace ownership", async () => {

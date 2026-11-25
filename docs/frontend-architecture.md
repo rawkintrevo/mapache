@@ -48,7 +48,8 @@ server-authoritative and use the shared pending-operation boundary.
 The VM crossover client is opt-in at build time with
 `VITE_VM_WORKSPACES_ENABLED=true`. `src/services/vmWorkspaceApi.js` wraps the
 existing API client, merges owner-admitted VM listings, and routes current
-session reads, pause/start/replacement, and signed access to `vmApi_v2`.
+session reads, rename, pause/start/replacement, and signed access to
+`vmApi_v2`.
 Legacy workspace calls retain their existing endpoints. VM identity is retained
 for the lifetime of the authenticated client even if later listing omits it,
 so stale callbacks cannot fall through to a Cloud Run mutation. Conflicting
@@ -63,9 +64,9 @@ workspace selection skips the legacy workspace MCP/Google config reads for VM
 records. Global account credential management remains available; unsupported
 VM-scoped actions return an explicit unavailable error. This is temporary
 crossover coverage, not removal of the central configuration requirements.
-Creation UI, remaining configuration/automation/request/upload routing and full-shell
-creation/lifecycle acceptance remain unfinished. Builds without the flag keep
-the old behavior.
+Creation UI, deletion, remaining configuration/automation/request/upload
+routing and full-shell creation/lifecycle acceptance remain unfinished. Builds
+without the flag keep the old behavior.
 
 VM workspace editing selects `VmWorkspaceEditModal` from `ModalStack`, while
 legacy workspaces retain `WorkspaceEditModal`. The VM editor loads versioned

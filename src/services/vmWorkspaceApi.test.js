@@ -3,7 +3,7 @@ import {withVmWorkspaces, pollVmSessions} from "./vmWorkspaceApi.js";
 
 function fixture() {
   const workspace = {id: "vm", backend: "compute-engine", generation: 8, state: "active", currentSessionId: "s8"};
-  const legacy = {getWorkspaces: vi.fn(async () => ({workspaces: [{id: "old"}]})), getSessions: vi.fn(),
+  const legacy = {getWorkspaces: vi.fn(async () => ({workspaces: [{id: "old"}]})), getSessions: vi.fn(), renameWorkspace: vi.fn(),
     getMachineConfiguration: vi.fn(), updateMachineConfiguration: vi.fn(),
     stopSession: vi.fn(), restartSession: vi.fn(), getSessionAccessUrls: vi.fn(), deleteWorkspace: vi.fn()};
   const request = vi.fn(async (url, options) => {
@@ -29,6 +29,8 @@ describe("VM frontend provider routing", () => {
   it("keeps legacy calls unchanged and routes VM generation-aware actions without legacy fallback", async () => {
     const f = fixture(); expect((await f.api.getWorkspaces()).workspaces.map(w => w.id)).toEqual(["old", "vm"]);
     await f.api.stopSession("old", "legacy-session"); expect(f.legacy.stopSession).toHaveBeenCalledWith("old", "legacy-session");
+    await f.api.renameWorkspace("vm", {name: "Renamed VM"});
+    expect(f.request).toHaveBeenLastCalledWith(expect.stringMatching(/\/vm\/rename$/), {method: "PATCH", body: {name: "Renamed VM", expectedGeneration: 8}});
     await f.api.restartSession("vm", "s8");
     expect(f.request).toHaveBeenLastCalledWith(expect.stringMatching(/\/vm\/replace$/), {method: "POST", body: {expectedGeneration: 8, requestId: "request-id"}});
     f.workspace.state = "stopped"; await f.api.restartSession("vm", "s8");
