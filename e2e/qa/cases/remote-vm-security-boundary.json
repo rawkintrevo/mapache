@@ -1,0 +1,16 @@
+{
+  "id": "remote-vm.security-boundary",
+  "title": "Remote VM rejects forged host admission",
+  "description": "Verify the authenticated owner boundary before any live canary. The forged host request must fail without creating a workspace, guest, disk, or tunnel.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/remote-vm.security-boundary",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/probe-remote-vm-host-boundary.json"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ],
+  "cleanup": [
+    {"type": "clearLocalStorageKeys", "keys": ["mapache.qaLogin", "mapache.qaSecret"]}
+  ]
+}

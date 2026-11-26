@@ -1,0 +1,37 @@
+{
+  "id": "remote-vm.rollout-canary",
+  "title": "Remote VM live canary lifecycle and persistence",
+  "description": "Run the full remote VM path against one deliberately prepared disposable host. This is the release-gate case: it must be run with an operator-supplied ready host and cleaned up through the confirmed delete path.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/remote-vm.rollout-canary",
+  "parameters": {
+    "remoteHostId": "",
+    "workspaceName": "qa-remote-vm-{{timestamp}}",
+    "sessionName": "qa-remote-vm-session-{{timestamp}}"
+  },
+  "requires": {
+    "chromeDevtools": true,
+    "preparedHost": "The remote host must be installed from the matching release, fingerprint-verified, ready, and reserved for this disposable canary",
+    "gateway": "The authenticated HTTP/WebSocket gateway and remote VM Functions revision are deployed",
+    "cleanup": "The case must stop the session and delete the workspace through the explicit permanent-delete confirmation; verify the guest disk and host capacity afterward"
+  },
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/create-remote-vm-canary.json", "parameters": {"remoteHostId": "{{remoteHostId}}", "workspaceName": "{{workspaceName}}", "sessionName": "{{sessionName}}"}},
+    {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "{{workspaceName}}"}},
+    {"assert": "snapshot-text", "expected": "Remote VM"},
+    {"assert": "network-status", "requestUrlIncludes": "/access-url", "method": "POST", "expectedStatus": 200},
+    {"assert": "snapshot-text", "expected": "pi-web-ui native terminal"},
+    {"capture": "screenshot", "fileName": "remote-vm-running.png"},
+    {"capture": "console"},
+    {"capture": "network"},
+    {"assert": "manual", "expected": "In the native pi-web-ui terminal, write a sentinel file, install one harmless user-scoped tool, reload the browser, and confirm the file/tool remain available."},
+    {"assert": "manual", "expected": "Stop the selected remote session, start it again, reconnect through the gateway, and confirm the sentinel file persists."},
+    {"assert": "manual", "expected": "Exercise one browser disconnect/reconnect, one duplicate start with the same operation ID, and one gateway/SSH interruption; record the resulting pending/error states without retrying blindly."},
+    {"useScript": "scripts/delete-selected-workspace.json"},
+    {"assert": "network-status", "requestUrlIncludes": "/api/workspaces/", "method": "DELETE", "expectedStatus": 200}
+  ],
+  "cleanup": [
+    {"type": "clearLocalStorageKeys", "keys": ["mapache.qaLogin", "mapache.qaSecret"]}
+  ]
+}

@@ -70,6 +70,28 @@ and a changed unmanaged file causes a visible refusal instead of an overwrite.
 Host removal is rejected while a workspace or cleanup operation still
 references this host.
 
+## Troubleshooting readiness
+
+Use the JSON check to distinguish setup from connectivity failures:
+
+```bash
+python3 install.py --check-only --json
+```
+
+`kvmAvailable: false` means the machine cannot run the isolated guest (often
+because `/dev/kvm` is unavailable); do not register it as ready. A missing
+`virsh`, inactive libvirt service, missing managed NAT network, or missing
+storage path must be repaired with the matching installer release and then
+checked again. A host-key mismatch is a trust failure: stop, verify the
+fingerprint independently, and use the Mapache host page to retry verification;
+never replace the pinned fingerprint just to make a test pass.
+
+If a live canary loses SSH or the gateway, leave the workspace in its visible
+pending/error state and retry the provider operation after connectivity is
+restored. Do not remove the managed network or guest disk manually. Offline
+deletion is retried by the provider and must be confirmed by the final host
+inventory before the canary is considered clean.
+
 ## Revoke access
 
 Remove the generated public-key line from the managed account's

@@ -351,3 +351,48 @@ operation recovery, offline deletion recovery, no public guest ports and
 preservation of unrelated host VMs. Existing Cloud Functions deploy commands
 must use `--project pi-agents-cloud` and the mandated service accounts.
 
+### Release-gate runbook (#643)
+
+The live canary is deliberately separate from the mocked/unit fixtures. The
+operator must reserve one disposable host and one owner account, record the
+release commit and guest-image/helper versions, and keep host addresses,
+fingerprints and credentials out of committed evidence. Run the following
+read-only host check from the prepared host before registering it:
+
+```bash
+python3 scripts/remote-vm-host/install.py --check-only --json
+```
+
+The result must contain `ready: true`, `kvmAvailable: true`,
+`libvirtAvailable: true`, `networkReady: true`, and all required commands. A
+`ready: false` result is a blocked rollout, not a reason to bypass the gate.
+Install or update the host only with the matching release scripts and then
+repeat the check. Do not delete or redefine an unrelated libvirt network or
+guest while repairing readiness.
+
+Run the checked-in browser cases with Chrome DevTools against the deployed
+revision:
+
+- `remote-vm.security-boundary` must reject a forged host ID with no workspace,
+  guest, disk or tunnel side effect.
+- `remote-vm.rollout-canary` must be run with an operator-supplied ready
+  `remoteHostId`. It creates one disposable blank workspace/session, verifies
+  the pi-web-ui/native terminal, writes a sentinel file and harmless user-scoped
+  tool, disconnects/reconnects the browser, stops/starts the guest, exercises a
+  duplicate mutation and a gateway/SSH interruption, then uses the explicit
+  permanent-delete confirmation. Inventory the host's managed disk directory,
+  libvirt domains and capacity after cleanup; unrelated guests and networks
+  must be unchanged. Retain only sanitized screenshots, network status and
+  operation IDs.
+
+The current admission behavior is intentionally fail-closed: workspace
+creation requires an owner-scoped host with `ready` status. If a canary cannot
+be completed, leave admission disabled and record the blocker rather than
+calling a mocked test a release. Existing remote workspaces must continue to
+use their stored provider descriptor when admission is disabled.
+
+Rollback is a Functions revision rollback, followed by disabling new remote
+admission at the same configuration boundary. Do not remove the remote
+provider dispatch, gateway, host key material or guest disks during rollback;
+existing workspaces need those paths to stop, reconnect or finish deletion.
+

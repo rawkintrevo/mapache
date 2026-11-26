@@ -1,0 +1,42 @@
+{
+  "id": "script.createRemoteVmCanary",
+  "title": "Create a remote VM canary workspace and session",
+  "parameters": {
+    "remoteHostId": "",
+    "workspaceName": "qa-remote-vm-{{timestamp}}",
+    "sessionName": "qa-remote-vm-session-{{timestamp}}"
+  },
+  "requires": {
+    "remoteHost": "The operator must provide an owner-scoped hostId whose host has passed setup, fingerprint verification, and readiness testing",
+    "billableRuntime": "Creates one disposable remote VM and guest disk"
+  },
+  "actions": [
+    {
+      "type": "apiRequest",
+      "method": "POST",
+      "path": "/api/workspaces",
+      "body": {
+        "name": "{{workspaceName}}",
+        "source": {"type": "remote-libvirt", "hostId": "{{remoteHostId}}"}
+      },
+      "saveAs": "workspace"
+    },
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/workspaces", "method": "POST", "expectedStatus": 201, "timeoutMs": 30000},
+    {"type": "navigate", "url": "{{baseUrl}}/app"},
+    {
+      "type": "apiRequest",
+      "method": "POST",
+      "path": "/api/workspaces/{{workspace.id}}/sessions",
+      "body": {
+        "name": "{{sessionName}}",
+        "resources": {"cpu": "2", "memory": "8Gi"}
+      },
+      "saveAs": "session"
+    },
+    {"type": "waitForNetwork", "requestUrlIncludes": "/sessions", "method": "POST", "expectedStatus": 201, "timeoutMs": 30000}
+  ],
+  "successSignals": [
+    "The workspace source is explicitly remote-libvirt and carries the supplied hostId",
+    "The session request is accepted with the fixed v1 guest resources"
+  ]
+}
