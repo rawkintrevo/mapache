@@ -8,6 +8,16 @@ const {connectRemoteHost} = require("./remoteHost.connection");
 
 const DEFAULT_SSH_PORT = 22;
 const MAX_HOSTS_PER_OWNER = 1;
+// Node's IP matcher also recognizes IPv4-mapped IPv6 encodings, including
+// their hexadecimal form. Text-prefix checks miss those equivalent targets.
+const DISALLOWED_ADDRESSES = new net.BlockList();
+for (const [address, prefix] of [["0.0.0.0", 8], ["10.0.0.0", 8], ["127.0.0.0", 8],
+  ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.168.0.0", 16], ["224.0.0.0", 3]]) {
+  DISALLOWED_ADDRESSES.addSubnet(address, prefix, "ipv4");
+}
+for (const [address, prefix] of [["::", 128], ["::1", 128], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8]]) {
+  DISALLOWED_ADDRESSES.addSubnet(address, prefix, "ipv6");
+}
 const HOST_STATUS = Object.freeze({
   PENDING_SETUP: "pending_setup",
   AWAITING_HOST_KEY: "awaiting_host_key",
@@ -308,6 +318,7 @@ function normalizeCapacity(value) {
 }
 
 async function resolveAllowedAddresses(address, dependencies = {}) {
+  address = normalizeHostAddress(address);
   if (net.isIP(address)) return [address];
   if (isDisallowedHostname(address)) throw httpError(400, "remote_host_address_disallowed");
   const resolver = dependencies.resolveHost || ((host) => dns.lookup(host, {all: true, verbatim: true}));
@@ -320,7 +331,7 @@ async function resolveAllowedAddresses(address, dependencies = {}) {
   const addresses = (Array.isArray(records) ? records : [records])
       .map((record) => typeof record === "string" ? record : record && record.address)
       .filter(Boolean);
-  if (!addresses.length || addresses.some((item) => isDisallowedIp(item))) {
+  if (!addresses.length || addresses.some((item) => !net.isIP(item) || isDisallowedIp(item))) {
     throw httpError(400, "remote_host_address_disallowed");
   }
   return [...new Set(addresses)];
@@ -335,17 +346,7 @@ function isDisallowedHostname(value) {
 function isDisallowedIp(value) {
   const address = String(value || "").toLowerCase();
   const version = net.isIP(address);
-  if (version === 4) {
-    const octets = address.split(".").map(Number);
-    const [a, b] = octets;
-    return a === 0 || a === 10 || a === 127 || a === 169 && b === 254 || a === 192 && b === 168 ||
-      a === 172 && b >= 16 && b <= 31 || a >= 224;
-  }
-  if (version === 6) {
-    return address === "::" || address === "::1" || address.startsWith("fc") || address.startsWith("fd") ||
-      address.startsWith("fe8") || address.startsWith("fe9") || address.startsWith("fea") || address.startsWith("feb");
-  }
-  return false;
+  return version !== 0 && DISALLOWED_ADDRESSES.check(address, version === 4 ? "ipv4" : "ipv6");
 }
 
 async function connectToHost({host, addresses, privateKey, dependencies}) {
