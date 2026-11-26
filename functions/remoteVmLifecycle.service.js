@@ -1,9 +1,8 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const {execFile} = require("node:child_process");
-const fs = require("node:fs/promises");
-const {promisify} = require("node:util");
+const {resolveAllowedAddresses} = require("./remoteHost.service");
+const {runRemoteHostCommand} = require("./remoteHost.connection");
 const {httpError} = require("./backendUtils.helpers");
 const {
   REMOTE_GUEST_DISK_GIB,
@@ -16,7 +15,6 @@ const {
   remoteGuestName,
 } = require("./runtimeProvider.helpers");
 
-const execFileAsync = promisify(execFile);
 const GIB = 1024 ** 3;
 const HEADROOM = Object.freeze({
   vcpus: 1,
@@ -700,63 +698,12 @@ function isLostResponse(error) {
 async function defaultHostOperation({action, host, privateKey, guest}) {
   if (!privateKey) throw lifecycleError("remote_host_key_revoked");
   if (!host?.address || !host?.hostKeyFingerprint) throw lifecycleError("remote_host_trust_incomplete");
-  const keyDirectory = await fsMkdtemp();
-  const keyPath = `${keyDirectory}/id_ed25519`;
-  const knownHostsPath = `${keyDirectory}/known_hosts`;
   try {
-    await fs.writeFile(keyPath, privateKey, {mode: 0o600});
-    await writePinnedKnownHosts(host, knownHostsPath);
-    const port = String(Number(host.port || 22));
-    const args = [
-      "-i", keyPath,
-      "-p", port,
-      "-o", "BatchMode=yes",
-      "-o", "IdentitiesOnly=yes",
-      "-o", "StrictHostKeyChecking=yes",
-      "-o", `UserKnownHostsFile=${knownHostsPath}`,
-      `${host.managedUsername}@${host.address}`,
-      `mapache-vm ${action}${action === "capacity" ? "" : ` ${guest.guestName}`}`,
-    ];
-    const {stdout} = await execFileAsync("ssh", args, {timeout: 45_000, maxBuffer: 2 * 1024 * 1024});
-    return JSON.parse(stdout);
+    const addresses = await resolveAllowedAddresses(host.address);
+    return await runRemoteHostCommand({host, addresses, privateKey, action, guestName: guest?.guestName});
   } catch (error) {
-    if (error?.publicMessage === "remote_host_key_mismatch" || error?.publicMessage === "remote_host_key_invalid" || error?.publicMessage === "remote_host_unreachable") throw error;
-    if (/no space left|disk full|thin.?disk/i.test(String(error?.stderr || error?.message || ""))) {
-      throw lifecycleError("remote_vm_thin_disk_exhausted");
-    }
-    const wrapped = lifecycleError(error?.code === "ETIMEDOUT" ? "ETIMEDOUT" : "remote_vm_transport_unavailable");
-    wrapped.cause = error;
-    throw wrapped;
-  } finally {
-    await fs.rm(keyDirectory, {recursive: true, force: true}).catch(() => {});
+    throw lifecycleError(error?.publicMessage || "remote_vm_transport_unavailable");
   }
-}
-
-async function writePinnedKnownHosts(host, destination) {
-  const {stdout} = await execFileAsync("ssh-keyscan", ["-T", "10", "-p", String(Number(host.port || 22)), host.address], {
-    timeout: 15_000,
-    maxBuffer: 256 * 1024,
-  });
-  const lines = stdout.split(/\r?\n/).filter((line) => line && !line.startsWith("#"));
-  if (!lines.length) throw lifecycleError("remote_host_unreachable");
-  const keyLines = lines.filter((line) => /\s(?:ssh-ed25519|ecdsa-sha2-nistp256)\s/.test(line));
-  if (!keyLines.length) throw lifecycleError("remote_host_key_invalid");
-  const tempDirectory = await fsMkdtemp();
-  const tempPath = `${tempDirectory}/host_key`;
-  try {
-    await fs.writeFile(tempPath, `${keyLines[0]}\n`, {mode: 0o600});
-    const {stdout: fingerprintOutput} = await execFileAsync("ssh-keygen", ["-lf", tempPath, "-E", "sha256"]);
-    const match = fingerprintOutput.match(/SHA256:[A-Za-z0-9+/=]+/);
-    const fingerprint = match ? match[0].replace(/^SHA256:/, "SHA256/") : "";
-    if (fingerprint !== host.hostKeyFingerprint) throw lifecycleError("remote_host_key_mismatch");
-    await fs.writeFile(destination, `${keyLines.join("\n")}\n`, {mode: 0o600});
-  } finally {
-    await fs.rm(tempDirectory, {recursive: true, force: true}).catch(() => {});
-  }
-}
-
-async function fsMkdtemp() {
-  return fs.mkdtemp("/tmp/mapache-remote-vm-");
 }
 
 module.exports = {

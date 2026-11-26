@@ -174,6 +174,16 @@ and workspace deletion are the only v1 power transitions. The lifecycle adapter
 dispatches only for `runtimeProvider.backend=remote-libvirt`; provider errors
 never fall back to Cloud Run, Compute Engine, or SSH.
 
+Lifecycle helper commands use the same bundled SSH client as host connection
+testing. Each operation resolves and validates the host address again, connects
+to that validated IP, and pins the Ed25519 key before authentication. Actions
+and managed guest names are validated before sending a command. The 45-second
+deadline and bounded output prevent indefinite worker waits; disk-full errors
+are returned as a safe code without host paths. This path does not require
+system `ssh`/`ssh-keyscan` binaries or temporary private-key files. Deploy API,
+provisioning, lifecycle-operation, and cleanup Functions that load this module
+when changing it; no guest image revision is required.
+
 ### Authenticated gateway implementation (child #640)
 
 `vm-gateway/` is the separately deployed `mapache-vm-gateway-v2` Cloud Run

@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const crypto = require("node:crypto");
 const {Server, utils} = require("ssh2");
-const {connectRemoteHost, sshPrivateKey} = require("./remoteHost.connection");
+const {connectRemoteHost, runRemoteHostCommand, sshPrivateKey} = require("./remoteHost.connection");
 const {generateKeyMaterial} = require("./remoteHost.service");
 
 test("real SSH handshake pins keys, authenticates existing PKCS8 keys, and runs bounded helper commands", async (t) => {
@@ -33,6 +33,10 @@ test("real SSH handshake pins keys, authenticates existing PKCS8 keys, and runs 
         commands.push(info.command);
         const stream = accept();
         if (replyMode === "hang") return;
+        if (replyMode === "full") {
+          stream.stderr.write("No space left on device: /private/host/path");
+          stream.exit(1); stream.end(); return;
+        }
         if (replyMode === "invalid") { stream.end("not json"); return; }
         const result = {version: "1", network: "mapache-vm", ready: replyMode !== "incomplete", ...(info.command.endsWith("capacity") ?
           {cpuCount: 20, memoryBytes: 64 * 1024 ** 3, freeDiskBytes: 100 * 1024 ** 3} : {virsh: ""})};
@@ -59,6 +63,22 @@ test("real SSH handshake pins keys, authenticates existing PKCS8 keys, and runs 
   const result = await connectRemoteHost(request);
   assert.equal(result.capacity.cpuCount, 20);
   assert.deepEqual(commands, ["mapache-vm status", "mapache-vm capacity"]);
+  const operation = {...request, action: "inspect", guestName: "mapache-ws-test"};
+  const authBefore = authAttempts;
+  await assert.rejects(runRemoteHostCommand({...operation, host: {...request.host, hostKeyFingerprint: null}}), /remote_host_trust_incomplete/);
+  await assert.rejects(runRemoteHostCommand({...operation, action: "bash"}), /remote_host_command_invalid/);
+  await assert.rejects(runRemoteHostCommand({...operation, guestName: "mapache-ws-test; id"}), /remote_host_command_invalid/);
+  assert.equal(authAttempts, authBefore);
+  for (const action of ["inspect", "create", "start", "stop", "destroy", "capacity"]) {
+    await runRemoteHostCommand({...operation, action});
+    assert.equal(commands.at(-1), `mapache-vm ${action}${action === "capacity" ? "" : " mapache-ws-test"}`);
+  }
+  replyMode = "full";
+  await assert.rejects(runRemoteHostCommand(operation), (error) => {
+    assert.equal(error.publicMessage, "remote_vm_thin_disk_exhausted");
+    assert.equal(error.message.includes("/private/"), false);
+    return true;
+  });
   replyMode = "incomplete";
   await assert.rejects(connectRemoteHost(request), /remote_host_setup_incomplete/);
   replyMode = "invalid";
