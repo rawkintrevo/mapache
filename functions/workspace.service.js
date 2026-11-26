@@ -26,6 +26,7 @@ const {
 } = require("./mcpConfig.helpers");
 const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
 const {isMainRuntime} = require("./runtimePaths.helpers");
+const {isRemoteVmAdmissionEnabled} = require("./remoteVmAdmission.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
 const {
   COMPUTE_ENGINE_BACKEND,
@@ -268,6 +269,9 @@ async function normalizeWorkspaceSourcePayload(uid, payload, dependencies = {}) 
     throw httpError(400, "unsupported_workspace_source_type");
   }
   if (["remote-vm", "remote-libvirt", REMOTE_LIBVIRT_BACKEND].includes(type)) {
+    if (!isRemoteVmAdmissionEnabled(dependencies.env || process.env)) {
+      throw httpError(409, "remote_vm_admission_disabled");
+    }
     const hostId = cleanName(source.hostId || payload.hostId || "");
     if (!hostId) throw httpError(400, "remote_host_required");
     if (typeof dependencies.remoteHostService?.getRemoteHost !== "function") {

@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const dns = require("node:dns").promises;
 const net = require("node:net");
 const {cleanName, httpError, serialize} = require("./backendUtils.helpers");
+const {isRemoteVmAdmissionEnabled} = require("./remoteVmAdmission.helpers");
 const {connectRemoteHost} = require("./remoteHost.connection");
 
 const DEFAULT_SSH_PORT = 22;
@@ -45,6 +46,7 @@ function createRemoteHostService(dependencies = {}) {
 async function listRemoteHosts(uid, dependencies = {}) {
   const snapshot = await ownerHostQuery(uid, dependencies).get();
   return {
+    remoteVmAdmissionEnabled: isRemoteVmAdmissionEnabled(dependencies.env || process.env),
     hosts: (snapshot.docs || [])
         .filter((doc) => !doc.data()?.deletedAt)
         .map(serializeRemoteHost),

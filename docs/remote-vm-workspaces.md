@@ -136,6 +136,20 @@ The private key is stored in the backend-only Firestore private subtree and is
 deleted on removal. The host registry never starts or deletes a guest; lifecycle
 operations use the separate `remoteVmLifecycle.service.js` adapter.
 
+New remote workspace admission is controlled by the backend-only
+`REMOTE_VM_ADMISSION_ENABLED` Functions environment value. It defaults to
+`false`; `GET /api/remote-hosts` returns the resolved
+`remoteVmAdmissionEnabled` value beside the owner-scoped host list so the
+creation modal can fail closed while the value is loading or disabled. The
+workspace service checks the switch before looking up a host or writing a
+workspace, and accepts both `remote-vm` and `remote-libvirt` aliases only when
+the switch is `true`. The switch is not consulted by host management, gateway
+access, credential renewal, lifecycle start/stop, queued reconciliation, or
+deletion, so turning it off is a creation-only rollback. Deploy the Functions
+reader/enforcement with the value `false`, canary it by setting the value to
+`true`, and roll back by deploying the value `false` again; no existing remote
+workspace or retained disk is migrated.
+
 V1 lifecycle states are `provisioning`, `starting`, `running`, `stopping`,
 `stopped`, `unreachable`, `error`, and `deleting`. `unreachable` means the host
 or tunnel cannot currently be inspected; it does not mean the guest was

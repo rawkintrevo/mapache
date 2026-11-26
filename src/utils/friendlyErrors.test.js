@@ -7,6 +7,11 @@ describe("friendly retained API errors", () => {
         .toBe("Enter a valid GitHub repository URL, for example https://github.com/owner/repo.");
   });
 
+  it("explains the creation-only remote VM rollout gate", () => {
+    expect(friendlyWorkspaceError(new Error("remote_vm_admission_disabled")))
+        .toBe("Remote VM workspace creation is not enabled yet.");
+  });
+
   it("maps MCP transport validation errors", () => {
     expect(friendlyMcpConfigError(new Error("multiple_mcp_server_transports")))
         .toBe("Choose command or URL, not both.");

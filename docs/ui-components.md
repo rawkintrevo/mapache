@@ -31,7 +31,7 @@ This index maps significant React components to their current responsibilities.
 | `McpServersModal` | `src/components/modals/McpServersModal.jsx` | Creates, edits, refreshes, and deletes workspace MCP configuration from the top navigation. |
 | `GoogleWorkspaceManageModal` | `src/components/modals/GoogleWorkspaceManageModal.jsx` | Lists saved Google accounts and manages the selected workspace binding from the top navigation. |
 | `WorkspaceRequestGrantsModal` | `src/components/modals/WorkspaceRequestGrantsModal.jsx` | Owner-managed directional workspace request permissions and revocation for the selected source workspace. |
-| `WorkspaceModal` | `src/components/modals/WorkspaceModal.jsx` | Creates blank/GitHub workspaces and chooses saved environment keys. |
+| `WorkspaceModal` | `src/components/modals/WorkspaceModal.jsx` | Creates blank/GitHub workspaces, gates the remote-VM source on backend admission and a ready host, and chooses saved environment keys. |
 | `WorkspaceEditModal` | `src/components/modals/WorkspaceEditModal.jsx` | Renames a workspace and edits versioned machine settings: resources, durable disk growth, idle policy, and redacted credential/connection/gateway IDs. |
 | `GoogleWorkspaceModal` | `src/components/modals/GoogleWorkspaceModal.jsx` | Selects Google services/access before OAuth, then returns to Google Workspace account management. |
 | `AdminPage` | `src/components/admin/AdminPage.jsx` | Admin user listing and allowlist controls. |

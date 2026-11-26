@@ -165,6 +165,7 @@ export function createRemoteHostsState(overrides = {}) {
     error: "",
     message: "",
     attempted: false,
+    remoteVmAdmissionEnabled: false,
     hosts: [],
     pendingFingerprint: null,
     ...overrides,

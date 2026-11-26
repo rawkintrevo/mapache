@@ -153,6 +153,13 @@ test("registers owner-scoped host metadata and stores key material privately", a
   await assert.rejects(() => service.getRemoteHost("owner-b", host.hostId), /remote_host_not_found/);
 });
 
+test("lists the backend admission switch without changing host ownership", async () => {
+  const disabled = createRemoteHostService(dependencies({env: {REMOTE_VM_ADMISSION_ENABLED: "false"}}));
+  const enabled = createRemoteHostService(dependencies({env: {REMOTE_VM_ADMISSION_ENABLED: "true"}}));
+  assert.equal((await disabled.listRemoteHosts("owner-a")).remoteVmAdmissionEnabled, false);
+  assert.equal((await enabled.listRemoteHosts("owner-a")).remoteVmAdmissionEnabled, true);
+});
+
 test("serializes concurrent registration so one owner gets one active host", async () => {
   const deps = dependencies();
   const service = createRemoteHostService(deps);

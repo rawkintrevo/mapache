@@ -40,6 +40,7 @@ describe("WorkspaceModal remote VM option", () => {
     const props = renderModal({
       hosts: [{id: "host-1", displayName: "Home machine", address: "home.example.com", status: "ready", ready: true}],
       loading: false,
+      remoteVmAdmissionEnabled: true,
     });
     await user.click(screen.getByRole("radio", {name: "VM on remote machine"}));
     expect(screen.getByText("2 vCPU · 8 GiB RAM · 40 GiB disk")).toBeInTheDocument();
@@ -56,10 +57,17 @@ describe("WorkspaceModal remote VM option", () => {
 
   test("blocks remote creation until the host is ready", async () => {
     const user = userEvent.setup();
-    const props = renderModal({hosts: [{id: "host-1", status: "unreachable"}], loading: false});
+    const props = renderModal({hosts: [{id: "host-1", status: "unreachable"}], loading: false, remoteVmAdmissionEnabled: true});
     await user.click(screen.getByRole("radio", {name: "VM on remote machine"}));
     expect(screen.getByRole("button", {name: "Create Workspace"})).toBeDisabled();
     expect(screen.getByRole("alert")).toHaveTextContent("not ready");
     expect(props.onCreateWorkspace).not.toHaveBeenCalled();
+  });
+
+  test("keeps remote creation disabled until the backend rollout switch is loaded", () => {
+    renderModal({hosts: [], loading: false, attempted: false, remoteVmAdmissionEnabled: false});
+
+    expect(screen.getByRole("radio", {name: "VM on remote machine"})).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent("Checking remote VM availability");
   });
 });

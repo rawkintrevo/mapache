@@ -23,6 +23,7 @@ export function WorkspaceModal({
   const isRemoteVm = sourceType === "remote-libvirt";
   const repos = repoPicker && Array.isArray(repoPicker.repos) ? repoPicker.repos : [];
   const remoteHosts = remoteHostState && Array.isArray(remoteHostState.hosts) ? remoteHostState.hosts : [];
+  const remoteVmAdmissionEnabled = remoteHostState?.remoteVmAdmissionEnabled === true;
   const readyRemoteHost = remoteHosts.find(isReadyRemoteHost) || null;
   const selectedRepo = useMemo(
       () => repos.find((repo) => connectedRepoKey(repo) === selectedRepoKey) || null,
@@ -36,8 +37,8 @@ export function WorkspaceModal({
   }, [isGithub, onLoadConnectedRepos]);
 
   useEffect(() => {
-    if (isRemoteVm && onLoadRemoteHosts) void onLoadRemoteHosts();
-  }, [isRemoteVm, onLoadRemoteHosts]);
+    if (onLoadRemoteHosts) void onLoadRemoteHosts();
+  }, [onLoadRemoteHosts]);
 
   return (
     <ModalBackdrop onClose={onClose}>
@@ -113,6 +114,8 @@ export function WorkspaceModal({
             <label className="source-choice">
               <input
                 checked={isRemoteVm}
+                disabled={!remoteVmAdmissionEnabled}
+                aria-describedby="workspace-remote-vm-admission-help"
                 name="workspaceSource"
                 type="radio"
                 value="remote-libvirt"
@@ -124,6 +127,11 @@ export function WorkspaceModal({
               <span>VM on remote machine</span>
             </label>
           </div>
+          {!remoteVmAdmissionEnabled ? (
+            <p className="subtle" id="workspace-remote-vm-admission-help" role="status">
+              {remoteHostState?.loading ? "Checking remote VM availability..." : remoteHostState?.attempted ? "Remote VM workspace creation is currently disabled." : "Checking remote VM availability..."}
+            </p>
+          ) : null}
           {isGithub ? (
             <div className="workspace-source-fields">
               <div className="repo-picker">
@@ -219,7 +227,7 @@ export function WorkspaceModal({
             <textarea name="env" placeholder={"FOO=workspace-value\nNODE_ENV=development"} rows={4} />
           </label>
           {environmentEntries.length ? <fieldset><legend>Saved generic environment keys</legend>{environmentEntries.map((entry) => <label className="checkbox-label" key={entry.id}><input name="environmentEntryId" type="checkbox" value={entry.id} /><span>{entry.label || entry.name} ({entry.name})</span></label>)}</fieldset> : null}
-          <Button disabled={isRemoteVm && !readyRemoteHost} type="submit">
+          <Button disabled={isRemoteVm && (!remoteVmAdmissionEnabled || !readyRemoteHost)} type="submit">
             <Plus aria-hidden="true" />
             Create Workspace
           </Button>

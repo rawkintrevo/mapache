@@ -170,6 +170,7 @@ async function testCreateRemoteWorkspaceUsesOwnerReadyHostAndFixedRuntime() {
     },
     runtimeProviderEnabled: () => true,
     runtimeGatewayBaseUrl: () => "https://gateway.example",
+    env: {REMOTE_VM_ADMISSION_ENABLED: "true"},
   };
   const service = createWorkspaceService(dependencies);
   const created = await service.createWorkspace("user-1", {
@@ -187,10 +188,36 @@ async function testCreateRemoteWorkspaceUsesOwnerReadyHostAndFixedRuntime() {
   assert.equal(updates.length, 1);
   await assert.rejects(
       normalizeWorkspaceSourcePayload("user-1", {source: {type: "remote-libvirt", hostId: "host-1"}}, {
+        env: {REMOTE_VM_ADMISSION_ENABLED: "true"},
         remoteHostService: {getRemoteHost: async () => ({ready: false, status: "unreachable"})},
       }),
       /remote_host_not_ready/,
   );
+}
+
+async function testRemoteWorkspaceAdmissionDisabledBeforeHostLookupOrWrite() {
+  let hostLookups = 0;
+  let workspaceWrites = 0;
+  const dependencies = {
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "server-time"}}},
+    db: {collection: () => ({add: async () => { workspaceWrites += 1; }})},
+    env: {REMOTE_VM_ADMISSION_ENABLED: "false"},
+    remoteHostService: {
+      getRemoteHost: async () => {
+        hostLookups += 1;
+        return {ready: true};
+      },
+    },
+  };
+  const service = createWorkspaceService(dependencies);
+  for (const type of ["remote-vm", "remote-libvirt"]) {
+    await assert.rejects(
+        service.createWorkspace("user-1", {name: "Remote guest", source: {type, hostId: "host-1"}}),
+        /remote_vm_admission_disabled/,
+    );
+  }
+  assert.equal(hostLookups, 0);
+  assert.equal(workspaceWrites, 0);
 }
 
 async function testCanonicalSessionAdoptionPrefersActiveRuntime() {
@@ -230,6 +257,7 @@ async function testCanonicalSessionAdoptionPrefersActiveRuntime() {
 Promise.all([
   testRenameWorkspace(),
   testCreateWorkspaceUsesManagedDefaults(),
+  testRemoteWorkspaceAdmissionDisabledBeforeHostLookupOrWrite(),
   testCreateRemoteWorkspaceUsesOwnerReadyHostAndFixedRuntime(),
   testCanonicalSessionAdoptionPrefersActiveRuntime(),
 ]).then(() => {

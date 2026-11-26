@@ -79,6 +79,14 @@ enabled schedule can start a stopped workspace without an open browser. The
 shell no longer reserves either sidebar column. GitHub account/repository
 connection controls remain in the profile and workspace creation flows.
 
+The workspace modal loads the owner-scoped remote-host inventory before enabling
+the **VM on remote machine** source choice. It requires the backend's
+`remoteVmAdmissionEnabled` response flag as well as a ready host; a missing,
+false, or stale response disables that choice and leaves Blank/GitHub creation
+available. `remoteHostsController` resets the flag with the rest of its state on
+account changes, while the Functions workspace service remains the enforcement
+boundary.
+
 SSH gateway management is a lazy account surface opened from the avatar menu.
 The page lists only gateway metadata returned for the signed-in owner, exposes
 owned workspace names as assignment choices, and saves workspace IDs through

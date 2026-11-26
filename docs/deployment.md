@@ -95,6 +95,16 @@ manifest, helper version, Functions revision, gateway revision and sanitized
 QA artifacts. Never put host addresses, fingerprints, private keys, or browser
 tokens in the release record.
 
+Remote workspace creation is guarded by the Functions environment value
+`REMOTE_VM_ADMISSION_ENABLED`. The production workflow writes the repository
+environment variable of that name to `functions/.env.pi-agents-cloud`, defaulting
+to `false` and rejecting values other than `true` or `false`. Deploy the API
+reader/enforcement while it is false, verify the default-deny behavior, and set
+the production environment value to `true` only for the #643 canary. Rollback
+is an API deployment with the value set back to `false`; this leaves existing
+remote host management, gateway access, lifecycle operations, and deletion
+available.
+
 For the #642 integration revision, the explicit command above completed
 successfully on 2026-11-26 for source `7b304c2` (the merged PR commit); the
 real-host canary remains the #643 gate. A host that fails

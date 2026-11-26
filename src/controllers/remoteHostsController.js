@@ -43,6 +43,7 @@ export function createRemoteHostsController({state, render = () => {}, api} = {}
         ...state.remoteHosts,
         loading: false,
         attempted: true,
+        remoteVmAdmissionEnabled: data?.remoteVmAdmissionEnabled === true,
         hosts: Array.isArray(data?.hosts) ? data.hosts : [],
         error: "",
       };
@@ -53,6 +54,7 @@ export function createRemoteHostsController({state, render = () => {}, api} = {}
           ...state.remoteHosts,
           loading: false,
           attempted: true,
+          remoteVmAdmissionEnabled: false,
           error: friendlyRemoteHostError(error),
         };
       }
@@ -178,9 +180,11 @@ export function createRemoteHostsController({state, render = () => {}, api} = {}
     try {
       const data = await getApi().getRemoteHosts();
       if (!isCurrent(context)) return;
+      state.remoteHosts.remoteVmAdmissionEnabled = data?.remoteVmAdmissionEnabled === true;
       state.remoteHosts.hosts = Array.isArray(data?.hosts) ? data.hosts : [];
     } catch {
       // Keep the original connection error visible when the status refresh fails.
+      if (isCurrent(context)) state.remoteHosts.remoteVmAdmissionEnabled = false;
     }
   }
 
