@@ -16,6 +16,7 @@ test("real SSH handshake pins keys, authenticates existing PKCS8 keys, and runs 
   let authAttempts = 0;
   let replyMode = "normal";
   const commands = [];
+  let receivedConfiguration;
   const peers = new Set();
   const server = new Server({hostKeys: [serverKeys.private]}, (client) => {
     peers.add(client);
@@ -32,6 +33,16 @@ test("real SSH handshake pins keys, authenticates existing PKCS8 keys, and runs 
       accept().on("exec", (accept, reject, info) => {
         commands.push(info.command);
         const stream = accept();
+        if (info.command.startsWith("mapache-vm configure ")) {
+          let input = "";
+          stream.on("data", (data) => { input += data.toString(); });
+          stream.on("end", () => {
+            receivedConfiguration = JSON.parse(input);
+            stream.write(JSON.stringify({configured: true}));
+            stream.exit(0); stream.end();
+          });
+          return;
+        }
         if (replyMode === "hang") return;
         if (replyMode === "full") {
           stream.stderr.write("No space left on device: /private/host/path");
@@ -74,6 +85,10 @@ test("real SSH handshake pins keys, authenticates existing PKCS8 keys, and runs 
     assert.equal(commands.at(-1), `mapache-vm ${action}${action === "capacity" ? "" : " mapache-ws-test"}`);
   }
   replyMode = "full";
+  const configuration = {SESSION_ID: "private-session-value"};
+  assert.deepEqual(await runRemoteHostCommand({...operation, action: "configure", configuration}), {configured: true});
+  assert.deepEqual(receivedConfiguration, configuration);
+  assert.equal(commands.some((value) => value.includes("private-session-value")), false);
   await assert.rejects(runRemoteHostCommand(operation), (error) => {
     assert.equal(error.publicMessage, "remote_vm_thin_disk_exhausted");
     assert.equal(error.message.includes("/private/"), false);

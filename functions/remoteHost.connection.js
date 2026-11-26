@@ -24,7 +24,7 @@ function sshPrivateKey(value) {
   return `-----BEGIN OPENSSH PRIVATE KEY-----\n${blob.toString("base64").match(/.{1,70}/g).join("\n")}\n-----END OPENSSH PRIVATE KEY-----\n`;
 }
 
-function command(client, text) {
+function command(client, text, input) {
   return new Promise((resolve, reject) => {
     client.exec(text, (error, stream) => {
       if (error) return reject(httpError(502, "remote_host_helper_failed"));
@@ -46,6 +46,7 @@ function command(client, text) {
           /no space left|disk full|thin.?disk/i.test(stderr) ? "remote_vm_thin_disk_exhausted" : "remote_host_helper_failed"));
         try { resolve(JSON.parse(output)); } catch { reject(httpError(502, "remote_host_helper_invalid")); }
       });
+      if (input !== undefined) stream.end(input);
     });
   });
 }
@@ -111,12 +112,16 @@ function connectRemoteHost(options) {
 async function runRemoteHostCommand(options) {
   const {action, guestName, host} = options;
   if (!host?.hostKeyFingerprint) throw httpError(409, "remote_host_trust_incomplete");
-  if (!["capacity", "inspect", "create", "start", "stop", "destroy"].includes(action) ||
+  if (!["capacity", "inspect", "create", "configure", "start", "stop", "destroy"].includes(action) ||
       (action !== "capacity" && !/^mapache-ws-[a-z0-9][a-z0-9-]{0,62}$/.test(guestName || ""))) {
     throw httpError(400, "remote_host_command_invalid");
   }
+  const input = action === "configure" ? JSON.stringify(options.configuration) : undefined;
+  if (action === "configure" && (!input || Buffer.byteLength(input) > 16384)) {
+    throw httpError(400, "remote_host_command_invalid");
+  }
   return withRemoteHost({...options, timeoutMs: options.timeoutMs || 45000}, (client) =>
-    command(client, `mapache-vm ${action}${action === "capacity" ? "" : ` ${guestName}`}`));
+    command(client, `mapache-vm ${action}${action === "capacity" ? "" : ` ${guestName}`}`, input));
 }
 
 module.exports = {connectRemoteHost, runRemoteHostCommand, sshPrivateKey};
