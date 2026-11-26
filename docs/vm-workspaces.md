@@ -18,7 +18,9 @@ deletes the VM and its auto-delete boot disk, while the data disk remains
 attached to no writer. A replacement creates a new boot disk and VM, verifies
 the data-disk identity, and attaches that same disk read/write. A workspace
 never silently changes from a stored VM provider back to a stale Cloud Run
-checkpoint.
+checkpoint. Once the provider deletion succeeds, the common session lifecycle
+also publishes the stopped state so the UI and schedulers do not retain a
+transient stopping status.
 
 The default region is `us-central1`; the initial proof zone is `us-central1-a`.
 The initial machine preset is `e2-standard-2`, with a `pd-balanced` data disk

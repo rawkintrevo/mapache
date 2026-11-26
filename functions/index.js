@@ -321,6 +321,7 @@ const cloudRunService = createCloudRunService({
 });
 const computeEngineService = createComputeEngineService({
   admin,
+  markSessionStopped,
   markMachineConfigurationApplied: (...args) => machineConfigurationService.markApplied(...args),
   projectId: "pi-agents-cloud",
   runnerServiceAccount: runnerServiceAccountValue() || "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",

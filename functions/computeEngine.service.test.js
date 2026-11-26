@@ -105,3 +105,41 @@ test("mixed-case Firebase workspace IDs produce valid Compute Engine labels", as
     assert.match(request.data.labels["mapache-workspace-id"], /^[a-z][a-z0-9_-]*$/);
   }
 });
+
+test("Compute Engine session deletion publishes the stopped lifecycle state", async () => {
+  const stopped = [];
+  const rawDescriptor = descriptor();
+  const normalizedOwner = normalizeComputeEngineLabelValue(rawDescriptor.ownerUid);
+  const normalizedWorkspace = normalizeComputeEngineLabelValue(rawDescriptor.workspaceId);
+  const service = createComputeEngineService({
+    request: async (request) => {
+      if (request.method === "GET" && request.url.includes("/instances/")) {
+        return {
+          data: {
+            name: rawDescriptor.instanceName,
+            status: "RUNNING",
+            labels: {
+              "mapache-owner-uid": normalizedOwner,
+              "mapache-workspace-id": normalizedWorkspace,
+              "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND,
+            },
+          },
+        };
+      }
+      if (request.method === "DELETE" && request.url.includes("/instances/")) {
+        return {data: {status: "DONE"}};
+      }
+      throw new Error(`unexpected ${request.method} ${request.url}`);
+    },
+    markSessionStopped: async (sessionRef, session, reason) => {
+      stopped.push({sessionRef, session, reason});
+    },
+  });
+  const sessionRef = {id: "session-1"};
+  const session = {runtimeProvider: rawDescriptor};
+
+  const result = await service.deleteSessionService(sessionRef, session, {reason: "manual"});
+
+  assert.deepEqual(result, {serviceAbsent: true, dataDiskRetained: true});
+  assert.deepEqual(stopped, [{sessionRef, session, reason: "manual"}]);
+});
