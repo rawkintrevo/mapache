@@ -9,7 +9,7 @@
     "generate:runner-catalog": "node scripts/generate-runner-catalog.mjs",
     "generate:automation-models": "node scripts/generate-automation-model-catalog.mjs",
     "test:frontend": "vitest run --maxWorkers=1",
-    "test:remote-vm": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/remote-vm-host -p 'test_*.py' && PYTHONDONTWRITEBYTECODE=1 python3 scripts/remote-vm-guest/test_guest_image.py",
+    "test:remote-vm": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/remote-vm-host -p 'test_*.py' && PYTHONDONTWRITEBYTECODE=1 python3 scripts/remote-vm-guest/test_guest_image.py && npm --prefix vm-gateway test",
     "test:firestore-rules": "firebase emulators:exec --only firestore --project mapache-rules-test --log-verbosity SILENT \"node firestore.rules.test.cjs\"",
     "build:main": "vite build",
     "analyze:bundle": "vite build --sourcemap && node scripts/analyze-vite-bundle.mjs",

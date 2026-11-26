@@ -6,9 +6,10 @@ const net = require("node:net");
 const {Server, utils} = require("ssh2");
 const {generateKeyMaterial} = require("./remoteHost.service");
 const {sshPrivateKey} = require("./remoteHost.connection");
-const {createSshTransport} = require("../vm-gateway/proxy");
+const {createSshTransportPool} = require("../vm-gateway/sshTransport");
 
-test("real OpenSSH gateway authenticates a converted registered key and relays only the guest target", {timeout: 15000}, async (t) => {
+test("real SSH gateway authenticates a converted registered key and relays only the guest target", {timeout: 15000}, async (t) => {
+  const createSshTransport = createSshTransportPool({idleMs: 20});
   const hostKeys = utils.generateKeyPairSync("ed25519");
   const hostBlob = utils.parseKey(hostKeys.public).getPublicSSH();
   const material = generateKeyMaterial();

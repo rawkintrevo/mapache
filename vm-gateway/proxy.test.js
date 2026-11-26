@@ -3,29 +3,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const http = require("node:http");
-const crypto = require("node:crypto");
 const {once} = require("node:events");
 const {WebSocketServer, WebSocket} = require("ws");
-const {createGateway, authorizationInput, sameAuthority, validateTarget, pinnedKnownHosts} = require("./proxy");
-
-test("known_hosts contains only the confirmed Ed25519 key regardless of scan ordering", async () => {
-  function key() {
-    const publicKey = crypto.generateKeyPairSync("ed25519").publicKey.export({type: "spki", format: "der"}).subarray(-32);
-    const blob = Buffer.concat([Buffer.from("0000000b7373682d6564323535313900000020", "hex"), publicKey]);
-    return {encoded: blob.toString("base64"), fingerprint: `SHA256/${crypto.createHash("sha256").update(blob).digest("base64").replace(/=+$/, "")}`};
-  }
-  const pinned = key();
-  const other = key();
-  const target = {sshAddress: "home.example.com", sshPort: 2222, hostKeyFingerprint: pinned.fingerprint};
-  const dependencies = {execFileAsync: async (program, args) => {
-    assert.equal(program, "ssh-keyscan");
-    assert.equal(args[args.indexOf("-t") + 1], "ed25519");
-    return {stdout: `home.example.com ssh-ed25519 ${other.encoded}\nignored-host ssh-ed25519 ${pinned.encoded}\n`};
-  }};
-  assert.equal(await pinnedKnownHosts(target, dependencies), `[home.example.com]:2222 ssh-ed25519 ${pinned.encoded}\n`);
-  await assert.rejects(pinnedKnownHosts({...target, hostKeyFingerprint: "SHA256/wrong"}, dependencies), /key_mismatch/);
-  await assert.rejects(pinnedKnownHosts(target, {execFileAsync: async () => ({stdout: "host ssh-ed25519 AAAA\n"})}), /key_mismatch/);
-});
+const {createGateway, authorizationInput, sameAuthority, validateTarget} = require("./proxy");
 
 async function fixture(t, resolveOverride) {
   let requests = 0;
@@ -39,7 +19,9 @@ async function fixture(t, resolveOverride) {
     if (req.method === "PUT") return req.pipe(res);
     res.end(JSON.stringify({url: req.url, host: req.headers.host, origin: req.headers.origin, cookie: req.headers.cookie}));
   });
-  const ws = new WebSocketServer({server: upstream});
+  const ws = new WebSocketServer({server: upstream,
+    verifyClient: (info) => info.origin === `http://${info.req.headers.host}` && info.req.url !== "/agent/reject-ws",
+  });
   ws.on("connection", (socket) => socket.on("message", (data) => socket.send(data)));
   upstream.listen(0, "127.0.0.1");
   await once(upstream, "listening");
@@ -84,7 +66,7 @@ function request(f, path, {method = "GET", token = "valid", body, headers = {}} 
 
 test("SSH relay streams HTTP and strips browser authority from the guest request", async (t) => {
   const f = await fixture(t);
-  const response = await request(f, "/agent/?mapache_access=valid&x=1", {headers: {
+  const response = await request(f, "/agent/?x=1", {headers: {
     origin: "https://gateway.example.com",
     "x-forwarded-host": "attacker.example",
   }});
@@ -92,7 +74,7 @@ test("SSH relay streams HTTP and strips browser authority from the guest request
   assert.deepEqual(JSON.parse(response.body), {
     url: "/agent/?x=1",
     host: "192.168.250.12:8787",
-    origin: "https://192.168.250.12:8787",
+    origin: "http://192.168.250.12:8787",
     cookie: "mapache_access=valid",
   });
   const body = Buffer.alloc(2 * 1024 * 1024, 123);
@@ -101,11 +83,42 @@ test("SSH relay streams HTTP and strips browser authority from the guest request
   assert.equal(uploaded.headers["cache-control"], "no-store");
 });
 
+test("authorized URL bootstrap sets a browser cookie before assets and WebSockets", async (t) => {
+  const f = await fixture(t);
+  const bootstrap = await request(f, "/agent/?mapache_access=valid&x=1", {token: ""});
+  assert.equal(bootstrap.status, 303);
+  assert.equal(bootstrap.headers.location, "/agent/?x=1");
+  assert.equal(bootstrap.headers["cache-control"], "no-store");
+  assert.equal(bootstrap.headers["referrer-policy"], "no-referrer");
+  assert.equal(f.count(), 0);
+  const cookie = bootstrap.headers["set-cookie"][0];
+  assert.equal(cookie, "mapache_access=valid; Path=/agent; HttpOnly; Secure; SameSite=None");
+  for (const path of [bootstrap.headers.location, "/agent/assets/main.js", "/agent/assets/main.css"]) {
+    assert.equal((await request(f, path, {headers: {cookie: cookie.split(";")[0]}})).status, 200);
+  }
+  const denied = await request(f, "/agent/?mapache_access=wrong", {token: ""});
+  assert.equal(denied.status, 404);
+  assert.equal(denied.headers["set-cookie"], undefined);
+});
+
 test("denied and guessed hosts never connect to the guest", async (t) => {
   const f = await fixture(t);
   assert.equal((await request(f, "/agent/", {token: "wrong"})).status, 404);
   assert.equal((await request(f, "/agent/", {headers: {host: "foreign.example.com"}})).status, 404);
   assert.equal(f.count(), 0);
+});
+
+test("a private WebSocket rejection promptly denies the public handshake", async (t) => {
+  const f = await fixture(t);
+  const socket = new WebSocket(`ws://127.0.0.1:${f.port}/agent/reject-ws`, {
+    headers: {host: "gateway.example.com", cookie: "mapache_access=valid"}, handshakeTimeout: 1000,
+  });
+  t.after(() => socket.terminate());
+  const status = await new Promise((resolve, reject) => {
+    socket.on("error", reject);
+    socket.once("unexpected-response", (req, res) => { res.resume(); resolve(res.statusCode); });
+  });
+  assert.equal(status, 404);
 });
 
 test("WebSocket frames relay and close when generation authority changes", async (t) => {
