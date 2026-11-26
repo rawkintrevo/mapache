@@ -3,7 +3,7 @@ import {lstatSync, mkdtempSync, mkdirSync, readlinkSync, symlinkSync, writeFileS
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import test from "node:test";
-import {applyPatches, buildUpstream, copyRuntime, readManifest} from "./build.mjs";
+import {applyPatches, buildUpstream, copyRuntime, createCacheDecision, readManifest} from "./build.mjs";
 
 function fixture() {
 	const root = mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-test-"));
@@ -29,6 +29,11 @@ test("the manifest is a release policy rather than a manually pinned source", ()
 	assert.equal(manifest.upstream.version, "0.122.0");
 	assert.equal(manifest.piSdk.version, "1.6.0");
 	assert.equal(manifest.piSdk.releaseChannel, "latest");
+});
+
+test("fast cache misses are never publishable", () => {
+	assert.equal(createCacheDecision({skipTests: true}).publishable, false);
+	assert.equal(createCacheDecision({skipTests: false}).publishable, true);
 });
 
 test("the build rejects a source directory with the wrong revision", async () => {

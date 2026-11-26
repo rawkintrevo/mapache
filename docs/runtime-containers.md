@@ -270,7 +270,11 @@ full SHA-256 key with a create-only generation precondition. A missing,
 tampered, stale, or otherwise unverifiable object is a miss. On a miss, a
 release build runs the existing typecheck, full upstream suite, and web build;
 pull-request builds pass `MAPACHE_SKIP_UPSTREAM_TESTS=1` and intentionally skip
-only that upstream suite while retaining typecheck and web-build validation.
+only that upstream suite while retaining typecheck and web-build validation. Fast
+pull-request builds may restore a matching artifact that was already validated by
+a release build, so they avoid repeating the dependency install and web build on a
+cache hit. A fast cache miss remains unpublishable until a full release build
+validates the artifact.
 In both cases the finished image is started and `bin/pi-web-ui-smoke.js` verifies
 that `/agent/` serves HTML plus every referenced JavaScript application bundle.
 The build-only smoke container sets `MAPACHE_STARTUP_SMOKE=1`, which skips
@@ -278,9 +282,9 @@ workspace checkpoint coordination and authority persistence because the image
 has no session document; it does not change normal Cloud Run startup behavior.
 Only after those checks pass is the runtime packaged and the cache object
 published. On a verified hit, the runtime is restored and the three upstream
-checks are skipped. Fast pull-request builds do not restore or publish the
-validated artifact cache, so an untested runtime can never become the shared
-cache. Both paths log the cache key, decision, reason, and elapsed time;
+checks are skipped. Fast pull-request cache misses do not publish the
+untested artifact, so an untested runtime can never become the shared cache.
+Both paths log the cache key, decision, reason, and elapsed time;
 changing a managed patch, resolved dependency tree, release, or builder
 environment produces a miss.
 

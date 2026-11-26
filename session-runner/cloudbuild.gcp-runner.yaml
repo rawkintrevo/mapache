@@ -90,9 +90,11 @@ steps:
         key="$$(cat pi-web-ui-cache-key)"
         identity="$$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync("pi-web-ui-runtime/build-info.json", "utf8")).cacheIdentitySha256 || "")')"
         decision="$$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync("pi-web-ui-runtime/build-info.json", "utf8")).cacheDecision?.status || "unknown")')"
+        publishable="$$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync("pi-web-ui-runtime/build-info.json", "utf8")).cacheDecision?.publishable === true ? "true" : "false")')"
         printf '%s\n' "$${decision}" > pi-web-ui-cache-publish-decision
+        printf '%s\n' "$${publishable}" > pi-web-ui-cache-publish-allowed
         echo "pi-web-ui cache decision=$${decision} key=$${key}"
-        if [ "$${decision}" = "miss" ]; then
+        if [ "$${decision}" = "miss" ] && [ "$${publishable}" = "true" ]; then
           node upstream/pi-web-ui/artifactCache.mjs pack \
             --runtime-dir pi-web-ui-runtime \
             --output pi-web-ui-cache.tar.gz \
@@ -107,10 +109,11 @@ steps:
       - -ceu
       - |
         decision="$$(cat pi-web-ui-cache-publish-decision)"
+        publishable="$$(cat pi-web-ui-cache-publish-allowed)"
         key="$$(cat pi-web-ui-cache-key)"
         cache_uri="$$(cat pi-web-ui-cache-uri)"
-        if [ "$${decision}" != "miss" ]; then
-          echo "pi-web-ui cache publication skipped: decision=$${decision} key=$${key}"
+        if [ "$${decision}" != "miss" ] || [ "$${publishable}" != "true" ]; then
+          echo "pi-web-ui cache publication skipped: decision=$${decision} publishable=$${publishable} key=$${key}"
           exit 0
         fi
         if gcloud storage cp --if-generation-match=0 pi-web-ui-cache.tar.gz "$${cache_uri}"; then

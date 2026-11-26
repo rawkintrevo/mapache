@@ -16,6 +16,16 @@ const PATCH_ROOT = join(HERE, "patches");
 function fail(message) {
 	throw new Error("pi-web-ui build: " + message);
 }
+
+export function createCacheDecision({skipTests = false} = {}) {
+	return {
+		status: "disabled",
+		reason: skipTests ? "tests-skipped" : "no-build-inputs",
+		elapsedMs: 0,
+		publishable: !skipTests,
+	};
+}
+
 export function readManifest(manifestPath = MANIFEST_PATH) {
 	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 	if (manifest.schemaVersion !== 2) fail("unsupported manifest schema");
@@ -395,6 +405,62 @@ export async function buildUpstream(options = {}) {
 		if (manifest.piSdk.version && sdk.version !== manifest.piSdk.version) {
 			fail(`resolved Pi SDK version mismatch (expected ${manifest.piSdk.version}, got ${sdk.version})`);
 		}
+		const cacheKey = buildInputs?.cacheKey || null;
+		const cacheIdentitySha256 = buildInputs?.identitySha256 || null;
+		const cacheLookupStartedAt = Date.now();
+		let cacheDecision = createCacheDecision({skipTests: options.skipTests});
+		const webBasePath = manifest.build?.webBasePath;
+		if (typeof webBasePath !== "string" || !/^\/[A-Za-z0-9._~-]+\/$/.test(webBasePath)) {
+			fail("manifest build.webBasePath must be a single slash-delimited path");
+		}
+		const adapter = adapterMetadata(manifest);
+		if (cacheKey && options.cacheArchivePath && options.outputDir) {
+			const cached = await restoreCacheArtifact({
+				archivePath: options.cacheArchivePath,
+				outputDir: options.outputDir,
+				expectedKey: cacheKey,
+				expectedIdentitySha256: cacheIdentitySha256,
+				requiredRuntimeEntries: manifest.build.runtimeEntries,
+			});
+			cacheDecision = {
+				...cacheDecision,
+				status: cached.status,
+				reason: cached.reason,
+				elapsedMs: cached.elapsedMs,
+			};
+			console.log(`pi-web-ui cache decision=${cached.status} reason=${cached.reason} key=${cacheKey} elapsedMs=${cached.elapsedMs}`);
+			if (cached.status === "hit") {
+				const expectedBuildInfo = cached.buildInfo || {};
+				const expectedPiAiVersion = buildInputs?.piAi?.version || expectedBuildInfo.piAi?.version || "";
+				if (expectedBuildInfo.upstreamCommit !== resolvedSource.commit ||
+					expectedBuildInfo.packageVersion !== resolvedSource.version ||
+					expectedBuildInfo.piSdkVersion !== sdk.version ||
+					(expectedPiAiVersion && expectedBuildInfo.piAi?.version !== expectedPiAiVersion) ||
+					expectedBuildInfo.piMcpAdapterVersion !== adapter.version) {
+					rmSync(resolve(options.outputDir), {recursive: true, force: true});
+					cacheDecision = {
+						...cacheDecision,
+						status: "miss",
+						reason: "cached-build-info-metadata-mismatch",
+						elapsedMs: Date.now() - cacheLookupStartedAt,
+					};
+					console.log(`pi-web-ui cache decision=miss reason=${cacheDecision.reason} key=${cacheKey} elapsedMs=${cacheDecision.elapsedMs}`);
+				} else {
+					updateCacheDecision(options.outputDir, cacheDecision);
+					return {
+						commit: resolvedSource.commit,
+						tag: resolvedSource.tag,
+						packageVersion: resolvedSource.version,
+						piSdkVersion: sdk.version,
+						piAiVersion: expectedPiAiVersion,
+						piMcpAdapterVersion: adapter.version,
+						outputDir: resolve(options.outputDir),
+						cache: cacheDecision,
+						cacheKey,
+					};
+				}
+			}
+		}
 		await run("npm", ["ci"], {cwd: sourceDir});
 		await run("npm", ["install", "--no-save", "--package-lock=false", "--ignore-scripts", sdk.package + "@" + sdk.version], {cwd: sourceDir});
 		if (existsSync(join(sourceDir, "mobile", "package.json"))) {
@@ -411,63 +477,6 @@ export async function buildUpstream(options = {}) {
 			version: installedPiAi.version,
 			fetchImpl,
 		});
-		const adapter = adapterMetadata(manifest);
-		const cacheKey = buildInputs?.cacheKey || null;
-		const cacheIdentitySha256 = buildInputs?.identitySha256 || null;
-		const cacheLookupStartedAt = Date.now();
-		let cacheDecision = {
-			status: "disabled",
-			reason: options.skipTests ? "tests-skipped" : "no-build-inputs",
-			elapsedMs: 0,
-		};
-		const webBasePath = manifest.build?.webBasePath;
-		if (typeof webBasePath !== "string" || !/^\/[A-Za-z0-9._~-]+\/$/.test(webBasePath)) {
-			fail("manifest build.webBasePath must be a single slash-delimited path");
-		}
-		if (!options.skipTests && cacheKey && options.cacheArchivePath) {
-			const cached = await restoreCacheArtifact({
-				archivePath: options.cacheArchivePath,
-				outputDir: options.outputDir,
-				expectedKey: cacheKey,
-				expectedIdentitySha256: cacheIdentitySha256,
-				requiredRuntimeEntries: manifest.build.runtimeEntries,
-			});
-			cacheDecision = {
-				status: cached.status,
-				reason: cached.reason,
-				elapsedMs: cached.elapsedMs,
-			};
-			console.log(`pi-web-ui cache decision=${cached.status} reason=${cached.reason} key=${cacheKey} elapsedMs=${cached.elapsedMs}`);
-			if (cached.status === "hit") {
-				const expectedBuildInfo = cached.buildInfo || {};
-				if (expectedBuildInfo.upstreamCommit !== resolvedSource.commit ||
-					expectedBuildInfo.packageVersion !== resolvedSource.version ||
-					expectedBuildInfo.piSdkVersion !== sdk.version ||
-					expectedBuildInfo.piAi?.version !== installedPiAi.version ||
-					expectedBuildInfo.piMcpAdapterVersion !== adapter.version) {
-					rmSync(resolve(options.outputDir), {recursive: true, force: true});
-					cacheDecision = {
-						status: "miss",
-						reason: "cached-build-info-metadata-mismatch",
-						elapsedMs: Date.now() - cacheLookupStartedAt,
-					};
-					console.log(`pi-web-ui cache decision=miss reason=${cacheDecision.reason} key=${cacheKey} elapsedMs=${cacheDecision.elapsedMs}`);
-				} else {
-					updateCacheDecision(options.outputDir, cacheDecision);
-					return {
-						commit: resolvedSource.commit,
-						tag: resolvedSource.tag,
-						packageVersion: resolvedSource.version,
-						piSdkVersion: sdk.version,
-						piAiVersion: installedPiAi.version,
-						piMcpAdapterVersion: adapter.version,
-						outputDir: resolve(options.outputDir),
-						cache: cacheDecision,
-						cacheKey,
-					};
-				}
-			}
-		}
 		const buildStartedAt = Date.now();
 		await run("npm", ["run", "typecheck"], {cwd: sourceDir});
 		await run("npm", ["run", "build"], {
