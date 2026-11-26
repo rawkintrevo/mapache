@@ -7,6 +7,7 @@ const {
   publicPreviewContentType,
   publicPreviewPath,
   signSessionAgentAccessToken,
+  signSessionRemoteGatewayAccessToken,
   shouldServePublicPreviewIndexFallback,
 } = require("./preview.service");
 
@@ -100,3 +101,51 @@ console.log("preview service tests passed");
   console.error(error);
   process.exitCode = 1;
 });
+
+testRemoteGatewayAccess().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+
+async function testRemoteGatewayAccess() {
+  const remoteDescriptor = {
+    version: 1,
+    backend: "remote-libvirt",
+    workspaceId: "workspace-remote",
+    ownerUid: "owner-1",
+    hostId: "host-1",
+    guestName: "mapache-ws-remote",
+    dataDiskName: "mapache-ws-remote.qcow2",
+    instanceName: "mapache-ws-remote",
+    guestIp: "192.168.250.12",
+    generation: 4,
+    state: "running",
+    guestResources: {vcpus: 2, memoryMiB: 8192, diskGiB: 40},
+  };
+  const session = {
+    ownerUid: "owner-1",
+    workspaceId: "workspace-remote",
+    runnerSessionId: "session-remote",
+    browserAccessTokenSecret: "browser-secret",
+    runtimeProvider: remoteDescriptor,
+    status: "running",
+  };
+  const service = createPreviewService({
+    browserAccessTtlMs: 60 * 60 * 1000,
+    remoteVmGatewayBaseUrl: () => "https://mapache-vm-gateway.example.com",
+    requireSession: async () => ({sessionSnap: {data: () => session}, workspace: {runtimeProvider: remoteDescriptor}}),
+  });
+  const result = await service.createSessionAccessUrls("owner-1", "workspace-remote", "session-remote");
+  assert.match(result.agentUrl, /^https:\/\/mapache-vm-gateway\.example\.com\/agent\/\?mapache_access=/);
+  assert.equal(result.terminalUrl, null);
+  const payload = JSON.parse(Buffer.from(new URL(result.agentUrl).searchParams.get("mapache_access").split(".")[0], "base64url").toString("utf8"));
+  assert.deepStrictEqual(payload, {
+    aud: "agent",
+    exp: payload.exp,
+    gen: "4",
+    sid: "session-remote",
+    uid: "owner-1",
+    wid: "workspace-remote",
+  });
+  assert.match(signSessionRemoteGatewayAccessToken(session, "workspace-remote", "owner-1", Date.now() + 1000), /^.+\..+$/);
+}

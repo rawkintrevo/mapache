@@ -153,6 +153,16 @@ function githubAutomationTokenRefreshUrl() {
   if (!/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/.test(projectId)) return "";
   return `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net/githubAutomationToken`;
 }
+
+function remoteVmGatewayBaseUrl() {
+  const configured = process.env.VM_REMOTE_VM_GATEWAY_BASE_URL || process.env.VM_RUNTIME_GATEWAY_BASE_URL ||
+    String(process.env.VM_WORKSPACE_GATEWAY_HOSTS || "").split(",")
+        .map((value) => value.trim())
+        .find((value) => value && !value.startsWith("backup-recovery---"));
+  if (!configured) return "";
+  return String(configured).startsWith("http") ? configured : `https://${configured}`;
+}
+
 const githubService = createGithubService({tokenRefreshUrl: githubAutomationTokenRefreshUrl()});
 const githubAutomationTokenBrokerService = createGithubAutomationTokenBrokerService({
   db,
@@ -227,6 +237,7 @@ const previewService = createPreviewService({
   browserAccessTtlMs: SESSION_BROWSER_ACCESS_TTL_MS,
   db,
   defaultBucket: DEFAULT_BUCKET,
+  remoteVmGatewayBaseUrl: () => remoteVmGatewayBaseUrl(),
   requestRunnerJson,
   requireSession,
   storage,
@@ -574,6 +585,24 @@ Object.defineProperty(module.exports, "__mapacheMigrationOperations", {
     restartSession,
   }),
   writable: false,
+});
+
+// IAM-private gateway resolver. It returns only a backend-owned target to the
+// dedicated relay service; browser callers cannot invoke this function.
+exports.vmGatewayResolve_v2 = onRequest({
+  invoker: "mapache-vm-gateway-v2@pi-agents-cloud.iam.gserviceaccount.com",
+  timeoutSeconds: 30,
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const {createVmGatewayResolveService} = require("./vmGatewayResolve.service");
+    res.json(await createVmGatewayResolveService({
+      allowedGatewayHosts: () => process.env.VM_WORKSPACE_GATEWAY_HOSTS || "",
+      db,
+    })(req));
+  } catch (error) {
+    res.status(error.status || 503).json({error: error.publicMessage || "gateway_unavailable"});
+  }
 });
 
 exports.api = onRequest({

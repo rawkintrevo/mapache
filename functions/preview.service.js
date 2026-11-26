@@ -9,6 +9,7 @@ const {
   explicitRuntimeGeneration,
   isCompatibleAgentSession,
 } = require("./agentRuntime.helpers");
+const {isRemoteLibvirtRuntime} = require("./runtimeProvider.helpers");
 const {qaFaultAccessTtlMs} = require("./qaFaultHarness.helpers");
 
 function createPreviewService(dependencies = {}) {
@@ -24,12 +25,27 @@ function createPreviewService(dependencies = {}) {
 async function createSessionAccessUrls(uid, workspaceId, sessionId, dependencies = {}) {
   const {sessionSnap, workspace} = await dependencies.requireSession(uid, workspaceId, sessionId);
   const session = {id: sessionId, ...sessionSnap.data()};
-  if (!session.serviceUrl) throw httpError(409, "session_not_running");
+  const remoteRuntime = isRemoteLibvirtRuntime(session) || isRemoteLibvirtRuntime(workspace);
+  const remoteBaseUrl = remoteRuntime ? resolveRemoteGatewayBaseUrl(session, dependencies) : "";
+  if (!session.serviceUrl && !remoteBaseUrl) throw httpError(409, "session_not_running");
   if (!session.browserAccessTokenSecret) {
     throw httpError(409, "session_requires_restart_for_browser_access");
   }
 
   const expiresAtMs = Date.now() + qaFaultAccessTtlMs(session, dependencies.browserAccessTtlMs);
+  if (remoteRuntime) {
+    const token = signSessionRemoteGatewayAccessToken(session, workspaceId, uid, expiresAtMs);
+    const baseUrl = remoteBaseUrl.replace(/\/+$/, "");
+    return {
+      ok: true,
+      expiresAt: new Date(expiresAtMs).toISOString(),
+      terminalUrl: null,
+      previewUrl: null,
+      browserUrl: null,
+      browserStatusUrl: null,
+      agentUrl: appendQuery(`${baseUrl}/agent/`, "mapache_access", token),
+    };
+  }
   const token = signSessionBrowserAccessToken(session, expiresAtMs);
   const baseUrl = session.serviceUrl.replace(/\/+$/, "");
   const terminalUrl = appendQuery(`${baseUrl}/`, "mapache_access", token);
@@ -183,6 +199,43 @@ function signSessionAgentAccessToken(session, expiresAtMs) {
   return `${payload}.${signature}`;
 }
 
+function signSessionRemoteGatewayAccessToken(session, workspaceId, ownerUid, expiresAtMs) {
+  const generation = explicitRuntimeGeneration(
+      session.agentRuntimeGeneration || session.runtimeProvider?.generation || "1",
+  ) || "1";
+  const payload = Buffer.from(JSON.stringify({
+    aud: AGENT_AUDIENCE,
+    exp: Math.floor(expiresAtMs / 1000),
+    gen: generation,
+    sid: session.runnerSessionId || session.id || "",
+    uid: ownerUid || session.ownerUid || "",
+    wid: workspaceId || session.workspaceId || "",
+  })).toString("base64url");
+  const signature = crypto.createHmac("sha256", session.browserAccessTokenSecret)
+      .update(payload)
+      .digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function resolveRemoteGatewayBaseUrl(session, dependencies = {}) {
+  const configured = session.runtimeProvider?.gateway?.baseUrl ||
+    dependencies.remoteVmGatewayBaseUrl?.() ||
+    process.env.VM_REMOTE_VM_GATEWAY_BASE_URL ||
+    process.env.VM_RUNTIME_GATEWAY_BASE_URL ||
+    String(process.env.VM_WORKSPACE_GATEWAY_HOSTS || "").split(",")
+        .map((value) => value.trim())
+        .find((value) => value && !value.startsWith("backup-recovery---"));
+  if (!configured) return "";
+  try {
+    const value = String(configured).startsWith("http") ? configured : `https://${configured}`;
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password || (url.pathname !== "/" && url.pathname !== "")) return "";
+    return url.origin;
+  } catch {
+    return "";
+  }
+}
+
 function appendQuery(url, key, value) {
   const parsed = new URL(url);
   parsed.searchParams.set(key, value);
@@ -241,5 +294,6 @@ module.exports = {
   publicPreviewPath,
   signSessionBrowserAccessToken,
   signSessionAgentAccessToken,
+  signSessionRemoteGatewayAccessToken,
   shouldServePublicPreviewIndexFallback,
 };

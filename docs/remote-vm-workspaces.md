@@ -1,11 +1,11 @@
 # Remote-host VM workspaces
 
 This page defines the contract for the remote-libvirt workspace provider under
-#630. Host registration, the lifecycle adapter, and the host helper are now
-implemented behind explicit provider dispatch. The gateway, connection
-materialization, workspace-creation UI, and real-host rollout remain separate
-children. Existing Cloud Run, Compute Engine, and retained SSH providers are
-unchanged.
+#630. Host registration, the lifecycle adapter, the host helper, and the
+authenticated gateway are implemented behind explicit provider dispatch. Guest
+connection materialization, the workspace-creation UI, and real-host rollout
+remain separate children. Existing Cloud Run, Compute Engine, and retained SSH
+providers are unchanged.
 
 The host registry portion is implemented by `functions/remoteHost.service.js`
 and the authenticated API route composition in `functions/apiRouteManifest.js`,
@@ -144,6 +144,38 @@ legacy idle/scheduled reconcilers do not stop a remote guest; manual stop/start
 and workspace deletion are the only v1 power transitions. The lifecycle adapter
 dispatches only for `runtimeProvider.backend=remote-libvirt`; provider errors
 never fall back to Cloud Run, Compute Engine, or SSH.
+
+### Authenticated gateway implementation (child #640)
+
+`vm-gateway/` is the separately deployed `mapache-vm-gateway-v2` Cloud Run
+relay. The browser receives a short-lived `agent` token from
+`functions/preview.service.js` and opens only `/agent/` and `/agent/ws` on the
+gateway origin. `functions/vmGatewayResolve.service.js` is an IAM-only
+`vmGatewayResolve_v2` resolver; it verifies the signed token, owner/workspace
+binding, running runtime generation, ready host, pinned host fingerprint, and
+the fixed `192.168.250.x:8787` guest endpoint. It returns a bounded relay
+authority to the gateway, never to the browser. The private host key is used
+only inside the server-to-server resolver/relay path and is never logged or
+forwarded to the guest.
+
+The relay opens a pinned `ssh -W` stdio connection to the managed host, strips
+browser credentials and forwarding headers, and injects the short-lived access
+cookie on the private guest request. HTTP bodies and WebSocket frames stream
+with backpressure. A five-second bounded reauthorization loop closes a route
+when the host, guest, owner, session, generation, or deletion state changes;
+gateway/SSH loss closes the route without stopping the guest, and the client
+must request a fresh access URL. The legacy Compute Engine route remains an
+explicit direct-target branch; remote-libvirt errors never fall back to it.
+
+Deploy the resolver with `firebase deploy --only functions:vmGatewayResolve_v2
+--project pi-agents-cloud`. Build and deploy `vm-gateway/Dockerfile` to the
+existing `mapache-vm-gateway-v2` service with
+`VM_GATEWAY_RESOLVER_URL=https://us-central1-pi-agents-cloud.cloudfunctions.net/vmGatewayResolve_v2`,
+the `mapache-vm-gateway-v2@pi-agents-cloud.iam.gserviceaccount.com` identity,
+and public ingress for the signed browser origin. The relay image includes
+only the OpenSSH client and Google ID-token client; it has no Firestore or
+secret-store authority. Keep the gateway host in the
+`VM_WORKSPACE_GATEWAY_HOSTS` Functions environment variable.
 
 ## Host trust and bootstrap
 
