@@ -99,6 +99,7 @@ class GuestImageTests(unittest.TestCase):
                     self.assertEqual(destination, "/opt/mapache")
                     directories = [command[i + 1] for i, value in enumerate(command) if value == "--mkdir"]
                     self.assertIn("/usr/local/libexec", directories)
+                    self.assertTrue(set(self.manifest["durablePaths"]).issubset(directories))
                     for i, value in enumerate(command):
                         if value == "--upload":
                             self.assertTrue(Path(command[i + 1].split(":", 1)[0]).is_file())
@@ -108,6 +109,9 @@ class GuestImageTests(unittest.TestCase):
                  patch.object(builder.shutil, "which", return_value="available"):
                 builder.build_image(root / "base", payload, root / "guest.qcow2", self.manifest, runner=run)
             self.assertEqual(sum(command[0] == "virt-customize" for command in commands), 1)
+            resize = next(command for command in commands if command[0] == "virt-resize")
+            self.assertEqual(resize[resize.index("--expand") + 1], "/dev/sda1")
+            self.assertLess(commands.index(resize), next(i for i, command in enumerate(commands) if command[0] == "virt-customize"))
 
 
 if __name__ == "__main__":

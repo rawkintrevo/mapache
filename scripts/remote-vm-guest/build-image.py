@@ -216,8 +216,8 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
         raise BuildError("output image must not overwrite the base image")
     if output.exists():
         raise BuildError(f"refusing to overwrite existing guest image: {output}")
-    if shutil.which("qemu-img") is None or shutil.which("virt-customize") is None:
-        raise BuildError("qemu-img and virt-customize are required to build a guest image")
+    if any(shutil.which(tool) is None for tool in ("qemu-img", "virt-customize", "virt-resize")):
+        raise BuildError("qemu-img, virt-customize and virt-resize are required to build a guest image")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix="mapache-guest-image-"))
@@ -228,8 +228,10 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
         shutil.copytree(payload, staged_payload, symlinks=True)
         # Copy to a new standalone QCOW2 first. A retained workspace disk must
         # not depend on the downloadable base image remaining on the host.
-        runner(["qemu-img", "convert", "-p", "-O", "qcow2", str(base_image), str(output)], check=True)
-        runner(["qemu-img", "resize", str(output), f"{manifest['resources']['diskGiB']}G"], check=True)
+        runner(["qemu-img", "create", "-f", "qcow2", str(output), f"{manifest['resources']['diskGiB']}G"], check=True)
+        # Root on the hash-pinned Noble image is /dev/sda1.
+        runner(["virt-resize", "--format", "qcow2", "--output-format", "qcow2",
+                "--expand", "/dev/sda1", str(base_image), str(output)], check=True)
         runner([
             "virt-customize", "-a", str(output),
             "--install", "ca-certificates,curl,git,openssh-client,python3",
@@ -237,6 +239,7 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
             "--mkdir", "/etc/mapache-vm",
             "--mkdir", "/usr/local/libexec",
             "--mkdir", "/var/lib/mapache/workspace",
+            *[argument for path in manifest["durablePaths"] for argument in ("--mkdir", path)],
             "--copy-in", f"{staged_payload}:/opt/mapache",
             "--upload", f"{bootstrap}:/usr/local/libexec/mapache-guest-bootstrap",
             "--upload", f"{unit}:/etc/systemd/system/mapache-guest.service",

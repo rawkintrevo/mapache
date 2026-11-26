@@ -343,6 +343,9 @@ way to implement remote-libvirt.
 
 Guest payload extraction rewrites the npm Pi launcher symlink for the
 payload's relocated module directory and excludes ssh2's test fixtures.
+The builder uses `virt-resize` to expand the pinned image's root partition
+and filesystem before installing the payload, and creates all durable
+directories before systemd enters the runtime working directory.
 The image validator rejects saved credential filenames and private-key
 material while allowing dependency source filenames and documentation that
 only illustrate key headers. With Snap Docker, extract into a non-hidden
