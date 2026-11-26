@@ -23,10 +23,9 @@ function parseMcpConfig(value) {
 }
 
 function createMcpConfigService({config}) {
-  const mcpConfig = runnerMcpConfig(config);
-  const outputPath = mcpConfigPath(config);
-
   async function materializeMcpConfig(harness = null) {
+    const mcpConfig = runnerMcpConfig(config);
+    const outputPath = mcpConfigPath(config);
     await writeJsonFile(outputPath, piMcpConfig(mcpConfig), config);
     return {
       ok: true,

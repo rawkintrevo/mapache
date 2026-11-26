@@ -19,16 +19,13 @@ function createGoogleMcpTokenApiService(config = {}, dependencies = {}) {
   const httpImpl = dependencies.http || http;
   const fetchImpl = dependencies.fetch || global.fetch;
   const socketPath = String(config.googleMcpTokenSocketPath || "").trim();
-  const refreshUrl = String(config.googleMcpTokenRefreshUrl || "").trim();
-  const connectionId = String(config.googleMcpConnectionId || "").trim();
-  const enabled = Boolean(socketPath && refreshUrl && connectionId && config.workspaceId && config.sessionId && config.shutdownToken);
   let server = null;
   let startPromise = null;
 
-  return {enabled: () => enabled, start, stop, status: () => ({enabled, listening: Boolean(server)})};
+  return {enabled: () => isEnabled(), start, stop, status: () => ({enabled: isEnabled(), listening: Boolean(server)})};
 
   async function start() {
-    if (!enabled) return {enabled: false, skipped: true};
+    if (!isEnabled()) return {enabled: false, skipped: true};
     if (server) return {enabled: true, listening: true};
     if (startPromise) return startPromise;
     startPromise = startInternal();
@@ -69,7 +66,7 @@ function createGoogleMcpTokenApiService(config = {}, dependencies = {}) {
     server = null;
     if (current) await new Promise((resolve) => current.close(() => resolve()));
     if (socketPath) await fsImpl.promises.unlink(socketPath).catch(() => {});
-    return {enabled, listening: false};
+    return {enabled: isEnabled(), listening: false};
   }
 
   async function handleRequest(request, response) {
@@ -91,6 +88,8 @@ function createGoogleMcpTokenApiService(config = {}, dependencies = {}) {
 
   async function refresh() {
     if (typeof fetchImpl !== "function") throw serviceError("google_token_refresh_unavailable", 503);
+    const refreshUrl = String(config.googleMcpTokenRefreshUrl || "").trim();
+    const connectionId = String(config.googleMcpConnectionId || "").trim();
     const response = await fetchImpl(refreshUrl, {
       method: "POST",
       headers: {"content-type": "application/json", "x-shutdown-token": config.shutdownToken},
@@ -109,6 +108,11 @@ function createGoogleMcpTokenApiService(config = {}, dependencies = {}) {
     const accessToken = String(body?.accessToken || "").trim();
     if (!accessToken) throw serviceError("google_access_token_missing", 502);
     return {accessToken, expiresIn: Math.max(0, Number(body.expiresIn || 0))};
+  }
+
+  function isEnabled() {
+    return Boolean(socketPath && config.googleMcpTokenRefreshUrl && config.googleMcpConnectionId &&
+      config.workspaceId && config.sessionId && config.shutdownToken);
   }
 
   async function parseResponse(response) {

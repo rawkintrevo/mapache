@@ -99,6 +99,7 @@ const {createAutomationAgentAuthService} = require("./automationAgentAuth.servic
 const {createAutomationAgentApiService} = require("./automationAgentApi.service");
 const {createAgentAuthService} = require("./agentAuth.service");
 const {createEnvironmentKeysService} = require("./environmentKeys.service");
+const {createRemoteVmCredentialsService} = require("./remoteVmCredentials.service");
 const {createOpenAiCodexAuthService} = require("./openAiCodexAuth.service");
 const {createPreviewService} = require("./preview.service");
 const {createQaFaultHarnessService} = require("./qaFaultHarness.service");
@@ -161,6 +162,12 @@ function remoteVmGatewayBaseUrl() {
         .find((value) => value && !value.startsWith("backup-recovery---"));
   if (!configured) return "";
   return String(configured).startsWith("http") ? configured : `https://${configured}`;
+}
+
+function remoteVmCredentialsUrl() {
+  const projectId = String(process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || "").trim();
+  if (!/^[a-z][a-z0-9-]{4,61}[a-z0-9]$/.test(projectId)) return "";
+  return `https://${DEFAULT_FUNCTION_REGION}-${projectId}.cloudfunctions.net/remoteVmCredentials_v2`;
 }
 
 const githubService = createGithubService({tokenRefreshUrl: githubAutomationTokenRefreshUrl()});
@@ -226,6 +233,12 @@ const googleWorkspaceProvisioningService = createGoogleWorkspaceProvisioningServ
   connectionsService: googleWorkspaceConnectionsService,
   oauthService: googleWorkspaceOAuthService,
   tokenRefreshUrl: googleMcpTokenRefreshUrl(),
+});
+const remoteVmCredentialsService = createRemoteVmCredentialsService({
+  agentAuthService,
+  db,
+  environmentKeysService,
+  googleWorkspaceProvisioningService,
 });
 const googleMcpTokenBrokerService = createGoogleMcpTokenBrokerService({
   connectionsService: googleWorkspaceConnectionsService,
@@ -315,7 +328,11 @@ const computeEngineService = createComputeEngineService({
   projectId: "pi-agents-cloud",
   runnerServiceAccount: runnerServiceAccountValue() || "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
 });
-const remoteVmLifecycleService = createRemoteVmLifecycleService({admin, db});
+const remoteVmLifecycleService = createRemoteVmLifecycleService({
+  admin,
+  db,
+  remoteVmCredentialsUrl,
+});
 const runtimeProviderService = createRuntimeProviderService({
   cloudRunService,
   computeEngineService,
@@ -602,6 +619,28 @@ exports.vmGatewayResolve_v2 = onRequest({
     })(req));
   } catch (error) {
     res.status(error.status || 503).json({error: error.publicMessage || "gateway_unavailable"});
+  }
+});
+
+// Token-gated connection broker for the remote guest. Firebase Auth is not
+// available inside the guest; the short-lived runtime token is bound to the
+// owner, workspace, session and generation before any selected material is
+// returned.
+exports.remoteVmCredentials_v2 = onRequest({
+  cors: false,
+  timeoutSeconds: 30,
+  secrets: [GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_ENCRYPTION_KEY],
+}, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    res.status(200).json(await remoteVmCredentialsService.resolve(req));
+  } catch (error) {
+    const status = error.status || 503;
+    logger.warn("Remote VM credential broker request failed", {
+      status,
+      error: error.publicMessage || "internal_error",
+    });
+    res.status(status).json({error: error.publicMessage || "internal_error"});
   }
 });
 

@@ -39,6 +39,7 @@ const {
 } = require("./lib/terminal");
 const {createShellSession} = require("./lib/shell");
 const {createWorkspaceService} = require("./lib/workspace");
+const {createRemoteCredentialsService} = require("./lib/remoteCredentials.service");
 const {createDiskUploadService} = require("./lib/diskUpload.service");
 const {createWorkspaceSyncCoordinator} = require("./lib/workspaceSyncCoordinator");
 const {createWebSocketUpgradeRouter} = require("./lib/webSocketUpgrade");
@@ -96,6 +97,7 @@ const workspaceAuthority = createWorkspaceAuthority({
   db,
   onLost: () => piWebUi?.stop?.(),
 });
+const remoteCredentials = createRemoteCredentialsService(config);
 const activity = createActivityService({
   admin,
   db,
@@ -120,6 +122,7 @@ const workspace = createWorkspaceService({
   config,
   db,
   git,
+  remoteCredentialProvider: remoteCredentials,
   storage,
 });
 const diskUpload = config.retainedDiskMode ? createDiskUploadService({config}) : null;
@@ -234,6 +237,7 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
     server.listen(config.port, onListening),
   piWebUi,
   resourceMetrics: resourceMetricsSocket,
+  remoteCredentials,
   piModelScope,
   workspace,
   workspaceAuthority,

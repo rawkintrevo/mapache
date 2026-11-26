@@ -3,9 +3,9 @@
 This page defines the contract for the remote-libvirt workspace provider under
 #630. Host registration, the lifecycle adapter, the host helper, and the
 authenticated gateway are implemented behind explicit provider dispatch. Guest
-connection materialization, the workspace-creation UI, and real-host rollout
-remain separate children. Existing Cloud Run, Compute Engine, and retained SSH
-providers are unchanged.
+connection materialization is implemented below; the workspace-creation UI and
+real-host rollout remain separate children. Existing Cloud Run, Compute Engine,
+and retained SSH providers are unchanged.
 
 The host registry portion is implemented by `functions/remoteHost.service.js`
 and the authenticated API route composition in `functions/apiRouteManifest.js`,
@@ -271,6 +271,31 @@ addresses, cross-owner workspace IDs and stale generations. Negative tests must
 cover SSRF, origin confusion, token replay, host-key replacement, tunnel loss,
 gateway restart and WebSocket expiry. No public guest service is part of this
 design.
+
+### Existing connection broker implementation (child #641)
+
+`functions/remoteVmCredentials.service.js` exposes the token-gated
+`remoteVmCredentials_v2` broker used by remote guests. A guest signs a
+five-minute `remote-credentials` token with its session browser-access secret;
+the broker re-reads the owner/workspace/session records and fences the request
+by the current remote runtime generation and boot identity before returning
+material. It returns only the selected Pi/provider entries, selected generic
+environment values, the normalized workspace MCP configuration, and a
+short-lived Google access token plus its existing refresh metadata. It never
+returns the host SSH key, Firebase/GCP credentials, Google refresh token, or
+another owner's entries.
+
+`session-runner/lib/remoteCredentials.service.js` fetches this response before
+runner startup, applies the bounded environment and MCP configuration, and
+hands the selected Pi entries to the existing `workspaceAuth` materializer.
+Google renewal continues through the existing private Unix-socket broker, so
+the embedded pi-web-ui process receives neither the remote broker URL nor the
+session/browser or shutdown credentials. A stopped/restarted session receives
+a new generation/boot fence; rotation, revocation, an expired connection, or a
+broker failure produces an actionable startup/materialization error rather
+than falling back to another account. The guest bootstrap exports only the
+workspace-scoped runtime identity and broker URL from `guest.env`; host
+transport keys are never written there.
 
 ## Existing connections and authority
 

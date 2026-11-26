@@ -22,6 +22,7 @@ function createRunnerLifecycleCoordinator({
   logger = console,
   piWebUi,
   resourceMetrics,
+  remoteCredentials,
   piModelScope,
   setIntervalFn = setInterval,
   setTimeoutFn = setTimeout,
@@ -56,6 +57,7 @@ function createRunnerLifecycleCoordinator({
   async function start() {
     authorityAcquired = false;
     try {
+      await startupStep("remote_credentials", () => remoteCredentials?.materialize?.());
       await githubTokenApi?.start?.();
       await googleMcpTokenApi?.start?.();
       await automationAgentApi?.start?.();

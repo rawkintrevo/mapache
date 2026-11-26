@@ -38,6 +38,7 @@ function agentRuntimeEnvironment(session = {}) {
   return [
     {name: "MAPACHE_AGENT_UI_VERSION", value: session.agentUiVersion === AGENT_UI_VERSION ? AGENT_UI_VERSION : ""},
     {name: "MAPACHE_AGENT_RUNTIME_GENERATION", value: explicitRuntimeGeneration(session.agentRuntimeGeneration)},
+    {name: "MAPACHE_AGENT_RUNTIME_BOOT_INSTANCE_ID", value: String(session.agentRuntimeBootInstanceId || "")},
   ];
 }
 

@@ -17,6 +17,11 @@ Locations:
   WebSocket relay, credential stripping, bounded reauthorization, target
   validation, and SSH transport setup. Resolver authorization tests live in
   `functions/vmGatewayResolve.service.test.js`.
+- Remote VM connection-broker authorization and guest materialization tests
+  live in `functions/remoteVmCredentials.service.test.js` and
+  `session-runner/lib/remoteCredentials.service.test.js`; they cover selected
+  provider entries, generic environment/MCP and Google material, generation
+  fencing, owner isolation, and reserved-environment injection rejection.
 
 Default commands:
 
@@ -26,6 +31,8 @@ npm run test:frontend
 npm --prefix session-runner run lint
 npm --prefix vm-gateway test
 node functions/vmGatewayResolve.service.test.js
+node functions/remoteVmCredentials.service.test.js
+node --test session-runner/lib/remoteCredentials.service.test.js
 ```
 
 ### Integration and contract tests

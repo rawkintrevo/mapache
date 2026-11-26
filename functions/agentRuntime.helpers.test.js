@@ -34,10 +34,12 @@ assert.equal(explicitRuntimeGeneration(0), "");
 assert.deepEqual(agentRuntimeEnvironment(session), [
   {name: "MAPACHE_AGENT_UI_VERSION", value: AGENT_UI_VERSION},
   {name: "MAPACHE_AGENT_RUNTIME_GENERATION", value: "7"},
+  {name: "MAPACHE_AGENT_RUNTIME_BOOT_INSTANCE_ID", value: ""},
 ]);
 assert.deepEqual(agentRuntimeEnvironment({}), [
   {name: "MAPACHE_AGENT_UI_VERSION", value: ""},
   {name: "MAPACHE_AGENT_RUNTIME_GENERATION", value: ""},
+  {name: "MAPACHE_AGENT_RUNTIME_BOOT_INSTANCE_ID", value: ""},
 ]);
 
 console.log("agent runtime helper tests passed");
