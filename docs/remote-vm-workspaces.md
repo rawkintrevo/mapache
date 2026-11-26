@@ -459,6 +459,15 @@ must use `--project pi-agents-cloud` and the mandated service accounts.
 
 ### Release-gate runbook (#643)
 
+Operation completion must read workspace/session/host reservation records before
+any transaction writes. Stop/delete/cancellation release capacity inside that
+same transaction. A confirmed stop also publishes the owned session's stopped
+state, so the UI and credential broker cannot retain a running session after
+the guest is off. The captured boot identity prevents an old stop completion
+from changing a newer boot's session. Successful completion clears earlier
+operation/workspace errors. Deploy `api`, `provisionQueuedSession` and
+`reconcileRemoteVmOperation` together for these shared lifecycle changes.
+
 The session provisioning worker and operation reconciler can observe the same
 start concurrently. A queued/running operation whose lease is held by another
 worker returns `remote_vm_provisioning_pending`. The provisioning trigger retries
