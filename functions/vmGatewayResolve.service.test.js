@@ -3,6 +3,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {createHmac} = require("node:crypto");
+const fs = require("node:fs/promises");
+const os = require("node:os");
+const {execFileSync} = require("node:child_process");
+const {generateKeyMaterial} = require("./remoteHost.service");
 const {createVmGatewayResolveService} = require("./vmGatewayResolve.service");
 const {createRuntimeDescriptor} = require("./runtimeProvider.helpers");
 
@@ -31,7 +35,8 @@ function fixture() {
     managedUsername: "mapache",
     hostKeyFingerprint: "SHA256/abcdEFGHijklmnop",
   };
-  const privateHost = {privateKey: "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----"};
+  const material = generateKeyMaterial();
+  const privateHost = {privateKey: material.privateKey};
   const docs = new Map([
     ["workspaces/workspace-1", workspace],
     ["workspaces/workspace-1/sessions/session-1", session],
@@ -54,7 +59,9 @@ function fixture() {
       return {exists: value !== undefined, data: () => value};
     }}),
   };
-  const resolve = createVmGatewayResolveService({db, now: () => time, allowedGatewayHosts: () => host});
+  let addresses = [{address: "203.0.113.5"}];
+  const resolve = createVmGatewayResolveService({db, now: () => time, allowedGatewayHosts: () => host,
+    resolveHost: async () => addresses});
   const token = (claims = {}, secret = session.browserAccessTokenSecret) => {
     const payload = Buffer.from(JSON.stringify({
       aud: "agent", exp: Math.floor((time + 30_000) / 1000), gen: 3,
@@ -66,6 +73,8 @@ function fixture() {
     host,
     session,
     workspace,
+    material,
+    setAddresses: (value) => { addresses = value; },
     remoteHost,
     token,
     resolve,
@@ -81,11 +90,11 @@ test("remote resolution is owner and generation fenced and returns only the SSH 
   const result = await f.call();
   assert.deepEqual(result, {
     transport: "ssh",
-    sshAddress: "home.example.com",
+    sshAddress: "203.0.113.5",
     sshPort: 22,
     sshUsername: "mapache",
     hostKeyFingerprint: "SHA256/abcdEFGHijklmnop",
-    privateKey: "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----",
+    privateKey: result.privateKey,
     guestAddress: "192.168.250.12",
     guestPort: 8787,
     sessionId: "session-1",
@@ -94,6 +103,15 @@ test("remote resolution is owner and generation fenced and returns only the SSH 
     validUntil: result.validUntil,
   });
   assert.ok(result.validUntil <= Date.now() + 10_000);
+  const directory = await fs.mkdtemp(`${os.tmpdir()}/mapache-gateway-key-test-`);
+  try {
+    const key = `${directory}/key`;
+    await fs.writeFile(key, result.privateKey, {mode: 0o600});
+    const publicKey = execFileSync("ssh-keygen", ["-y", "-f", key], {encoding: "utf8"}).trim();
+    assert.equal(publicKey.split(" ").slice(0, 2).join(" "), f.material.publicKey.split(" ").slice(0, 2).join(" "));
+  } finally {
+    await fs.rm(directory, {recursive: true, force: true});
+  }
 
   for (const body of [
     {token: f.token({gen: 2})},
@@ -109,6 +127,10 @@ test("remote resolution is owner and generation fenced and returns only the SSH 
 });
 
 test("remote host and guest targets cannot be changed into arbitrary forwarding", async () => {
+  const rebound = fixture();
+  await rebound.call();
+  rebound.setAddresses([{address: "10.0.0.4"}]);
+  await assert.rejects(rebound.call(), /remote_host_address_disallowed/);
   for (const patch of [
     {guestIp: "10.0.0.4"},
     {guestIp: "127.0.0.1"},

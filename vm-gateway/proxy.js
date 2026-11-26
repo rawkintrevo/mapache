@@ -1,6 +1,7 @@
 "use strict";
 
 const fs = require("node:fs/promises");
+const crypto = require("node:crypto");
 const http = require("node:http");
 const net = require("node:net");
 const os = require("node:os");
@@ -222,24 +223,24 @@ async function createSshTransport(target, dependencies = {}) {
 
 async function pinnedKnownHosts(target, dependencies = {}) {
   const exec = dependencies.execFileAsync || execFileAsync;
-  const {stdout} = await exec("ssh-keyscan", ["-T", "10", "-p", String(target.sshPort), target.sshAddress], {
+  const {stdout} = await exec("ssh-keyscan", ["-T", "10", "-t", "ed25519", "-p", String(target.sshPort), target.sshAddress], {
     timeout: 15_000,
     maxBuffer: 256 * 1024,
   });
-  const lines = String(stdout).split(/\r?\n/).filter((line) => line && !line.startsWith("#") && /\s(?:ssh-ed25519|ecdsa-sha2-nistp256)\s/.test(line));
+  const lines = String(stdout).split(/\r?\n/).filter((line) => line && !line.startsWith("#"));
   if (!lines.length) throw new Error("remote_host_unreachable");
-  const fingerprintDirectory = await fs.mkdtemp(`${os.tmpdir()}/mapache-vm-key-`);
-  const fingerprintPath = `${fingerprintDirectory}/host_key`;
-  try {
-    await fs.writeFile(fingerprintPath, `${lines[0]}\n`, {mode: 0o600});
-    const fingerprint = await exec("ssh-keygen", ["-lf", fingerprintPath, "-E", "sha256"], {maxBuffer: 64 * 1024});
-    const match = String(fingerprint.stdout || "").match(/SHA256:[A-Za-z0-9+/=]+/);
-    const normalized = match ? match[0].replace(/^SHA256:/, "SHA256/") : "";
-    if (normalized !== target.hostKeyFingerprint) throw new Error("remote_host_key_mismatch");
-    return `${lines.join("\n")}\n`;
-  } finally {
-    await fs.rm(fingerprintDirectory, {recursive: true, force: true});
+  for (const line of lines) {
+    const [, type, encoded] = line.trim().split(/\s+/);
+    if (type !== "ssh-ed25519" || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded || "")) continue;
+    const blob = Buffer.from(encoded, "base64");
+    if (blob.length !== 51 || blob.readUInt32BE(0) !== 11 ||
+        blob.subarray(4, 15).toString() !== "ssh-ed25519" || blob.readUInt32BE(15) !== 32) continue;
+    const fingerprint = `SHA256/${crypto.createHash("sha256").update(blob).digest("base64").replace(/=+$/, "")}`;
+    if (fingerprint !== target.hostKeyFingerprint) continue;
+    const host = Number(target.sshPort) === 22 ? target.sshAddress : `[${target.sshAddress}]:${target.sshPort}`;
+    return `${host} ssh-ed25519 ${blob.toString("base64")}\n`;
   }
+  throw new Error("remote_host_key_mismatch");
 }
 
 function validateTarget(target) {
@@ -258,7 +259,7 @@ function validateTarget(target) {
 }
 
 function sameAuthority(a, b) {
-  const keys = a?.transport === "ssh" ? ["transport", "sshAddress", "sshPort", "sshUsername", "guestAddress", "guestPort", "sessionId", "generation", "bootId"] :
+  const keys = a?.transport === "ssh" ? ["transport", "sshAddress", "sshPort", "sshUsername", "hostKeyFingerprint", "guestAddress", "guestPort", "sessionId", "generation", "bootId"] :
     ["transport", "address", "port", "sessionId", "generation", "bootId"];
   return keys.every((key) => String(a[key]) === String(b[key]));
 }
@@ -311,6 +312,7 @@ module.exports = {
   authorizationInput,
   createGateway,
   createSshTransport,
+  pinnedKnownHosts,
   sameAuthority,
   validateTarget,
 };
