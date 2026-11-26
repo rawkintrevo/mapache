@@ -255,8 +255,8 @@ def install(public_key, *, runner=run, dry_run=False):
     for directory in (STORAGE_DIR, STORAGE_DIR / "images", STORAGE_DIR / "disks"):
         directory.mkdir(mode=0o711, exist_ok=True)
         directory.chmod(0o711)
-    run(["chown", f"{APP_USER}:{APP_USER}", str(STORAGE_DIR)], runner=runner)
-    run(["chown", f"{APP_USER}:{APP_USER}", str(STORAGE_DIR / "images"), str(STORAGE_DIR / "disks")], runner=runner)
+    runner(["chown", f"{APP_USER}:{APP_USER}", str(STORAGE_DIR)])
+    runner(["chown", f"{APP_USER}:{APP_USER}", str(STORAGE_DIR / "images"), str(STORAGE_DIR / "disks")])
     ensure_file(AUTHORIZED_KEYS, key_line, 0o644, preserve_unrelated=True)
     ensure_managed_file(SSHD_CONFIG, sshd_config(), 0o644, "Mapache remote VM management account")
     ensure_network(runner=runner)

@@ -10,6 +10,7 @@ import tempfile
 import subprocess
 import os
 from contextlib import ExitStack
+from functools import partial
 
 
 ROOT = Path(__file__).parent
@@ -42,7 +43,9 @@ class HostToolTests(unittest.TestCase):
             def runner(command, **kwargs):
                 commands.append(command)
                 return SimpleNamespace(returncode=1 if command[0] == "id" or "net-info" in command else 0, stdout="")
-            installer.install("ssh-ed25519 AAAA", runner=runner)
+            # Exercise the real wrapper's keyword contract. Passing the fake
+            # subprocess directly hides accidental nested run() calls.
+            installer.install("ssh-ed25519 AAAA", runner=partial(installer.run, runner=runner))
             self.assertEqual(installer.AUTHORIZED_KEYS.stat().st_mode & 0o777, 0o644)
             self.assertEqual(installer.HELPER_PATH.stat().st_mode & 0o777, 0o755)
             self.assertEqual(installer.STORAGE_DIR.stat().st_mode & 0o777, 0o711)
