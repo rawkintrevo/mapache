@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import tempfile
 import subprocess
 import os
+import shutil
 from contextlib import ExitStack
 from functools import partial
 
@@ -28,6 +29,14 @@ installer = load("install")
 
 
 class HostToolTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("virt-xml-validate"), "libvirt schema validator is not installed")
+    def test_generated_guest_matches_installed_libvirt_domain_schema(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "domain.xml"
+            path.write_text(helper.guest_xml("mapache-ws-schema-check"))
+            result = subprocess.run(["virt-xml-validate", str(path), "domain"], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_status_checks_network_and_base_image_before_admitting_host(self):
         for active, readable, expected in [(False, True, False), (True, False, False), (True, True, True)]:
             def runner(command, **kwargs):
@@ -153,13 +162,15 @@ class HostToolTests(unittest.TestCase):
 
         def runner(command, **kwargs):
             if "domifaddr" in command:
-                return Result()
+                self.assertEqual(command[-2:], ["--source", "lease"])
+                return SimpleNamespace(returncode=0, stdout="vnet0 52:54:00:aa:bb:cc ipv4 192.168.250.42/24\n")
             return Result()
 
         observed = helper.handle(["inspect", "mapache-ws-abc123"], runner=runner)
         self.assertTrue(observed["exists"])
         self.assertEqual(observed["state"], "running")
         self.assertFalse(observed["autostart"])
+        self.assertEqual(observed["guestIp"], "192.168.250.42")
 
     def test_readiness_reports_missing_host_capabilities_without_mutation(self):
         class Result:

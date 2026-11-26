@@ -239,6 +239,13 @@ at once. The guest image is versioned and integrity-pinned; changing the image
 version affects new guests or an explicit migration, never an existing disk by
 surprise.
 
+Guest XML omits graphics devices for the headless v1 guest; `graphics
+type="none"` is not a valid libvirt device. Validate generated definitions with
+`virt-xml-validate <domain.xml> domain` on the prepared host. Guest address
+discovery uses libvirt's DHCP lease source on the managed network, since the
+base image does not install a QEMU guest agent. A missing lease remains a
+missing address and must not be replaced with an assumed guest IP.
+
 The guest exposes its pi-web-ui HTTP and WebSocket service only to the private
 host network. The gateway route is backend-authored from the host, guest and
 session records. It is never accepted from a browser request. The canonical
