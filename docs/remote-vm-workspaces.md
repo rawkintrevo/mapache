@@ -459,6 +459,16 @@ must use `--project pi-agents-cloud` and the mandated service accounts.
 
 ### Release-gate runbook (#643)
 
+The session provisioning worker and operation reconciler can observe the same
+start concurrently. A queued/running operation whose lease is held by another
+worker returns `remote_vm_provisioning_pending`. The provisioning trigger retries
+without marking the session failed or releasing its reservations. A later
+attempt adopts the completed operation and publishes the running session;
+it does not create or restart a second guest. Actual host failures retain their
+existing error handling. Deploy both `provisionQueuedSession` and
+`reconcileRemoteVmOperation`, plus `api`, when changing this shared lifecycle
+code. No guest image or host helper update is required for this behavior.
+
 The live canary is deliberately separate from the mocked/unit fixtures. The
 operator must reserve one disposable host and one owner account, record the
 release commit and guest-image/helper versions, and keep host addresses,

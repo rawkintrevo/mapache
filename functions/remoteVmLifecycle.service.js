@@ -77,6 +77,11 @@ function createRemoteVmLifecycleService(dependencies = {}) {
 
   async function provisionSessionService(workspace, sessionRef, session, options = {}) {
     const result = await runLifecycle("start", workspace, sessionRef, session, options);
+    // The operation trigger may acquire the lease before this caller. That is
+    // an in-flight start, not evidence that SSH or the guest is unreachable.
+    if (["queued", "running"].includes(result.state)) {
+      throw lifecycleError("remote_vm_provisioning_pending");
+    }
     if (result.state !== "completed") throw lifecycleError(result.errorCode || "remote_vm_unreachable");
     const descriptor = normalizeRuntimeDescriptor(session.runtimeProvider || session.runtimeProviderDescriptor, {
       workspaceId: session.workspaceId || workspace?.id,
