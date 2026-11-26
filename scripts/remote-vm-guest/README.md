@@ -28,7 +28,12 @@ after the VM is created. The service binds to the assigned `192.168.250.x`
 libvirt address and is reachable only through the authenticated gateway/SSH
 forward. `mapache-guest-bootstrap.sh` fails closed if a caller supplies a
 public or loopback listener, changes the durable root, or omits the assigned
-private address.
+private address. The lifecycle worker may also provide `OWNER_UID`,
+`WORKSPACE_ID`, `SESSION_ID`, `MAPACHE_AGENT_RUNTIME_GENERATION`,
+`MAPACHE_AGENT_RUNTIME_BOOT_INSTANCE_ID`, `SESSION_BROWSER_TOKEN_SECRET`,
+`SESSION_SHUTDOWN_TOKEN`, and
+`MAPACHE_REMOTE_CREDENTIAL_BROKER_URL`. These values are workspace/session
+scoped; the host SSH private key is never one of them.
 
 The following roots live on the retained workspace disk and survive ordinary
 VM stop/start and reboot: `home`, `workspace`, `agent`, `credentials`,

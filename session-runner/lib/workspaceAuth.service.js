@@ -7,7 +7,7 @@ const {compactErrorMessage} = require("./utils");
 const {resolveHarnessMetadata} = require("./harnesses/metadata");
 const {ensurePrivateRuntimeDirectory} = require("./runtimeStorage.helpers");
 
-function createWorkspaceAuthService({admin, config, db}) {
+function createWorkspaceAuthService({admin, config, db, remoteCredentialProvider}) {
   const harness = resolveHarnessMetadata(config);
 
   async function synchronizeAuth(options = {}) {
@@ -97,6 +97,10 @@ function createWorkspaceAuthService({admin, config, db}) {
   }
 
   async function readRemoteAuthData() {
+    if (config.remoteCredentialBrokerUrl && remoteCredentialProvider?.materialize) {
+      const materialized = await remoteCredentialProvider.materialize();
+      return materialized?.auth || {providers: {}, entries: {}};
+    }
     const snap = await agentAuthDoc(config.ownerUid, db).get();
     return mergeRemoteAuthData(snap.exists ? snap.data() : {});
   }

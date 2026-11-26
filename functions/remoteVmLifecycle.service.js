@@ -91,6 +91,8 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       runtimeDataDiskName: descriptor.dataDiskName,
       runtimeDataDiskGeneration: descriptor.generation,
       serviceUrl: descriptor.gateway?.baseUrl || remoteVmGatewayBaseUrl(),
+      remoteCredentialBrokerUrl: typeof dependencies.remoteVmCredentialsUrl === "function" ?
+        dependencies.remoteVmCredentialsUrl() : null,
       lastError: null,
       runtimeProvider: {...descriptor, state: "running", guestIp: result.guestIp || descriptor.guestIp},
       ...(dependencies.admin?.firestore?.Timestamp ? {updatedAt: dependencies.admin.firestore.Timestamp.now()} : {}),

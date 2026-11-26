@@ -171,6 +171,7 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     agentRuntimeEnabled,
     chromeSandboxEnabled: retainedDiskMode && !envFlag(process.env.CHROME_DISABLE_SANDBOX),
     chromeDesktopMinimal: retainedDiskMode,
+    agentRuntimeBootInstanceId: normalizeEnvString(process.env.MAPACHE_AGENT_RUNTIME_BOOT_INSTANCE_ID),
     agentRuntimeGeneration: normalizeEnvString(process.env.MAPACHE_AGENT_RUNTIME_GENERATION),
     startupSmoke: envFlag(process.env.MAPACHE_STARTUP_SMOKE),
     automationAgentApiUrl: normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_API_URL),
@@ -254,6 +255,9 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     legacyDirectoryMarkerFiles: [LEGACY_DIRECTORY_MARKER_FILE],
     legacyInternalStorageDirs: [LEGACY_INTERNAL_STORAGE_DIR],
     mcpConfigRaw: process.env.MCP_CONFIG || "",
+    remoteCredentialBrokerUrl: normalizeEnvString(
+        process.env.MAPACHE_REMOTE_CREDENTIAL_BROKER_URL || process.env.REMOTE_VM_CREDENTIALS_URL,
+    ),
     ownerUid: process.env.OWNER_UID || "",
     piAgentDir,
     piMcpConfigPath,

@@ -473,6 +473,8 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     // The embedded process talks to the runner's Unix adapter. It must not
     // receive the runner-only shutdown credential as a child environment var.
     delete childEnv.SESSION_SHUTDOWN_TOKEN;
+    delete childEnv.SESSION_BROWSER_TOKEN_SECRET;
+    delete childEnv.MAPACHE_REMOTE_CREDENTIAL_BROKER_URL;
     delete childEnv.GITHUB_AUTOMATION_TOKEN_REFRESH_URL;
     delete childEnv.GITHUB_AUTOMATION_TOKEN;
     delete childEnv.GITHUB_AUTOMATION_TOKEN_EXPIRES_AT;

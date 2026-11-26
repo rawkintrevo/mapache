@@ -13,10 +13,10 @@ const {assertSharedWorkspaceMount, isMountedWorkspaceMode} = require("./sharedWo
 const {assertAutomationStorageMounts, isAutomationStorageMode} = require("./automationStorage.helpers");
 const {prepareRetainedDisk} = require("./retainedDiskStorage");
 
-function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher, checkpointRestore, config, db, git, storage}) {
+function createWorkspaceService({admin, checkpointIdentity, checkpointPublisher, checkpointRestore, config, db, git, remoteCredentialProvider, storage}) {
   const pathHelpers = createWorkspacePathHelpers({config});
   const archives = createWorkspaceArchiveService({config, git, pathHelpers, storage});
-  const auth = createWorkspaceAuthService({admin, config, db});
+  const auth = createWorkspaceAuthService({admin, config, db, remoteCredentialProvider});
   const githubRestore = createGithubWorkspaceRestoreService({
     archives,
     config,
