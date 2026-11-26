@@ -20,7 +20,7 @@ class GuestImageTests(unittest.TestCase):
         self.manifest = builder.load_manifest()
 
     def test_manifest_pins_guest_contract(self):
-        self.assertEqual(self.manifest["imageVersion"], "ubuntu-24.04-v1")
+        self.assertEqual(self.manifest["imageVersion"], "ubuntu-24.04-v2")
         self.assertEqual(self.manifest["resources"], {
             "vcpus": 2,
             "memoryMiB": 8192,
@@ -60,6 +60,41 @@ class GuestImageTests(unittest.TestCase):
             with self.assertRaises(builder.BuildError):
                 builder.validate_payload(root, self.manifest)
 
+    def test_payload_records_and_verifies_guest_overlay_provenance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "runtime/bin").mkdir(parents=True)
+            (root / "session-runner").mkdir()
+            (root / "pi-web-ui/dist/server").mkdir(parents=True)
+            (root / "pi-mcp-adapter").mkdir()
+            (root / "runtime/bin/node").write_bytes(b"node")
+            (root / "runtime/bin/node").chmod(0o755)
+            (root / "session-runner/server.js").write_text("// runner")
+            (root / "pi-web-ui/dist/server/index.js").write_text("// ui")
+            overlay = root / "session-runner/server.js"
+            overlay_hash = builder.sha256_file(overlay)
+            (root / "pi-mcp-adapter/index.ts").write_text("// adapter")
+            (root / "payload.json").write_text(json.dumps({
+                "schemaVersion": 1,
+                "sourceImage": "registry.example/runner@sha256:" + "a" * 64,
+                "runnerEntry": "session-runner/server.js",
+                "guestOverlay": {
+                    "schemaVersion": 1,
+                    "sourceCommit": "b" * 40,
+                    "files": [{"path": "session-runner/server.js", "sha256": overlay_hash}],
+                    "buildFiles": [{
+                        "path": "scripts/remote-vm-guest/mapache-guest-bootstrap.sh",
+                        "sha256": builder.sha256_file(ROOT / "mapache-guest-bootstrap.sh"),
+                    }],
+                },
+            }))
+            result = builder.validate_payload(root, self.manifest)
+            self.assertEqual(result["sourceImage"], "registry.example/runner@sha256:" + "a" * 64)
+            self.assertEqual(result["guestOverlay"]["sourceCommit"], "b" * 40)
+            overlay.write_text("// changed")
+            with self.assertRaisesRegex(builder.BuildError, "hash does not match"):
+                builder.validate_payload(root, self.manifest)
+
     def test_base_hash_mismatch_fails_before_qemu(self):
         with tempfile.TemporaryDirectory() as directory:
             image = Path(directory) / "base.img"
@@ -93,6 +128,8 @@ class GuestImageTests(unittest.TestCase):
             commands = []
             def run(command, **kwargs):
                 commands.append(command)
+                if command[0] == "qemu-img" and command[1] == "create":
+                    Path(command[4]).write_bytes(b"qcow2 test output")
                 if command[0] == "virt-customize":
                     source, destination = command[command.index("--copy-in") + 1].split(":", 1)
                     self.assertTrue(Path(source).is_dir())

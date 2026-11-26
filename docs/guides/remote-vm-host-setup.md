@@ -44,15 +44,43 @@ key as the managed account. No private SSH key is installed on the host.
 
 ## Install the guest image
 
-Build the pinned `ubuntu-24.04-v1` image using the instructions in
+Build the pinned `ubuntu-24.04-v2` image using the instructions in
 [`scripts/remote-vm-guest/README.md`](../../scripts/remote-vm-guest/README.md),
 then copy it to the managed image directory. The credential-free base image
 must be readable by both the managed account and libvirt's QEMU user:
 
 ```bash
 sudo install -o root -g root -m 0644 \
-  ubuntu-24.04-v1.qcow2 /var/lib/mapache-vm/images/ubuntu-24.04-v1.qcow2
+  ubuntu-24.04-v2.qcow2 /var/lib/mapache-vm/images/ubuntu-24.04-v2.qcow2
 ```
+
+Install v2 beside any existing v1 image. Reinstall the matching `install.py`,
+`helper.py`, and `mapache_guest_config.py` from the same release before the
+readiness check; the helper selects v2 for new workspaces while retained v1
+disks continue to reference their original backing image. Do not overwrite or
+rebase an image that an existing QCOW2 overlay references.
+
+The following is the complete operator-side install/check block. It verifies
+the sidecar checksum before any privileged write, updates the existing
+root-owned helper in place (the forced-command path does not change), installs
+the new base beside v1, and finishes with the read-only readiness check:
+
+```bash
+image="$PWD/ubuntu-24.04-v2.qcow2"
+manifest="$image.manifest.json"
+expected="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["imageSha256"])' "$manifest")"
+observed="$(sha256sum "$image" | awk '{print $1}')"
+test "$expected" = "$observed"
+sudo install -o root -g root -m 0755 helper.py /usr/local/libexec/mapache-vm-helper
+sudo install -o root -g root -m 0644 mapache_guest_config.py /usr/local/libexec/mapache_guest_config.py
+sudo install -o root -g root -m 0644 "$image" /var/lib/mapache-vm/images/ubuntu-24.04-v2.qcow2
+sudo python3 install.py --check-only --json
+```
+
+This block does not stop or reconfigure an existing guest. A v1 retained disk
+continues to use its v1 backing image; rollback is the same block with the
+previous matching helper and v1 image, after stopping only a newly created v2
+guest if one exists.
 
 The lifecycle helper creates one 40 GiB thin QCOW2 overlay per workspace under
 `/var/lib/mapache-vm/disks/`. It defines 2 vCPUs, 8192 MiB, the private

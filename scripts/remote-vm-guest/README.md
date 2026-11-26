@@ -1,6 +1,6 @@
 # Versioned remote VM guest image
 
-`manifest.json` is the v1 guest contract for the remote-libvirt provider:
+`manifest.json` is the v2 guest contract for the remote-libvirt provider:
 Ubuntu 24.04 LTS (amd64), 2 vCPU, 8 GiB RAM, and one 40 GiB thin QCOW2 disk.
 The base image is a dated Ubuntu release artifact with a checked-in SHA-256;
 the builder refuses a changed or unverified base image.
@@ -15,10 +15,18 @@ scripts/remote-vm-guest/prepare-payload.sh \
   us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:IMAGE_DIGEST \
   /tmp/mapache-guest-payload
 
+# Extract the same immutable payload and overlay the committed guest-only
+# repairs, recording source and per-file hashes in payload.json. The same
+# descriptor records the bootstrap and systemd files supplied to the image
+# builder.
+scripts/remote-vm-guest/prepare-repaired-payload.sh \
+  us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:IMAGE_DIGEST \
+  /tmp/mapache-repaired-guest-payload
+
 scripts/remote-vm-guest/build-image.py \
   --base-image /var/tmp/ubuntu-24.04-server-cloudimg-amd64.img \
-  --payload /tmp/mapache-guest-payload \
-  --output /var/lib/mapache-vm/images/ubuntu-24.04-v1.qcow2
+  --payload /tmp/mapache-repaired-guest-payload \
+  --output /var/lib/mapache-vm/images/ubuntu-24.04-v2.qcow2
 ```
 
 The resulting image contains no owner, host, Firebase, model-provider, or SSH
@@ -43,10 +51,12 @@ seeded by the image.
 
 The 40 GiB value is the virtual capacity, not the initial host allocation.
 QCOW2 metadata and guest filesystem overhead consume space immediately; actual
-host usage grows with writes. The builder records the source hash, payload hash,
-virtual size, and image version in `<output>.manifest.json` for lifecycle and
-upgrade checks. Changing `imageVersion` affects new workspaces only. Existing
-disks are never silently rebased; migration is an explicit later operation.
+host usage grows with writes. The builder records the base hash, upstream
+runtime digest, overlay source commit and file hashes, payload hash, output
+image checksum, virtual size, and image version in `<output>.manifest.json` for
+lifecycle and upgrade checks. Changing `imageVersion` affects new workspaces
+only. Existing v1 disks are never silently rebased; install v2 alongside v1
+and use an explicit later migration operation if one is ever approved.
 
 Building requires `qemu-img`, `virt-customize`, a libvirt-capable host, and a
 guest with KVM access. A host without `/dev/kvm` can inspect or prepare an image

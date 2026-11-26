@@ -63,7 +63,7 @@ test("invalid stored providers fail instead of silently falling back", () => {
   }), /runtime_provider_descriptor_invalid/);
 });
 
-test("remote-libvirt descriptors pin the guest identity and fixed v1 resources", () => {
+test("remote-libvirt descriptors pin the guest identity and fixed v2 resources", () => {
   const descriptor = createRuntimeDescriptor({
     backend: REMOTE_LIBVIRT_BACKEND,
     workspaceId: "workspace-1",
@@ -72,6 +72,7 @@ test("remote-libvirt descriptors pin the guest identity and fixed v1 resources",
   });
   assert.equal(descriptor.guestName, remoteGuestName("workspace-1"));
   assert.equal(descriptor.dataDiskName, remoteDiskName("workspace-1"));
+  assert.equal(descriptor.guestImageVersion, "ubuntu-24.04-v2");
   assert.deepEqual(descriptor.guestResources, {
     vcpus: REMOTE_GUEST_VCPUS,
     memoryMiB: REMOTE_GUEST_MEMORY_MIB,

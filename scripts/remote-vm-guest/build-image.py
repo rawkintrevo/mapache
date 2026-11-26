@@ -150,6 +150,7 @@ def validate_payload(payload: Path, manifest: dict) -> dict:
         raise BuildError("guest payload node runtime is not executable")
 
     payload_descriptor = payload / "payload.json"
+    descriptor = None
     if payload_descriptor.exists():
         try:
             descriptor = json.loads(payload_descriptor.read_text())
@@ -159,6 +160,42 @@ def validate_payload(payload: Path, manifest: dict) -> dict:
             raise BuildError("guest payload schema does not match the image manifest")
         if descriptor.get("runnerEntry") != "session-runner/server.js":
             raise BuildError("guest payload runner entry is not the session runner")
+        source_image = descriptor.get("sourceImage")
+        if source_image and not re.fullmatch(r".+@sha256:[0-9a-f]{64}", str(source_image)):
+            raise BuildError("guest payload source image must be content-addressed")
+        overlay = descriptor.get("guestOverlay")
+        if overlay is not None:
+            if not isinstance(overlay, dict) or overlay.get("schemaVersion") != 1:
+                raise BuildError("guest payload overlay metadata is invalid")
+            if not re.fullmatch(r"[0-9a-f]{40}", str(overlay.get("sourceCommit", ""))):
+                raise BuildError("guest payload overlay source commit is invalid")
+            files = overlay.get("files")
+            if not isinstance(files, list) or not files:
+                raise BuildError("guest payload overlay file list is invalid")
+            for entry in files:
+                if (not isinstance(entry, dict) or
+                        not isinstance(entry.get("path"), str) or
+                        not SHA256_RE.fullmatch(str(entry.get("sha256", "")))):
+                    raise BuildError("guest payload overlay file metadata is invalid")
+                overlay_path = (payload / entry["path"]).resolve()
+                if payload.resolve() not in overlay_path.parents or not overlay_path.is_file():
+                    raise BuildError("guest payload overlay file is missing")
+                if sha256_file(overlay_path) != entry["sha256"]:
+                    raise BuildError("guest payload overlay file hash does not match")
+            build_files = overlay.get("buildFiles")
+            if not isinstance(build_files, list) or not build_files:
+                raise BuildError("guest payload build file metadata is invalid")
+            repo_root = ROOT.parent.parent.resolve()
+            for entry in build_files:
+                if (not isinstance(entry, dict) or
+                        not isinstance(entry.get("path"), str) or
+                        not SHA256_RE.fullmatch(str(entry.get("sha256", "")))):
+                    raise BuildError("guest payload build file metadata is invalid")
+                build_path = (repo_root / entry["path"]).resolve()
+                if repo_root not in build_path.parents or not build_path.is_file():
+                    raise BuildError("guest payload build file is missing")
+                if sha256_file(build_path) != entry["sha256"]:
+                    raise BuildError("guest payload build file hash does not match")
 
     scanned_files = 0
     for path in payload.rglob("*"):
@@ -179,7 +216,13 @@ def validate_payload(payload: Path, manifest: dict) -> dict:
             raise BuildError(f"guest payload contains private-key material: {path.name}")
     if scanned_files == 0:
         raise BuildError("guest payload is empty")
-    return {"sha256": directory_digest(payload), "fileCount": scanned_files}
+    result = {"sha256": directory_digest(payload), "fileCount": scanned_files}
+    if descriptor:
+        if descriptor.get("sourceImage"):
+            result["sourceImage"] = descriptor["sourceImage"]
+        if descriptor.get("guestOverlay"):
+            result["guestOverlay"] = descriptor["guestOverlay"]
+    return result
 
 
 def command_output(command: list[str], runner=subprocess.run) -> str:
@@ -269,6 +312,7 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
             "format": image_info.get("format"),
             "thinProvisioned": manifest["resources"]["thinProvisioned"],
         }
+        result["imageSha256"] = sha256_file(output)
         output.with_name(f"{output.name}.manifest.json").write_text(json.dumps(result, indent=2) + "\n")
         return result
     except Exception:
