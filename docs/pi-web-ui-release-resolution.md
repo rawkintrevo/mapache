@@ -69,13 +69,28 @@ work is gated during drain; the terminal dispatcher can inspect the same gate.
 
 This is **not yet a complete shutdown integration**. Instantiated native Goal
 and background hosts without their new `quiesce` capability explicitly fail
-the drain. Their pause/persistence and verified process-stop implementations,
-automation/request admission, and full runtime validation remain required.
-Do not activate the patch set while those adapters are missing. The component
+the drain. Native Goal pause/persistence, automation/request admission, and
+full runtime validation remain required. Do not activate the patch set while
+those contracts are incomplete. The component
 passes 50 focused drain/core/terminal/bash/interrupted-run tests, the generated
 dispatch-surface tests, and full upstream typecheck. Tests cover delayed and
 hung SDK aborts, attachment races, retry sharing, terminal stop failure, late
 rejection handling, and refusal of unsupported background drain.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-background-drain.patch`
+adds the background adapter's `quiesce` hook after the drain component. It
+captures tracked PIDs before asking existing owners to stop jobs/port listeners,
+then verifies both the remaining rows and captured process liveness within a
+bounded deadline. UI cleanup alone cannot acknowledge termination. The upstream
+plugin stop API removes task rows even if a stop callback throws, so active
+plugin tasks trigger a best-effort stop and a failed drain requiring runner
+process-group escalation; that API cannot establish successful termination.
+
+This component passes 25 adapter tests, including a real background job whose
+launcher and reported child PID are checked before and after shutdown. Mocked
+cases cover removed-but-live job rows, delayed PID exit, and unverifiable plugin
+stops. Full upstream typecheck passes with the candidate patch set. Native Goal
+shutdown and the overall image/protocol/browser release gates remain open.
 
 The remaining migration must preserve these contracts at their current owners:
 
@@ -84,7 +99,7 @@ The remaining migration must preserve these contracts at their current owners:
 | Protocol and service interfaces | `packages/keel/src/protocol.ts` and `engine-service.ts`; server files are re-export shims. Port managed messages and real implementations together. |
 | Persisted state | `packages/keel/src/projects-schema.ts` owns types; `server/client-state.ts` owns storage. Preserve paused goals, model timestamps, and interrupted workspace-request metadata. |
 | Automation and workspace requests | Replace old daemon hooks with current core runtime/host integration; preserve status, cancellation, readiness, model validation, and restart recovery. |
-| Quiesce and counters | Counter and bounded core-drain components are tested but inactive; native Goal/background host shutdown and complete admission coverage remain required. |
+| Quiesce and counters | Counter, bounded core drain, and background-host components are tested but inactive; native Goal shutdown, process-group escalation validation, and complete admission coverage remain required. |
 | Native Pi Goals | `server/core-goal-run-adapter.ts`, core goal contracts/handlers, and runtime state own execution. Passing old `goal-service.ts` tests does not establish persistence or paused restore here. |
 | SDK setup | `packages/keel/src/adapters/sdk/session-opener.ts` and host ports must preserve credentials, transcript placement, prompt references, and the single MCP integration. Do not import server modules into the core package. |
 | Embedding and browser surfaces | Revalidate authenticated `/agent/`, native terminal, model selection, Goals, and proxy paths against the actual new engine. |
