@@ -37,12 +37,17 @@ function createVmGatewayResolveService({db, now = Date.now, allowedGatewayHosts,
     const time = Number(now());
     if (!Number.isSafeInteger(time)) throw httpError(503, "gateway_unavailable");
 
-    // The old Compute Engine route schema is retained as an explicit provider
-    // branch for existing workspaces. Remote-libvirt never falls back to it.
-    const legacy = await resolveLegacyComputeRoute({db, host, requestPath, body, time});
-    if (legacy) return legacy;
-
     const payload = parseTokenPayload(body.token);
+    // Workspace-scoped tokens select remote-libvirt before consulting the
+    // hostname-scoped Compute Engine route. Both providers share this gateway
+    // hostname; an existing Compute route must not shadow remote workspaces.
+    // This is only dispatch: the selected branch still verifies the signature,
+    // owner and generation. A failed remote token never falls back to Compute.
+    if (!payload || !Object.prototype.hasOwnProperty.call(payload, "wid")) {
+      const legacy = await resolveLegacyComputeRoute({db, host, requestPath, body, time});
+      if (legacy) return legacy;
+      throw httpError(404, "not_found");
+    }
     if (!payload || !payload.wid || !payload.sid) throw httpError(404, "not_found");
     const workspaceRef = db.collection("workspaces").doc(String(payload.wid));
     const sessionRef = workspaceRef.collection("sessions").doc(String(payload.sid));

@@ -469,6 +469,14 @@ existing error handling. Deploy both `provisionQueuedSession` and
 `reconcileRemoteVmOperation`, plus `api`, when changing this shared lifecycle
 code. No guest image or host helper update is required for this behavior.
 
+The gateway hostname can also have a legacy Compute Engine route. The resolver
+dispatches workspace-scoped tokens (the `wid` claim) to remote-libvirt before
+looking up that hostname route, then verifies the token against the owned
+remote session. An invalid remote token never falls back to Compute Engine.
+Tokens without a workspace claim retain the legacy route contract. Deploy
+`vmGatewayResolve_v2` for resolver dispatch changes; no gateway image rebuild
+is needed.
+
 The live canary is deliberately separate from the mocked/unit fixtures. The
 operator must reserve one disposable host and one owner account, record the
 release commit and guest-image/helper versions, and keep host addresses,
