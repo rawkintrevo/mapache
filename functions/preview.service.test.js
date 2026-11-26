@@ -137,7 +137,7 @@ async function testRemoteGatewayAccess() {
     requireSession: async () => ({sessionSnap: {data: () => session}, workspace: {runtimeProvider: remoteDescriptor}}),
   });
   const result = await service.createSessionAccessUrls("owner-1", "workspace-remote", "session-remote");
-  assert.match(result.agentUrl, /^https:\/\/mapache-vm-gateway\.example\.com\/agent\/\?mapache_access=/);
+  assert.match(result.agentUrl, /^https:\/\/mapache-vm-gateway\.example\.com\/workspaces\/workspace-remote\/agent\/\?mapache_access=/);
   assert.equal(result.terminalUrl, null);
   const payload = JSON.parse(Buffer.from(new URL(result.agentUrl).searchParams.get("mapache_access").split(".")[0], "base64url").toString("utf8"));
   assert.deepStrictEqual(payload, {
