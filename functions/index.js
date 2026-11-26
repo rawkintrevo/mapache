@@ -332,6 +332,7 @@ const computeEngineService = createComputeEngineService({
 const remoteVmLifecycleService = createRemoteVmLifecycleService({
   admin,
   db,
+  markChromeWorkspaceSessionRunning,
   remoteVmCredentialsUrl,
 });
 const runtimeProviderService = createRuntimeProviderService({

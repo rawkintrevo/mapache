@@ -67,9 +67,14 @@ jobs:
         env:
           BROWSER_EGRESS_CONFIG_SECRET: ${{ vars.BROWSER_EGRESS_CONFIG_SECRET }}
           REMOTE_VM_ADMISSION_ENABLED: ${{ vars.REMOTE_VM_ADMISSION_ENABLED }}
+          VM_WORKSPACE_GATEWAY_HOSTS: ${{ vars.VM_WORKSPACE_GATEWAY_HOSTS }}
         run: |
           test -n "$BROWSER_EGRESS_CONFIG_SECRET" || {
             echo "BROWSER_EGRESS_CONFIG_SECRET is required for the production Functions deployment." >&2
+            exit 1
+          }
+          test -n "$VM_WORKSPACE_GATEWAY_HOSTS" || {
+            echo "VM_WORKSPACE_GATEWAY_HOSTS is required for the production Functions deployment." >&2
             exit 1
           }
           remote_vm_admission_enabled="${REMOTE_VM_ADMISSION_ENABLED:-false}"
@@ -84,6 +89,7 @@ jobs:
             'FUNCTION_SERVICE_ACCOUNT=mapache-api@pi-agents-cloud.iam.gserviceaccount.com' \
             'SESSION_RUNNER_SERVICE_ACCOUNT=mapache-runner@pi-agents-cloud.iam.gserviceaccount.com' \
             "BROWSER_EGRESS_CONFIG_SECRET=$BROWSER_EGRESS_CONFIG_SECRET" \
+            "VM_WORKSPACE_GATEWAY_HOSTS=$VM_WORKSPACE_GATEWAY_HOSTS" \
             "REMOTE_VM_ADMISSION_ENABLED=$remote_vm_admission_enabled" \
             'QA_LOGIN_UID=${{ vars.QA_LOGIN_UID }}' \
             'QA_LOGIN_EMAIL=${{ vars.QA_LOGIN_EMAIL }}' \
