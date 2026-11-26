@@ -29,6 +29,7 @@ function command(client, text) {
     client.exec(text, (error, stream) => {
       if (error) return reject(httpError(502, "remote_host_helper_failed"));
       let output = "";
+      let stderr = "";
       let bytes = 0;
       stream.on("data", (data) => {
         bytes += data.length;
@@ -38,17 +39,18 @@ function command(client, text) {
         } else output += data.toString();
       });
       // Never propagate command stderr (which may contain private host paths).
-      stream.stderr.resume();
+      stream.stderr.on("data", (data) => { stderr = (stderr + data.toString()).slice(-4096); });
       stream.on("error", () => reject(httpError(502, "remote_host_helper_failed")));
       stream.on("close", (code) => {
-        if (code !== 0) return reject(httpError(502, "remote_host_helper_failed"));
+        if (code !== 0) return reject(httpError(502,
+          /no space left|disk full|thin.?disk/i.test(stderr) ? "remote_vm_thin_disk_exhausted" : "remote_host_helper_failed"));
         try { resolve(JSON.parse(output)); } catch { reject(httpError(502, "remote_host_helper_invalid")); }
       });
     });
   });
 }
 
-function connectRemoteHost({host, addresses, privateKey, timeoutMs = 15000}) {
+function withRemoteHost({host, addresses, privateKey, timeoutMs = 15000}, task) {
   return new Promise((resolve, reject) => {
     const client = new Client();
     let settled = false;
@@ -65,15 +67,7 @@ function connectRemoteHost({host, addresses, privateKey, timeoutMs = 15000}) {
     client.on("close", () => finish(httpError(502, "remote_host_unreachable")));
     client.on("ready", async () => {
       try {
-        const status = await command(client, "mapache-vm status");
-        if (status.ready !== true) throw httpError(409, "remote_host_setup_incomplete");
-        const capacity = await command(client, "mapache-vm capacity");
-        if (status.version !== "1" || status.network !== "mapache-vm" ||
-            capacity.version !== "1" || capacity.network !== "mapache-vm" ||
-            ![capacity.cpuCount, capacity.memoryBytes, capacity.freeDiskBytes].every((n) => Number.isFinite(n) && n > 0)) {
-          throw httpError(502, "remote_host_helper_invalid");
-        }
-        finish(null, {hostKeyFingerprint: observed, capacity});
+        finish(null, await task(client, observed));
       } catch (error) { finish(error); }
     });
     try {
@@ -100,4 +94,29 @@ function connectRemoteHost({host, addresses, privateKey, timeoutMs = 15000}) {
   });
 }
 
-module.exports = {connectRemoteHost, sshPrivateKey};
+function connectRemoteHost(options) {
+  return withRemoteHost(options, async (client, observed) => {
+    const status = await command(client, "mapache-vm status");
+    if (status.ready !== true) throw httpError(409, "remote_host_setup_incomplete");
+    const capacity = await command(client, "mapache-vm capacity");
+    if (status.version !== "1" || status.network !== "mapache-vm" ||
+        capacity.version !== "1" || capacity.network !== "mapache-vm" ||
+        ![capacity.cpuCount, capacity.memoryBytes, capacity.freeDiskBytes].every((n) => Number.isFinite(n) && n > 0)) {
+      throw httpError(502, "remote_host_helper_invalid");
+    }
+    return {hostKeyFingerprint: observed, capacity};
+  });
+}
+
+async function runRemoteHostCommand(options) {
+  const {action, guestName, host} = options;
+  if (!host?.hostKeyFingerprint) throw httpError(409, "remote_host_trust_incomplete");
+  if (!["capacity", "inspect", "create", "start", "stop", "destroy"].includes(action) ||
+      (action !== "capacity" && !/^mapache-ws-[a-z0-9][a-z0-9-]{0,62}$/.test(guestName || ""))) {
+    throw httpError(400, "remote_host_command_invalid");
+  }
+  return withRemoteHost({...options, timeoutMs: options.timeoutMs || 45000}, (client) =>
+    command(client, `mapache-vm ${action}${action === "capacity" ? "" : ` ${guestName}`}`));
+}
+
+module.exports = {connectRemoteHost, runRemoteHostCommand, sshPrivateKey};
