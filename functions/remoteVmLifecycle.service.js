@@ -5,6 +5,8 @@ const {resolveAllowedAddresses} = require("./remoteHost.service");
 const {runRemoteHostCommand} = require("./remoteHost.connection");
 const {guestConfiguration, guestConfigurationId} = require("./remoteVmGuestConfig.helpers");
 const {httpError} = require("./backendUtils.helpers");
+const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
+const {runtimeSessionStateUpdate} = require("./runtimeReservation.helpers");
 const {
   REMOTE_GUEST_DISK_GIB,
   REMOTE_GUEST_IMAGE_VERSION,
@@ -69,7 +71,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
     patchSessionService: (sessionRef, session, options = {}) => patchSessionService(sessionRef, session, options),
     deleteSessionService: (sessionRef, session, options = {}) => deleteSessionService(sessionRef, session, options),
     inspect: (session, options = {}) => inspectSession(session, options),
-    reconcileOperation: (operationId) => reconcileOperation(operationId),
+    reconcileOperation: (operationId, options) => reconcileOperation(operationId, options),
     executeOperation: (operationId) => executeOperation(operationId),
     reserveCapacity: (workspace, descriptor, operationId) => reserveCapacity(workspace, descriptor, operationId),
     releaseCapacity: (descriptor, operationId) => releaseCapacity(descriptor, operationId),
@@ -230,6 +232,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
         ownerUid: descriptor.ownerUid,
         workspaceId: descriptor.workspaceId,
         sessionId: session.id || null,
+        sessionBootId: session.agentRuntimeBootInstanceId || null,
         hostId: descriptor.hostId,
         kind,
         idempotencyKey,
@@ -418,12 +421,21 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       const workspace = workspaceSnap.exists ? workspaceSnap.data() || {} : {};
       const staleDelete = operation.kind !== "delete" && (workspace.deleted === true || workspace.deletionTombstone);
       if (staleDelete) {
-        txSet(transaction, ref, {state: "cancelled", lastError: "remote_vm_stale_operation", updatedAt: timestamp});
         if (current.capacityReserved) {
           await releaseCapacityInTransaction(transaction, db.collection("remoteHosts").doc(operation.hostId), operation.id, operation.workspaceId);
         }
+        txSet(transaction, ref, {state: "cancelled", lastError: "remote_vm_stale_operation", updatedAt: timestamp});
         finished = {...current, id: ref.id, state: "cancelled"};
         return;
+      }
+      const sessionRef = operation.kind === "stop" && operation.sessionId ?
+        workspaceRef.collection("sessions").doc(operation.sessionId) : null;
+      const sessionSnap = sessionRef ? await transaction.get(sessionRef) : null;
+      // Capacity release reads the host before writing it. Do it before any
+      // other writes so Firestore's read-before-write transaction rule holds.
+      if (operation.kind === "stop" || operation.kind === "delete") {
+        await releaseCapacityInTransaction(transaction, db.collection("remoteHosts").doc(operation.hostId),
+            operation.id, operation.workspaceId);
       }
       txSet(transaction, ref, {
         state: "completed",
@@ -433,14 +445,17 @@ function createRemoteVmLifecycleService(dependencies = {}) {
         completedAt: timestamp,
         updatedAt: timestamp,
         lastError: null,
+        errorCode: null,
       });
-      if (operation.kind === "stop" || operation.kind === "delete") {
-        await releaseCapacityInTransaction(
-            transaction,
-            db.collection("remoteHosts").doc(operation.hostId),
-            operation.id,
-            operation.workspaceId,
-        );
+      const stoppedSession = sessionSnap?.data() || {};
+      if (sessionSnap?.exists && stoppedSession.ownerUid === operation.ownerUid &&
+          (!operation.sessionBootId || operation.sessionBootId === stoppedSession.agentRuntimeBootInstanceId)) {
+        txSet(transaction, sessionRef, sessionStatusUpdate(stoppedSession, "stopped", {
+          ...runtimeSessionStateUpdate(stoppedSession, "stopped"),
+          runtimeProvider: {...context.descriptor, state: "stopped"},
+          runtimeProviderState: "stopped", runtimeProviderOperationId: ref.id,
+          serviceUrl: null, activeSocketCount: 0, lastError: null, stoppedAt: timestamp, updatedAt: timestamp,
+        }, {reconciliationReason: "remote_vm_stop_confirmed"}));
       }
       const targetState = operation.kind === "delete" ? "deleted" : operation.kind === "stop" ? "stopped" : "running";
       if (workspaceSnap.exists) {
@@ -448,6 +463,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
           runtimeProvider: {...context.descriptor, state: targetState, guestIp: observed.guestIp || context.descriptor.guestIp},
           runtimeProviderState: targetState,
           runtimeProviderOperationId: ref.id,
+          lastError: null,
           ...(operation.kind === "delete" ? {lifecycle: "deleted", deleted: true, deletedAt: timestamp} : {}),
           updatedAt: timestamp,
         });
@@ -470,6 +486,10 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       const currentSnap = await transaction.get(ref);
       if (!currentSnap.exists) return;
       const current = currentSnap.data() || {};
+      if (["completed", "cancelled"].includes(current.state)) {
+        failed = {...current, id: ref.id};
+        return;
+      }
       const hostRef = db.collection("remoteHosts").doc(operation.hostId);
       if (current.capacityReserved && operation.kind !== "stop") {
         await releaseCapacityInTransaction(transaction, hostRef, operation.id, operation.workspaceId);
@@ -500,6 +520,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
   async function claimOperation(ref) {
     let claimed = false;
     await db.runTransaction(async (transaction) => {
+      claimed = false;
       const snap = await transaction.get(ref);
       if (!snap.exists) return;
       const current = snap.data() || {};
@@ -535,12 +556,13 @@ function createRemoteVmLifecycleService(dependencies = {}) {
     return normalizeObserved(await performHostOperation(context, "inspect"), descriptor);
   }
 
-  async function reconcileOperation(operationIdValue) {
+  async function reconcileOperation(operationIdValue, options = {}) {
     const id = normalizeOperationId(operationIdValue);
     const snap = await operationRef(id).get();
     if (!snap.exists) throw lifecycleError("remote_vm_operation_not_found");
     const operation = {...snap.data(), id};
     if (["completed", "cancelled"].includes(operation.state)) return operation;
+    if (options.retryFailed === false && operation.state === "error" && operation.retryable !== true) return operation;
     return executeOperation(id);
   }
 

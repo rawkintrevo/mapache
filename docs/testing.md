@@ -106,7 +106,7 @@ It runs:
 5. Frontend smoke tests.
 6. Full Vite app and Docusaurus community build.
 
-Firebase preview and production workflows should keep mirroring this fast set: install root, `community/`, `functions/`, and `session-runner/` dependencies; run Functions tests; run runner syntax checks; run frontend smoke tests; then build. Live Cloud Run provisioning, browser E2E, and LLM-assisted regressions stay out of the default PR path.
+Firebase preview and production workflows should keep mirroring this fast set: install root, `community/`, `functions/`, `vm-gateway/`, and `session-runner/` dependencies; run Functions tests; run runner syntax checks; run frontend smoke tests; then build. The remote-VM gate includes gateway authentication, SSH pooling and WebSocket regression tests. Live Cloud Run provisioning, browser E2E, and LLM-assisted regressions stay out of the default PR path.
 
 The `Runner Images` workflow has a separate fast-path guard for pull requests:
 Cloud Build passes `MAPACHE_SKIP_UPSTREAM_TESTS=1` to the `gcp-runner` Dockerfile,
