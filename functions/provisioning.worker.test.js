@@ -159,12 +159,13 @@ assert.strictEqual(isProvisioningRecoveryEvent({
   assert.strictEqual(failureUpdates[0].lastError, "workspace lookup failed");
 
   let pendingReleases = 0;
+  let pendingCode = "cloud_run_provisioning_pending";
   const pendingWorker = createProvisioningWorker({
     db: failureDb,
     requireWorkspace: async () => workspace,
     provisionSessionService: async () => {
       const error = new Error("still pending");
-      error.code = "cloud_run_provisioning_pending";
+      error.code = pendingCode;
       throw error;
     },
     releaseChromeWorkspaceSession: async () => {
@@ -185,6 +186,14 @@ assert.strictEqual(isProvisioningRecoveryEvent({
       }),
       (error) => error.code === "cloud_run_provisioning_pending",
   );
+  assert.strictEqual(pendingReleases, 0);
+  const previousFailures = failureUpdates.length;
+  pendingCode = "remote_vm_provisioning_pending";
+  await assert.rejects(pendingWorker({
+    params: {workspaceId: "workspace-1", sessionId: "session-pending"},
+    data: {after: {id: "session-pending", ref: failureRef, exists: true, data: () => session}},
+  }), (error) => error.code === "remote_vm_provisioning_pending");
+  assert.strictEqual(failureUpdates.length, previousFailures);
   assert.strictEqual(pendingReleases, 0);
 
   const unsupportedRef = {update: async (update) => failureUpdates.push(update)};

@@ -70,6 +70,7 @@ function fixture() {
     return `${payload}.${createHmac("sha256", secret).update(payload).digest("base64url")}`;
   };
   return {
+    docs,
     host,
     session,
     workspace,
@@ -84,6 +85,28 @@ function fixture() {
     advance: (milliseconds) => { time += milliseconds; },
   };
 }
+
+test("shared gateway keeps remote workspace tokens separate from legacy Compute routes", async () => {
+  const f = fixture();
+  const time = Date.now();
+  f.docs.set(`vmGatewayRoutes_v2/${f.host}`, {workspaceId: "compute-1", enabled: true,
+    ownerUid: "compute-owner", generation: 3, sessionId: "compute-session", address: "10.90.0.3"});
+  f.docs.set("vmRuntimes_v2/compute-1", {backend: "compute-engine", currentSessionId: "compute-session",
+    ownerUid: "compute-owner", generation: 3, state: "active", leaseExpiresAt: time + 60_000});
+  f.docs.set("vmRuntimes_v2/compute-1/sessions/compute-session", {ownerUid: "compute-owner",
+    generation: 3, state: "active", leaseExpiresAt: time + 60_000});
+  f.docs.set("vmRuntimeCredentials_v2/compute-session", {ownerUid: "compute-owner",
+    generation: 3, browserToken: "compute-secret"});
+  assert.equal((await f.call()).transport, "ssh");
+  const legacyToken = f.token({wid: undefined, uid: undefined, sid: "compute-session"}, "compute-secret");
+  assert.equal((await f.call({token: legacyToken})).transport, "direct");
+  // A token signed by the legacy key cannot fall back from the remote branch.
+  await assert.rejects(f.call({token: f.token({}, "compute-secret")}), /not_found/);
+  await assert.rejects(f.call({token: f.token({wid: ""}, "compute-secret")}), /not_found/);
+  f.docs.get(`vmGatewayRoutes_v2/${f.host}`).enabled = false;
+  assert.equal((await f.call()).transport, "ssh");
+  await assert.rejects(f.call({token: legacyToken}), /not_found/);
+});
 
 test("remote resolution is owner and generation fenced and returns only the SSH relay contract", async () => {
   const f = fixture();

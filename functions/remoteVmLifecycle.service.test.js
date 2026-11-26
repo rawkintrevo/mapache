@@ -146,6 +146,42 @@ test("duplicate start requests converge on one retained guest and reservation", 
   assert.equal(savedHost.remoteVmReservations.entries.length, 1);
 });
 
+test("concurrent provisioning defers to the active lease and adopts completion without another boot", async () => {
+  const value = fixture();
+  await seed(value);
+  const host = fakeHost();
+  let releaseStart;
+  let signalStart;
+  const starting = new Promise((resolve) => { signalStart = resolve; });
+  const gate = new Promise((resolve) => { releaseStart = resolve; });
+  const service = createRemoteVmLifecycleService({db: value.db, hostOperation: async (request) => {
+    if (request.action === "start") {
+      signalStart();
+      await gate;
+    }
+    return host.operation(request);
+  }});
+  const ref = value.db.collection("workspaces").doc("workspace-1").collection("sessions").doc("session-1");
+  // A separate worker owns the operation, without the provisioning wrapper.
+  const owner = service.start(value.workspace, ref, value.session);
+  await starting;
+  try {
+    await assert.rejects(service.provisionSessionService(value.workspace, ref, value.session),
+        (error) => error.code === "remote_vm_provisioning_pending");
+    assert.equal((await ref.get()).data().status, "provisioning");
+  } finally {
+    releaseStart();
+  }
+  await owner;
+  const adopted = await service.provisionSessionService(value.workspace, ref, value.session);
+  assert.equal(adopted.status, "running");
+  assert.equal((await ref.get()).data().runtimeProvider.guestIp, "192.168.250.42");
+  assert.equal(host.calls.filter((action) => action === "create").length, 1);
+  assert.equal(host.calls.filter((action) => action === "start").length, 1);
+  const savedHost = (await value.db.collection("remoteHosts").doc("host-1").get()).data();
+  assert.equal(savedHost.remoteVmReservations.entries.length, 1);
+});
+
 test("wrong-owner session cannot configure a guest", async () => {
   const fixtureValue = fixture();
   await seed(fixtureValue);
