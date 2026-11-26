@@ -155,11 +155,14 @@ Run slower checks when a change touches the related subsystem:
   reserved for #643.
 - Runner image cache changes: provision the private `pi-agents-cloud-build-cache` bucket as
   described in [Deployment](./deployment.md), then run three Cloud Builds with the same
-  source inputs. The first build is the cold miss; a second build submitted from a fresh
-  worker must log `cache decision=hit`; changing a managed patch or resolved dependency must
-  produce a different key and a miss. Save the Cloud Build URLs and the `cache decision`,
-  `reason`, and `elapsedMs` lines in the release evidence. The image build also fails unless
-  its started container serves `/agent/` and every referenced JavaScript bundle.
+  source inputs. The first build is the cold miss; a second fast build submitted from a
+  fresh worker must log `cache decision=hit` and reuse the validated artifact without
+  running the upstream suite; changing a managed patch or resolved dependency must
+  produce a different key and a miss. Fast misses must not publish an untested cache
+  object; release builds publish only after the full suite passes. Save the Cloud Build
+  URLs and the `cache decision`, `reason`, and `elapsedMs` lines in the release evidence.
+  The image build also fails unless its started container serves `/agent/` and every
+  referenced JavaScript bundle.
 - One-off HubSpot export changes: `node --test scripts/hubspotPiWebExport.test.mjs`.
   These fixtures stay local and verify restricted inventory matching, dry-run defaults,
   quiescence/stop gating, source/output collision rejection, hidden files, `.git`, binary

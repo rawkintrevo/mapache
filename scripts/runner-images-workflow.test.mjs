@@ -5,6 +5,7 @@ import {readFile} from "node:fs/promises";
 const workflow = await readFile(new URL("../.github/workflows/runner-images.yml", import.meta.url), "utf8");
 const cloudbuild = await readFile(new URL("../session-runner/cloudbuild.gcp-runner.yaml", import.meta.url), "utf8");
 const dockerfile = await readFile(new URL("../session-runner/Dockerfile.gcp-runner", import.meta.url), "utf8");
+const buildScript = await readFile(new URL("../session-runner/upstream/pi-web-ui/build.mjs", import.meta.url), "utf8");
 
 test("runner image builds avoid log streaming and wait for Cloud Build status", () => {
   assert.match(workflow, /gcloud builds submit session-runner \\\n+\s+--async/);
@@ -29,6 +30,8 @@ test("runner image builds resolve and verify the pi-web-ui cache before packagin
   assert.match(dockerfile, /--cache-archive \/app\/pi-web-ui-cache\.tar\.gz/);
   assert.match(cloudbuild, /artifactCache\.mjs pack/);
   assert.match(cloudbuild, /--if-generation-match=0/);
+	assert.match(cloudbuild, /cacheDecision\?\.publishable === true/);
+	assert.match(cloudbuild, /pi-web-ui-cache-publish-allowed/);
 });
 
 test("pull-request runner builds use the fast upstream test path while releases stay full", () => {
@@ -40,6 +43,13 @@ test("pull-request runner builds use the fast upstream test path while releases 
 	assert.match(workflow, /skip_upstream_tests=1/);
 	assert.match(workflow, /skip_upstream_tests=0/);
 	assert.match(workflow, /_SKIP_UPSTREAM_TESTS=\$skip_upstream_tests/);
+});
+
+test("fast cache hits restore before dependency installation", () => {
+  const restoreIndex = buildScript.indexOf("restoreCacheArtifact(");
+  const installIndex = buildScript.indexOf('run("npm", ["ci"]');
+  assert.ok(restoreIndex >= 0);
+  assert.ok(installIndex > restoreIndex);
 });
 
 test("runner image publication is gated by the pi-web-ui page and bundle smoke test", () => {
