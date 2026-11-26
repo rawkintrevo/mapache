@@ -95,7 +95,7 @@ function createVmGatewayResolveService({db, now = Date.now, allowedGatewayHosts,
         guestPort: DEFAULT_AGENT_PORT,
         sessionId: String(session.runnerSessionId || payload.sid),
         generation: descriptor.generation,
-        bootId: String(session.runtimeProvider?.bootId || descriptor.generation),
+        bootId: String(session.agentRuntimeBootInstanceId),
         validUntil: Math.min(time + ROUTE_TTL_MS, payload.exp * 1000),
       };
     });
@@ -146,6 +146,7 @@ async function resolveLegacyComputeRoute({db, host, requestPath, body, time}) {
 
 function normalizeRemoteDescriptor(workspace, session, payload) {
   if (workspace.deletedAt || session.deletedAt || session.status !== "running") return null;
+  if (!session.agentRuntimeBootInstanceId || payload.boot !== session.agentRuntimeBootInstanceId) return null;
   let descriptor;
   try {
     descriptor = normalizeRuntimeDescriptor(session.runtimeProvider || workspace.runtimeProvider, {

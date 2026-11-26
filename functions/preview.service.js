@@ -200,11 +200,14 @@ function signSessionAgentAccessToken(session, expiresAtMs) {
 }
 
 function signSessionRemoteGatewayAccessToken(session, workspaceId, ownerUid, expiresAtMs) {
+  const boot = String(session.agentRuntimeBootInstanceId || "");
+  if (!boot) throw httpError(409, "remote_vm_boot_required");
   const generation = explicitRuntimeGeneration(
       session.agentRuntimeGeneration || session.runtimeProvider?.generation || "1",
   ) || "1";
   const payload = Buffer.from(JSON.stringify({
     aud: AGENT_AUDIENCE,
+    boot,
     exp: Math.floor(expiresAtMs / 1000),
     gen: generation,
     sid: session.runnerSessionId || session.id || "",

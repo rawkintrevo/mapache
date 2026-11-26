@@ -126,6 +126,7 @@ async function testRemoteGatewayAccess() {
     ownerUid: "owner-1",
     workspaceId: "workspace-remote",
     runnerSessionId: "session-remote",
+    agentRuntimeBootInstanceId: "remote-boot-1",
     browserAccessTokenSecret: "browser-secret",
     runtimeProvider: remoteDescriptor,
     status: "running",
@@ -143,9 +144,12 @@ async function testRemoteGatewayAccess() {
     aud: "agent",
     exp: payload.exp,
     gen: "4",
+    boot: "remote-boot-1",
     sid: "session-remote",
     uid: "owner-1",
     wid: "workspace-remote",
   });
   assert.match(signSessionRemoteGatewayAccessToken(session, "workspace-remote", "owner-1", Date.now() + 1000), /^.+\..+$/);
+  assert.throws(() => signSessionRemoteGatewayAccessToken({...session, agentRuntimeBootInstanceId: ""},
+      "workspace-remote", "owner-1", Date.now() + 1000), /remote_vm_boot_required/);
 }
