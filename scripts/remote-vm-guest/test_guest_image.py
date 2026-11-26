@@ -97,6 +97,8 @@ class GuestImageTests(unittest.TestCase):
                     source, destination = command[command.index("--copy-in") + 1].split(":", 1)
                     self.assertTrue(Path(source).is_dir())
                     self.assertEqual(destination, "/opt/mapache")
+                    directories = [command[i + 1] for i, value in enumerate(command) if value == "--mkdir"]
+                    self.assertIn("/usr/local/libexec", directories)
                     for i, value in enumerate(command):
                         if value == "--upload":
                             self.assertTrue(Path(command[i + 1].split(":", 1)[0]).is_file())

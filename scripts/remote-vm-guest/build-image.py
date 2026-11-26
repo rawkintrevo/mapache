@@ -235,6 +235,7 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
             "--install", "ca-certificates,curl,git,openssh-client,python3",
             "--mkdir", "/opt/mapache",
             "--mkdir", "/etc/mapache-vm",
+            "--mkdir", "/usr/local/libexec",
             "--mkdir", "/var/lib/mapache/workspace",
             "--copy-in", f"{staged_payload}:/opt/mapache",
             "--upload", f"{bootstrap}:/usr/local/libexec/mapache-guest-bootstrap",
