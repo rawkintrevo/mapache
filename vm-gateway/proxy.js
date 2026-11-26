@@ -7,6 +7,11 @@ const {workspacePath, entryHtml, rewriteEntryHtml, assetModule, rewriteAssetModu
 
 const HOP_HEADERS = new Set(["connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade"]);
 const ACCESS_QUERY = "mapache_access";
+// The embedded pi-web-ui uses the parent origin from document.referrer to
+// complete its postMessage readiness handshake. Preserve only that origin
+// across the token-to-cookie redirect; the token itself is removed from the
+// redirect location and never forwarded to the guest.
+const EMBEDDED_AGENT_REFERRER_POLICY = "strict-origin-when-cross-origin";
 const MAX_TOKEN_BYTES = 8192;
 const MAX_LIFETIME_MS = 55 * 60 * 1000;
 
@@ -38,7 +43,7 @@ function createGateway({resolve, request = http.request, transportFactory = crea
         location: input.publicPath,
         "set-cookie": `mapache_access=${encodeURIComponent(input.token)}; Path=${input.prefix}/agent; HttpOnly; Secure; SameSite=None`,
         "cache-control": "no-store",
-        "referrer-policy": "no-referrer",
+        "referrer-policy": EMBEDDED_AGENT_REFERRER_POLICY,
       });
       downstream.end();
       return;

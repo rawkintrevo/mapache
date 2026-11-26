@@ -107,7 +107,7 @@ test("authorized URL bootstrap sets a browser cookie before assets and WebSocket
   assert.equal(bootstrap.status, 303);
   assert.equal(bootstrap.headers.location, "/agent/?x=1");
   assert.equal(bootstrap.headers["cache-control"], "no-store");
-  assert.equal(bootstrap.headers["referrer-policy"], "no-referrer");
+  assert.equal(bootstrap.headers["referrer-policy"], "strict-origin-when-cross-origin");
   assert.equal(f.count(), 0);
   const cookie = bootstrap.headers["set-cookie"][0];
   assert.equal(cookie, "mapache_access=valid; Path=/agent; HttpOnly; Secure; SameSite=None");

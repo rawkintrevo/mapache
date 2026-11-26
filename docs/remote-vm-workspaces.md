@@ -232,7 +232,10 @@ For an authorized remote guest GET containing `mapache_access`, the gateway
 sets a Secure, HttpOnly, SameSite=None cookie scoped to
 `/workspaces/{workspaceId}/agent` and redirects
 to the same URL without the token. This permits the following asset and
-WebSocket requests to authenticate. Invalid tokens never set a cookie; every
+WebSocket requests to authenticate. The bootstrap redirect preserves only the
+parent origin with `Referrer-Policy: strict-origin-when-cross-origin`, which
+allows the embedded pi-web-ui to emit its readiness message without exposing
+the token-bearing URL as a referrer. Invalid tokens never set a cookie; every
 subsequent request still checks current session authority and token expiry.
 The resolver also requires the URL workspace to equal the signed token's `wid`;
 namespaced paths cannot select legacy Compute routes. `vm-gateway/workspacePaths.js`
