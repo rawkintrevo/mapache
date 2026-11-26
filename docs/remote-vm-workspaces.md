@@ -247,6 +247,12 @@ connection-time resolution reject loopback, metadata, private control-plane and
 other disallowed relay targets. The host's existing port 22 is sufficient; no
 guest port is opened to the internet.
 
+Address checks use Node's IP subnet matcher so IPv4-mapped IPv6 literals and
+hexadecimal encodings cannot bypass loopback, private, or metadata exclusions.
+Connection-time resolution validates literal IPs as well as every DNS answer;
+a mixture of public and prohibited answers is rejected rather than selecting
+one. Resolver, API, and lifecycle worker deployments must share this validator.
+
 ## Guest storage and networking
 
 The host helper creates one private NAT/libvirt network and one QCOW2 disk per

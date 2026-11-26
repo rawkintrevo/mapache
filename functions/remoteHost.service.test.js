@@ -7,6 +7,7 @@ const {
   createRemoteHostService,
   generateKeyMaterial,
   normalizeHostAddress,
+  resolveAllowedAddresses,
 } = require("./remoteHost.service");
 
 class FakeSnapshot {
@@ -206,10 +207,24 @@ test("blocks removal while referenced and revokes an unused host without deletin
 });
 
 test("rejects loopback, private and metadata host addresses", () => {
-  for (const address of ["localhost", "127.0.0.1", "10.0.0.5", "169.254.169.254", "metadata.google.internal"]) {
+  for (const address of ["localhost", "127.0.0.1", "10.0.0.5", "169.254.169.254", "metadata.google.internal",
+    "::ffff:127.0.0.1", "::ffff:7f00:1", "::ffff:169.254.169.254", "::ffff:a9fe:a9fe",
+    "::ffff:192.168.1.1", "0:0:0:0:0:0:0:1", "ff02::1"]) {
     assert.throws(() => normalizeHostAddress(address), /remote_host_address_disallowed/);
   }
   assert.equal(normalizeHostAddress("home.example.com"), "home.example.com");
+});
+
+test("connection-time validation rejects mapped private literals and mixed DNS answers", async () => {
+  await assert.rejects(resolveAllowedAddresses("::ffff:7f00:1"), /remote_host_address_disallowed/);
+  for (const address of ["::ffff:a9fe:a9fe", "::ffff:c0a8:101", "not-an-ip"]) {
+    await assert.rejects(resolveAllowedAddresses("home.example.com", {resolveHost: async () =>
+      [{address: "203.0.113.5"}, {address}]}), /remote_host_address_disallowed/);
+  }
+  for (const address of ["203.0.113.5", "::ffff:203.0.113.5", "2001:4860:4860::8888"]) {
+    assert.equal(normalizeHostAddress(address), address);
+    assert.deepEqual(await resolveAllowedAddresses(address), [address]);
+  }
 });
 
 console.log("remote host service tests passed");
