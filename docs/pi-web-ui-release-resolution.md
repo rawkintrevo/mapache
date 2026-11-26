@@ -148,6 +148,26 @@ The wire catches asynchronous resume failures and emits a generic error notice.
 The existing managed Resume button still requires validation against the complete
 new runtime; this is not browser or image release evidence.
 
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-model-catalog.patch`
+adds an eighth inactive component: browserless model discovery reads the actual
+installed SDK `ModelRuntime` catalog without opening or adopting a conversation.
+It returns explicit safe fields for all providers, including unavailable ones,
+and retains the saved selection even if it is no longer in the catalog. Model
+IDs containing slashes remain intact. Each completed query releases its runtime
+so the next query reloads changed credentials/configuration; concurrent callers
+share a flight. A timed-out flight stays shared until it settles, preventing
+retries from multiplying hung initialization work. Discovery rejects while
+quiesced, bounds responses to eight seconds, and sanitizes initialization/catalog
+errors into the existing control response shape.
+
+Six tests pass, including a real offline SDK custom-model fixture and checks for
+safe projection, unavailable providers, saved selection, retry behavior, timeout,
+and drain admission. Full upstream typecheck passes with the independent
+components. The in-progress full port connects this reader at `server/index.ts`,
+but automation/request execution still references the removed service and that
+full port does not typecheck. This component alone does not establish working
+control-socket discovery or request execution and must remain inactive.
+
 The remaining migration must preserve these contracts at their current owners:
 
 | Contract | v0.123 owner / required work |
