@@ -109,7 +109,12 @@ function createGateway({resolve, request = http.request, transportFactory = crea
       close();
     });
     upstream.on("response", (response) => {
-      if (websocket || stopped) return response.destroy();
+      if (stopped) return response.destroy();
+      if (websocket) {
+        response.resume();
+        deny(downstream);
+        return;
+      }
       downstream.writeHead(response.statusCode || 502, {...cleanHeaders(response.headers), "cache-control": "no-store"});
       response.on("error", close);
       response.pipe(downstream);
@@ -167,7 +172,7 @@ function forwardedHeaders(req, token, target, websocket = false, shutdownToken =
   // HTTP requests and WebSocket handshakes.  The browser origin belongs to the
   // public gateway and is intentionally not forwarded; synthesize the origin
   // that matches the private request Host instead.
-  headers.origin = `https://${headers.host}`;
+  headers.origin = `http://${headers.host}`;
   headers.cookie = `mapache_access=${encodeURIComponent(token)}`;
   if (shutdownToken && requestPath === "/runner/health") headers["x-shutdown-token"] = shutdownToken;
   if (websocket) {

@@ -19,7 +19,9 @@ async function fixture(t, resolveOverride) {
     if (req.method === "PUT") return req.pipe(res);
     res.end(JSON.stringify({url: req.url, host: req.headers.host, origin: req.headers.origin, cookie: req.headers.cookie}));
   });
-  const ws = new WebSocketServer({server: upstream});
+  const ws = new WebSocketServer({server: upstream,
+    verifyClient: (info) => info.origin === `http://${info.req.headers.host}` && info.req.url !== "/agent/reject-ws",
+  });
   ws.on("connection", (socket) => socket.on("message", (data) => socket.send(data)));
   upstream.listen(0, "127.0.0.1");
   await once(upstream, "listening");
@@ -72,7 +74,7 @@ test("SSH relay streams HTTP and strips browser authority from the guest request
   assert.deepEqual(JSON.parse(response.body), {
     url: "/agent/?x=1",
     host: "192.168.250.12:8787",
-    origin: "https://192.168.250.12:8787",
+    origin: "http://192.168.250.12:8787",
     cookie: "mapache_access=valid",
   });
   const body = Buffer.alloc(2 * 1024 * 1024, 123);
@@ -104,6 +106,19 @@ test("denied and guessed hosts never connect to the guest", async (t) => {
   assert.equal((await request(f, "/agent/", {token: "wrong"})).status, 404);
   assert.equal((await request(f, "/agent/", {headers: {host: "foreign.example.com"}})).status, 404);
   assert.equal(f.count(), 0);
+});
+
+test("a private WebSocket rejection promptly denies the public handshake", async (t) => {
+  const f = await fixture(t);
+  const socket = new WebSocket(`ws://127.0.0.1:${f.port}/agent/reject-ws`, {
+    headers: {host: "gateway.example.com", cookie: "mapache_access=valid"}, handshakeTimeout: 1000,
+  });
+  t.after(() => socket.terminate());
+  const status = await new Promise((resolve, reject) => {
+    socket.on("error", reject);
+    socket.once("unexpected-response", (req, res) => { res.resume(); resolve(res.statusCode); });
+  });
+  assert.equal(status, 404);
 });
 
 test("WebSocket frames relay and close when generation authority changes", async (t) => {

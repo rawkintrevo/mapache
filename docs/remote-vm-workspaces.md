@@ -226,6 +226,9 @@ serialization). Each authorized HTTP/WebSocket request
 gets its own forwarding channel and retains its own expiry/revocation checks.
 Idle connections close after 30 seconds. Asset bursts therefore share a
 handshake instead of exhausting the host's unauthenticated SSH connection limit.
+The private hop uses HTTP, so its synthesized Origin uses HTTP as well; the
+resolver validates the public HTTPS origin before forwarding. Rejected upgrade
+responses close with a denial instead of leaving the browser handshake pending.
 
 Deploy the resolver with `firebase deploy --only functions:vmGatewayResolve_v2
 --project pi-agents-cloud`. Build and deploy `vm-gateway/Dockerfile` to the
