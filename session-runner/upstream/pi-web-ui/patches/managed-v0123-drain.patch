@@ -1,0 +1,531 @@
+diff --git a/packages/keel/src/adapters/wire/dispatch-surface.ts b/packages/keel/src/adapters/wire/dispatch-surface.ts
+index 8392f55..5d26703 100644
+--- a/packages/keel/src/adapters/wire/dispatch-surface.ts
++++ b/packages/keel/src/adapters/wire/dispatch-surface.ts
+@@ -1,6 +1,7 @@
+ // 生成物，勿手改：node scripts/gen-core-dispatch-surface.mjs
+ 
+ export const DISPATCH_SURFACE = [
++	"isQuiesceActive",
+ 	"cwd",
+ 	"workspaceRoots",
+ 	"prompt",
+@@ -191,6 +192,7 @@ export const DISPATCH_SURFACE = [
+ export type DispatchSessionMember = (typeof DISPATCH_SURFACE)[number];
+ 
+ export const DISPATCH_OPTIONAL_MEMBERS = [
++	"isQuiesceActive",
+ 	"workspaceRoots",
+ 	"saveDraft",
+ 	"listProjectScripts",
+diff --git a/packages/keel/src/app/client-assembly.ts b/packages/keel/src/app/client-assembly.ts
+index caf19d6..ca3c56d 100644
+--- a/packages/keel/src/app/client-assembly.ts
++++ b/packages/keel/src/app/client-assembly.ts
+@@ -26,6 +26,7 @@ import { DEFAULT_PI_CAPABILITIES } from "../engine-capabilities.js";
+ import type { ElsewhereRunning, ServerMessage } from "../protocol.js";
+ import type { MobileNotificationEvent } from "../mobile-notification-events.js";
+ import { ClientRuntime } from "./client-runtime.js";
++import { drainManagedWriters } from "./managed-drain.js";
+ import type { SessionRegistry } from "./session-registry.js";
+ import { createEngineSessionRegistry } from "./engine-sessions.js";
+ import type { Conversation } from "../kernel/conversation/index.js";
+@@ -172,6 +173,39 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 	});
+ 
+ 	runtime = new ClientRuntime({
++		drainWriters: async (timeoutMs) => {
++			const conversations = runtime.registry.list();
++			const stopped = await drainManagedWriters({
++				timeoutMs,
++				stop: [
++					async () => {
++						if (goalPort && !goalPort.quiesce) throw new Error("goal_drain_unavailable");
++						await goalPort?.quiesce?.();
++					},
++					async () => {
++						if (faces.background && !faces.background.quiesce) throw new Error("background_drain_unavailable");
++						if (faces.background && !await faces.background.quiesce!()) throw new Error("background_drain_failed");
++					},
++					() => bashKills.requestStopAll(),
++					() => terminalHost.requestStopAll(),
++					...conversations.map((conv) => async () => {
++						conv.queues.clear();
++						askWaiter.cancelConversation(conv.id, "server_quiesced");
++						const session = sessions.get(conv.id)?.session;
++						session?.clearQueue?.();
++						await session?.abort?.();
++					}),
++				],
++				isIdle: () => bashKills.activeCount() === 0 && terminalHost.activeCount() === 0 &&
++					runtime.registry.list().every((conv) => {
++						const session = sessions.get(conv.id)?.session;
++						return !runtime.turns.isStreaming(conv.id) && !session?.isStreaming &&
++							session?.isIdle !== false && conv.queues.total() === 0;
++					}),
++			});
++			runtime.publisher.flush({ forceFull: true });
++			return stopped;
++		},
+ 		clientId,
+ 		cwd,
+ 		workspaceRoots: stateStore.getWorkspaceRoots(clientId, cwd),
+diff --git a/packages/keel/src/app/client-runtime.ts b/packages/keel/src/app/client-runtime.ts
+index c5f51c6..5a49789 100644
+--- a/packages/keel/src/app/client-runtime.ts
++++ b/packages/keel/src/app/client-runtime.ts
+@@ -53,6 +53,7 @@ export interface ClientFrames {
+ }
+ 
+ export interface ClientRuntimeOptions extends GoalHostPorts {
++	drainWriters?(timeoutMs: number): Promise<boolean>;
+ 	clientId: ClientId;
+ 	cwd: string;
+ 	workspaceRoots?: readonly string[];
+@@ -183,6 +184,9 @@ export interface ClientRuntimeOptions extends GoalHostPorts {
+  * 这里是「状态与生命周期」，两者分开才守得住「门面里不写业务」。跨域能力只在这里装配，域之间互不认识。
+  */
+ export class ClientRuntime {
++	quiesce(timeoutMs: number): Promise<boolean> {
++		return this.options.drainWriters?.(timeoutMs) ?? Promise.resolve(false);
++	}
+ 	readonly registry = new ConversationRegistry<Conversation>();
+ 	readonly publisher: SnapshotPublisher;
+ 	readonly turns: TurnRunner;
+diff --git a/packages/keel/src/app/connection-init.ts b/packages/keel/src/app/connection-init.ts
+index 2e88ce6..919d3ba 100644
+--- a/packages/keel/src/app/connection-init.ts
++++ b/packages/keel/src/app/connection-init.ts
+@@ -50,6 +50,7 @@ export interface QuiesceGate {
+  * （每层都会发一条同样的 notice）。调用点因此只有 `initializeConnection()` 一处。
+  */
+ function applyQuiesceGate(session: DispatchSession, gate: QuiesceGate): void {
++	session.isQuiesceActive = () => gate.isQuiesced();
+ 	const reject = (): boolean => {
+ 		if (!gate.isQuiesced()) return false;
+ 		gate.emit(QUIESCE_NOTICE);
+@@ -79,6 +80,26 @@ function applyQuiesceGate(session: DispatchSession, gate: QuiesceGate): void {
+ 		if (reject()) return;
+ 		await retryLast();
+ 	};
++	const setGoal = session.setGoal.bind(session);
++	session.setGoal = async (...args) => { if (!reject()) await setGoal(...args); };
++	const startGoalWizard = session.startGoalWizard.bind(session);
++	session.startGoalWizard = async (...args) => { if (!reject()) await startGoalWizard(...args); };
++	if (session.startBgScript) {
++		const start = session.startBgScript.bind(session);
++		session.startBgScript = (...args) => { if (!reject()) start(...args); };
++	}
++	if (session.restartBgJob) {
++		const restart = session.restartBgJob.bind(session);
++		session.restartBgJob = (...args) => { if (!reject()) restart(...args); };
++	}
++	if (session.newCliChat) {
++		const start = session.newCliChat.bind(session);
++		session.newCliChat = async (...args) => reject() ? false : start(...args);
++	}
++	if (session.openBotChat) {
++		const start = session.openBotChat.bind(session);
++		session.openBotChat = async (...args) => reject() ? false : start(...args);
++	}
+ }
+ 
+ /**
+diff --git a/packages/keel/src/app/core-engine.ts b/packages/keel/src/app/core-engine.ts
+index 38912e4..8a19c33 100644
+--- a/packages/keel/src/app/core-engine.ts
++++ b/packages/keel/src/app/core-engine.ts
+@@ -67,6 +67,7 @@ import {
+ import { isOrphanAdoptionExcludedClientId } from "../client-id-utils.js";
+ import { assembleClient } from "./client-assembly.js";
+ import { ManagedRunAccounting } from "./managed-run-accounting.js";
++import { drainManagedWriters } from "./managed-drain.js";
+ 
+ export { CoreEngineNotReadyError };
+ import type { CoreEngineOptions } from "./core-engine-options.js";
+@@ -112,6 +113,9 @@ export class CoreEngine implements EngineService {
+ 	private readonly langs = new Map<string, ServerLang>();
+ 	private socketCount = 0;
+ 	private quiescedSince: number | undefined;
++	private drainFlight: Promise<{ ok: boolean; error?: string }> | undefined;
++	private drainFailed = false;
++	private readonly pendingAttaches = new Set<Promise<DispatchSession>>();
+ 
+ 	private readonly stateStore: SettingsStorePort;
+ 	private readonly projectSource: ReturnType<typeof createProjectSource>;
+@@ -156,7 +160,13 @@ export class CoreEngine implements EngineService {
+ 		return this.modelAdmin;
+ 	}
+ 
+-	async attach(clientId: string, send: FrameSender): Promise<DispatchSession> {
++	attach(clientId: string, send: FrameSender): Promise<DispatchSession> {
++		const flight = this.attachInternal(clientId, send);
++		this.pendingAttaches.add(flight);
++		void flight.then(() => this.pendingAttaches.delete(flight), () => this.pendingAttaches.delete(flight));
++		return flight;
++	}
++	private async attachInternal(clientId: string, send: FrameSender): Promise<DispatchSession> {
+ 		if (!(this.options.attach ?? resolvePiEngineAttach())) throw new CoreEngineNotReadyError("attach");
+ 		this.clearOffline(clientId);
+ 		const existing = this.runtimes.get(clientId);
+@@ -360,10 +370,28 @@ export class CoreEngine implements EngineService {
+ 	isQuiesced(): boolean {
+ 		return this.quiescedSince !== undefined;
+ 	}
+-	quiesce(): void {
++	quiesce(timeoutMs = 5000): Promise<{ ok: boolean; error?: string }> {
+ 		this.quiescedSince ??= Date.now();
++		if (this.drainFlight) return this.drainFlight;
++		this.drainFlight = drainManagedWriters({
++			timeoutMs,
++			stop: [async () => {
++				await Promise.allSettled([...this.pendingAttaches]);
++				this.recordInterruptedRuns();
++				const results = await Promise.all([...this.runtimes.values()].map((runtime) => runtime.quiesce(timeoutMs)));
++				if (results.some((ok) => !ok)) throw new Error("runtime_drain_failed");
++			}],
++			isIdle: () => this.pendingAttaches.size === 0 && this.activeConversations() === 0 && this.activeTools() === 0 && this.pendingMessages() === 0,
++		}).then((ok) => {
++			this.drainFailed ||= !ok;
++			return ok ? { ok: true } : { ok: false, error: "quiesce_timeout" };
++		})
++			.finally(() => { this.drainFlight = undefined; });
++		return this.drainFlight;
+ 	}
+ 	unquiesce(): void {
++		if (this.drainFlight) throw new Error("quiesce_in_progress");
++		if (this.drainFailed) throw new Error("quiesce_failed_restart_required");
+ 		this.quiescedSince = undefined;
+ 	}
+ 	quiesceInfo(): { quiesced: boolean; quiescedSince?: number } {
+diff --git a/packages/keel/src/app/managed-drain.ts b/packages/keel/src/app/managed-drain.ts
+new file mode 100644
+index 0000000..9e1d417
+--- /dev/null
++++ b/packages/keel/src/app/managed-drain.ts
+@@ -0,0 +1,26 @@
++/** One deadline covers stop requests and verification, including hung adapters. */
++export async function drainManagedWriters(input: {
++	stop: readonly (() => void | Promise<unknown>)[];
++	isIdle(): boolean;
++	timeoutMs: number;
++}): Promise<boolean> {
++	const duration = Number.isFinite(input.timeoutMs) ? Math.max(1, input.timeoutMs) : 5000;
++	const deadline = Date.now() + duration;
++	let timer: ReturnType<typeof setTimeout> | undefined;
++	let expired = false;
++	const timeout = new Promise<false>((resolve) => {
++		timer = setTimeout(() => { expired = true; resolve(false); }, duration);
++	});
++	const drain = async (): Promise<boolean> => {
++		// Start every stop operation even when another throws synchronously.
++		const results = await Promise.allSettled(input.stop.map((stop) => Promise.resolve().then(stop)));
++		if (results.some((result) => result.status === "rejected")) return false;
++		while (!expired && Date.now() < deadline) {
++			if (input.isIdle()) return true;
++			await new Promise<void>((resolve) => setTimeout(resolve, Math.min(25, Math.max(1, deadline - Date.now()))));
++		}
++		return false;
++	};
++	try { return await Promise.race([drain().catch(() => false), timeout]); }
++	finally { expired = true; clearTimeout(timer); }
++}
+diff --git a/packages/keel/src/contracts/background.ts b/packages/keel/src/contracts/background.ts
+index 7498523..52dfa17 100644
+--- a/packages/keel/src/contracts/background.ts
++++ b/packages/keel/src/contracts/background.ts
+@@ -21,6 +21,8 @@
+  * 所以那张表（`BashAbortRegistry`）与「中止 + 出回执」的编排也归内核，宿主没有任何可做的事。
+  */
+ export interface BackgroundPort {
++	/** Stop owned work and verify termination; missing support must fail drain closed. */
++	quiesce?(): Promise<boolean>;
+ 	/**
+ 	 * 插件常驻任务变了：只重投影一帧 `bg_servers`（**不**重扫端口）。老实现 `refreshBgTasks()` = `bg.push()`。
+ 	 * 与 `listBgServers()` 的区别是真实的：后者要扫监听端口（`snapshotListeningPorts` = 子进程），
+diff --git a/packages/keel/src/contracts/goals.ts b/packages/keel/src/contracts/goals.ts
+index 40c82ef..b8d1621 100644
+--- a/packages/keel/src/contracts/goals.ts
++++ b/packages/keel/src/contracts/goals.ts
+@@ -24,6 +24,8 @@ export type GoalPrefsPatch = Wire<"set_goal_prefs">;
+  * 绝不降级成「设了目标但不跑」——那比直接报错更坏。
+  */
+ export interface GoalRunPort {
++	/** Pause and preserve goal state before draining; absent means unsafe to acknowledge drain. */
++	quiesce?(): Promise<void>;
+ 	setGoal(goal: string, opts?: GoalStartOptions): Promise<void>;
+ 	clearGoal(conversationId?: string): Promise<void>;
+ 	startGoalWizard(text: string, opts?: GoalWizardOptions): Promise<void>;
+diff --git a/packages/keel/src/contracts/session.ts b/packages/keel/src/contracts/session.ts
+index f4392d2..68e532e 100644
+--- a/packages/keel/src/contracts/session.ts
++++ b/packages/keel/src/contracts/session.ts
+@@ -20,6 +20,8 @@ export interface TurnCapableSession {
+ 	readonly sessionFile?: string;
+ 	readonly messages?: readonly unknown[];
+ 	readonly isStreaming?: boolean;
++	readonly isIdle?: boolean;
++	clearQueue?(): void;
+ 	readonly thinkingLevel?: string;
+ 	readonly model?: unknown;
+ 	dispose(): void;
+diff --git a/packages/keel/src/domains/background/bash-kills.ts b/packages/keel/src/domains/background/bash-kills.ts
+index e5df9a8..05a8d7e 100644
+--- a/packages/keel/src/domains/background/bash-kills.ts
++++ b/packages/keel/src/domains/background/bash-kills.ts
+@@ -16,6 +16,16 @@ import type { BashAbortHandle, BashAbortRegistry } from "../../contracts/backgro
+ export class BashKills implements BashAbortRegistry {
+ 	private readonly table = new Map<string, Set<AbortController>>();
+ 
++	/** Drain keeps handles until their tool finally blocks acknowledge termination. */
++	requestStopAll(): void {
++		for (const id of [...this.table.keys()]) this.abort(id);
++	}
++	activeCount(): number {
++		let count = 0;
++		for (const bucket of this.table.values()) count += bucket.size;
++		return count;
++	}
++
+ 	/** 开始执行：登记一条句柄。没有对话身份 → 不登记（调用方直接透传上游 signal）。 */
+ 	register(conversationId: string | undefined): BashAbortHandle | undefined {
+ 		const key = conversationId?.trim();
+diff --git a/packages/keel/src/domains/terminals/host.ts b/packages/keel/src/domains/terminals/host.ts
+index c5bd47e..6a36e4f 100644
+--- a/packages/keel/src/domains/terminals/host.ts
++++ b/packages/keel/src/domains/terminals/host.ts
+@@ -22,6 +22,8 @@ export interface TerminalHostInput {
+ }
+ 
+ export interface TerminalHost {
++	requestStopAll(): void;
++	activeCount(): number;
+ 	/** 某个对话的终端管理器（懒建，同一对话复用同一份） */
+ 	managerFor(conversationId: string, cwd: string): TerminalManagerLike;
+ 	disposeConversation(conversationId: string): void;
+@@ -75,6 +77,18 @@ export function createTerminalHost(input: TerminalHostInput): TerminalHost {
+ 	};
+ 
+ 	return {
++		requestStopAll(): void {
++			for (const manager of byConversation.values()) killLive(manager);
++		},
++		activeCount(): number {
++			let count = 0;
++			for (const manager of byConversation.values()) {
++				// Missing inspection is not evidence of successful termination.
++				if (!manager.list) return Number.POSITIVE_INFINITY;
++				count += manager.list().filter((terminal) => terminal.running).length;
++			}
++			return count;
++		},
+ 		managerFor(conversationId: string, cwd: string): TerminalManagerLike {
+ 			const existing = byConversation.get(conversationId);
+ 			if (existing) return existing;
+diff --git a/packages/keel/src/engine-service.ts b/packages/keel/src/engine-service.ts
+index a72381f..a0064cd 100644
+--- a/packages/keel/src/engine-service.ts
++++ b/packages/keel/src/engine-service.ts
+@@ -63,6 +63,7 @@ export interface TerminalManagerLike {
+ }
+ 
+ export interface DispatchSession {
++	isQuiesceActive?(): boolean;
+ 	cwd: string;
+ 	readonly workspaceRoots?: readonly string[];
+ 	prompt(text: string, attachments?: PromptAttachment[], queue?: boolean): Promise<void>;
+@@ -403,7 +404,7 @@ export interface EngineService {
+ 	noteSocketOpen(): void;
+ 	noteSocketClose(): void;
+ 	isQuiesced(): boolean;
+-	quiesce(): void;
++	quiesce(): void | Promise<{ ok: boolean; error?: string }>;
+ 	unquiesce(): void;
+ 	quiesceInfo(): { quiesced: boolean; quiescedSince?: number };
+ 	serviceStatus(): {
+diff --git a/tests/unit/core-domain-terminals.test.ts b/tests/unit/core-domain-terminals.test.ts
+index d52ddac..73e4a3f 100644
+--- a/tests/unit/core-domain-terminals.test.ts
++++ b/tests/unit/core-domain-terminals.test.ts
+@@ -79,6 +79,19 @@ function hostFor(over: { cwdOf?: (conversationId: string) => string; lang?: () =
+ 	};
+ }
+ 
++it("retains failed terminal stops for drain verification and allows a later retry", () => {
++	const { host } = hostFor();
++	const manager = host.managerFor("drain", "/work") as unknown as InstanceType<typeof fixture.MockTerminalManager>;
++	manager.add("stuck");
++	manager.killThrowsFor = "stuck";
++	host.requestStopAll();
++	expect(host.activeCount()).toBe(1);
++	expect(host.managers()).toContain("drain");
++	manager.killThrowsFor = null;
++	host.requestStopAll();
++	expect(host.activeCount()).toBe(0);
++});
++
+ function managerAt(index: number) {
+ 	return fixture.MockTerminalManager.created[index];
+ }
+diff --git a/tests/unit/core-engine-connect.test.ts b/tests/unit/core-engine-connect.test.ts
+index 3ee61e9..e05235c 100644
+--- a/tests/unit/core-engine-connect.test.ts
++++ b/tests/unit/core-engine-connect.test.ts
+@@ -34,12 +34,16 @@ let opened: number;
+ /** 每个假会话的 `sendUserMessage`：验「quiesce 期不喂轮」用（喂了就一定经过它）。 */
+ let feeds: ReturnType<typeof vi.fn>[];
+ let eventListeners: Set<(event: unknown) => void>[];
++let sdkStreaming: boolean;
++let abortSession: ReturnType<typeof vi.fn<() => Promise<void>>>;
+ 
+ beforeEach(() => {
+ 	root = mkdtempSync(join(tmpdir(), "pi-core-connect-"));
+ 	opened = 0;
+ 	feeds = [];
+ 	eventListeners = [];
++	sdkStreaming = false;
++	abortSession = vi.fn(async () => {});
+ 	openTurnSession.mockReset();
+ 	openTurnSession.mockImplementation(async () => {
+ 		opened += 1;
+@@ -48,7 +52,8 @@ beforeEach(() => {
+ 		const listeners = new Set<(event: unknown) => void>();
+ 		eventListeners.push(listeners);
+ 		const session = {
+-			isStreaming: false,
++			get isStreaming() { return sdkStreaming; },
++			abort: () => abortSession(),
+ 			sessionFile: undefined,
+ 			messages: [] as unknown[],
+ 			model: { provider: "anthropic", id: "claude" },
+@@ -88,6 +93,69 @@ function collector(): { sent: ServerMessage[]; types(): string[] } {
+ }
+ 
+ describe("managed runtime accounting", () => {
++	it("waits for an attachment already opening its SDK session before draining it", async () => {
++		const open = openTurnSession.getMockImplementation()!;
++		let release!: () => void;
++		openTurnSession.mockImplementation(async (...args) => {
++			await new Promise<void>((resolve) => { release = resolve; });
++			return open(...args);
++		});
++		const engine = engineWith();
++		const attaching = engine.attach("opening", () => {});
++		await vi.waitFor(() => expect(openTurnSession).toHaveBeenCalledOnce());
++		const drain = engine.quiesce(200);
++		expect(() => engine.unquiesce()).toThrow("quiesce_in_progress");
++		release();
++		await attaching;
++		expect(await drain).toEqual({ ok: true });
++		expect(abortSession).toHaveBeenCalledOnce();
++	});
++
++	it("rejects new goal work while draining before invoking the host", async () => {
++		const goal = vi.fn();
++		const engine = engineWith({ goalRun: goal });
++		const session = await engine.attach("goal-gate", () => {});
++		await engine.quiesce();
++		await session.setGoal("must not start");
++		await session.startGoalWizard("must not start");
++		expect(goal).not.toHaveBeenCalled();
++		expect(session.isQuiesceActive?.()).toBe(true);
++	});
++	it("shares a drain flight and waits for the actual SDK abort and tool end", async () => {
++		const engine = engineWith();
++		await engine.attach("drain", () => {});
++		sdkStreaming = true;
++		for (const listener of eventListeners[0]!) listener({ type: "tool_execution_start", toolCallId: "writer" });
++		let finish!: () => void;
++		abortSession.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve; }));
++		const drain = engine.quiesce(200);
++		expect(engine.quiesce()).toBe(drain);
++		expect(() => engine.unquiesce()).toThrow("quiesce_in_progress");
++		await vi.waitFor(() => expect(abortSession).toHaveBeenCalledOnce());
++		expect(engine.activeTools()).toBe(1);
++		sdkStreaming = false;
++		for (const listener of eventListeners[0]!) listener({ type: "tool_execution_end", toolCallId: "writer" });
++		finish();
++		expect(await drain).toEqual({ ok: true });
++		engine.unquiesce();
++		expect(engine.isQuiesced()).toBe(false);
++	});
++
++	it("fails a hung SDK abort within the deadline and requires restart before new work", async () => {
++		const engine = engineWith();
++		await engine.attach("hung", () => {});
++		sdkStreaming = true;
++		abortSession.mockImplementation(() => new Promise<void>(() => {}));
++		expect(await engine.quiesce(30)).toEqual({ ok: false, error: "quiesce_timeout" });
++		expect(engine.isQuiesced()).toBe(true);
++		expect(() => engine.unquiesce()).toThrow("quiesce_failed_restart_required");
++	});
++
++	it("refuses to acknowledge a background host without drain support", async () => {
++		const engine = engineWith({ background: () => ({ refreshBgTasks() {} }) });
++		await engine.attach("unsupported", () => {});
++		expect(await engine.quiesce(100)).toEqual({ ok: false, error: "quiesce_timeout" });
++	});
+ 	it("counts SDK completions without retries and scopes tool IDs to their sessions", async () => {
+ 		const engine = engineWith();
+ 		await engine.attach("accounting-a", () => {});
+@@ -280,6 +348,7 @@ describe("core/app · 重连与 quiesce（K）", () => {
+ 		expect(flushed).toHaveBeenCalledTimes(1);
+ 		expect(feeds[0]).not.toHaveBeenCalled();
+ 
++		await engine.quiesce();
+ 		engine.unquiesce();
+ 	});
+ 
+diff --git a/tests/unit/managed-drain.test.ts b/tests/unit/managed-drain.test.ts
+new file mode 100644
+index 0000000..faa40cd
+--- /dev/null
++++ b/tests/unit/managed-drain.test.ts
+@@ -0,0 +1,47 @@
++import { describe, expect, it, vi, afterEach } from "vitest";
++import { drainManagedWriters } from "../../packages/keel/src/app/managed-drain.js";
++import { BashKills } from "../../packages/keel/src/domains/background/bash-kills.js";
++
++afterEach(() => vi.useRealTimers());
++
++describe("managed writer drain", () => {
++	it("waits for bash termination acknowledgement after requesting abort", async () => {
++		vi.useFakeTimers();
++		const kills = new BashKills();
++		const handle = kills.register("conversation")!;
++		handle.signal.addEventListener("abort", () => setTimeout(handle.release, 40));
++		const stopped = vi.fn();
++		const result = drainManagedWriters({ stop: [() => kills.requestStopAll()], isIdle: () => kills.activeCount() === 0, timeoutMs: 100 }).then((value) => { stopped(value); return value; });
++		await vi.advanceTimersByTimeAsync(1);
++		expect(handle.signal.aborted).toBe(true);
++		expect(kills.activeCount()).toBe(1);
++		expect(stopped).not.toHaveBeenCalled();
++		await vi.advanceTimersByTimeAsync(50);
++		expect(await result).toBe(true);
++	});
++	it("bounds hung stop requests and observes late rejections without restarting work", async () => {
++		vi.useFakeTimers();
++		let reject!: (error: Error) => void;
++		const otherStop = vi.fn();
++		const result = drainManagedWriters({ stop: [() => new Promise((_, fail) => { reject = fail; }), otherStop], isIdle: () => true, timeoutMs: 30 });
++		await vi.advanceTimersByTimeAsync(30);
++		expect(await result).toBe(false);
++		expect(otherStop).toHaveBeenCalledOnce();
++		reject(new Error("late stop failure"));
++		await vi.runAllTimersAsync();
++	});
++	it("attempts every stop but fails closed on a thrown stop or unreadable state", async () => {
++		const stop = vi.fn();
++		expect(await drainManagedWriters({ stop: [() => { throw new Error("stop failed"); }, stop], isIdle: () => true, timeoutMs: 100 })).toBe(false);
++		expect(stop).toHaveBeenCalledOnce();
++		expect(await drainManagedWriters({ stop: [], isIdle: () => { throw new Error("state unreadable"); }, timeoutMs: 100 })).toBe(false);
++	});
++	it("never treats a resolved abort as proof that writers stopped", async () => {
++		vi.useFakeTimers();
++		const result = drainManagedWriters({ stop: [async () => {}], isIdle: () => false, timeoutMs: 30 });
++		await vi.advanceTimersByTimeAsync(30);
++		expect(await result).toBe(false);
++		await vi.runAllTimersAsync();
++		expect(vi.getTimerCount()).toBe(0);
++	});
++});

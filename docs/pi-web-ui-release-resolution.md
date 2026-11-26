@@ -22,6 +22,234 @@ pi-ai `1.6.0`. A future stable release must either be intentionally selected in
 the manifest and accept the managed patch or fail the candidate image build
 until its integration is ported.
 
+## v0.123 migration in progress (#676)
+
+The upstream v0.123.0 release (commit
+`db6ff914de6cd1509edb224919dda2d547272f12`) changes the package identity to
+`keel-agent` and replaces the old `AgentService`/`AgentServiceDaemon` runtime
+with `packages/keel/src/app/core-engine.ts`. The active manifest remains on the
+last integrated target above. Fresh builds fail safely on the newer stable
+release until the complete managed integration is validated; changing only
+the version or package name cannot repair the runtime.
+
+### Combined candidate checkpoint
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-candidate.patch` is the
+current **inactive combined candidate**. It applies directly to the official
+v0.123.0 baseline; do not stack the component patches below on top of it. Those
+files remain incremental audit artifacts. The combined patch includes their
+changes, retained managed server/web integration, and the new
+`server/managed-run-controller.ts` wired at `server/index.ts`.
+
+The controller reserves run IDs before asynchronous setup, shares browserless
+client initialization, validates saved/explicit models against the runtime
+catalog, and submits through `CoreEngine.openManagedRun`. It observes SDK events
+through the existing completion reducer, excludes retries, preserves cancellation
+during setup, and rejects admission from an older drain generation. Cancellation
+is recorded before abort and failed abort can be retried without re-submission.
+Private automation accepts one run ID and cancels unattended question waits.
+The core question waiter now has a per-conversation cancellation hook.
+
+This combined candidate applies cleanly to a fresh v0.123 checkout and passes
+full upstream typecheck, production `npm run build`, and 42 focused reducer,
+controller, core connection, and local control-socket tests. One test sends a
+workspace request through the actual core bridge with synthetic SDK events.
+The obsolete `quiesce.test.ts` and `workspace-request-models.test.ts` fixtures
+imported the deleted service; their delayed/hung drain, admission, shared
+initialization, and sanitized-error cases are covered by the core/drain and
+managed catalog/controller tests. Control-socket fixtures now include the new
+required service-status field.
+
+**Not release-ready:** the SDK opener still needs managed transcript-root,
+credential, MCP, and operating-reference integration. Incoming request metadata
+and restart reconciliation, private automation cleanup, and actual background/
+subagent termination evidence need integration/validation. Parent SDK tool-end
+events alone do not prove detached children stopped. Full image tests, browser
+Goal/history/embedding QA, and release-cache validation remain open. The active
+manifest and deployed runtime are unchanged.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-workspace-boundary.patch`
+is an **inactive, partial migration artifact**. It applies independently to the
+official v0.123.0 source and is deliberately absent from the manifest. It
+enforces canonical workspace containment in `server/core-workspace-adapter.ts`
+and validates extra roots at `ClientStateStore` read/write boundaries. Managed
+mode rejects external local paths, symlink escapes, and remote workspace URIs;
+standalone behavior remains available. Rejected writes leave persisted state
+unchanged, and stale external roots are filtered during restore.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-run-accounting.patch`
+is a second inactive component. `ManagedRunAccounting` observes SDK events
+through the core session assembly: non-retry `agent_end` events increment an
+engine-lifetime completed count, and tool start/end events maintain a separate
+set for each session. `CoreEngine` exposes both counts to its status consumer.
+Subscriptions follow the opened session through client-registry transfers and
+are released when that session is disposed; reconnecting does not subscribe
+twice. The cumulative completion count survives client disposal. These counts
+are observations, not proof that all writers have drained.
+
+The accounting patch passes 29 tests across `core-engine-connect.test.ts`,
+`core-engine-plugin-hooks.test.ts`, and `core-app-session-registry.test.ts`.
+Coverage uses the actual core engine/registry with synthetic SDK events,
+including retries, reconnects, per-session tool IDs, transfer, and disposal.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-drain.patch` applies
+after those two inactive components. It introduces a bounded drain through the
+real core/client assembly. Pending attachments settle before interrupted-run
+state is recorded and stop requests are issued. Concurrent drain callers share
+one promise. Stop failures, unreadable state, active writers, and hung adapters
+fail closed. A failed drain requires process restart before unquiescing because
+late stop operations may still be outstanding. Terminal and bash drain helpers
+retain their records until termination can be observed rather than clearing the
+records when sending a stop request. New goal, background, bot, and native CLI
+work is gated during drain; the terminal dispatcher can inspect the same gate.
+
+This is **not yet a complete shutdown integration**. Instantiated native Goal
+and background hosts without their new `quiesce` capability explicitly fail
+the drain. Native Goal pause/persistence, automation/request admission, and
+full runtime validation remain required. Do not activate the patch set while
+those contracts are incomplete. The component
+passes 50 focused drain/core/terminal/bash/interrupted-run tests, the generated
+dispatch-surface tests, and full upstream typecheck. Tests cover delayed and
+hung SDK aborts, attachment races, retry sharing, terminal stop failure, late
+rejection handling, and refusal of unsupported background drain.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-background-drain.patch`
+adds the background adapter's `quiesce` hook after the drain component. It
+captures tracked PIDs before asking existing owners to stop jobs/port listeners,
+then verifies both the remaining rows and captured process liveness within a
+bounded deadline. UI cleanup alone cannot acknowledge termination. The upstream
+plugin stop API removes task rows even if a stop callback throws, so active
+plugin tasks trigger a best-effort stop and a failed drain requiring runner
+process-group escalation; that API cannot establish successful termination.
+
+This component passes 25 adapter tests, including a real background job whose
+launcher and reported child PID are checked before and after shutdown. Mocked
+cases cover removed-but-live job rows, delayed PID exit, and unverifiable plugin
+stops. Full upstream typecheck passes with the candidate patch set. Native Goal
+shutdown and the overall image/protocol/browser release gates remain open.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-goal-state.patch`
+adds native Goal display persistence and the adapter's drain implementation.
+The existing `__settings__.conversationGoals` schema and `session:`/`file:`
+identity prefixes are retained. `managed-core-goal-state.ts` owns the display
+projection; `core-goal-run-adapter.ts` remains the sole execution owner. Restore
+creates only a stopped, paused in-memory record with fresh wizard state and no
+child conversations or turns. Clear/pass removes the saved display record.
+Drain saves display state and invalidates every generation before awaiting any
+abort, preventing late turn callbacks from dispatching review or more work.
+The sink waits for turn settlement and rejects still-active SDK sessions before
+child disposal. Abort failures propagate to the bounded core drain.
+
+This component passes 38 native adapter/domain/sink/handler tests and full
+upstream typecheck. A real `ClientStateStore` round-trip verifies restoration
+under a new browser client id, session isolation, absence of execution fields,
+and explicit clearing. This adapter evidence does **not** prove live browser
+restore. The following components wire runtime restore, Resume, and
+re-admission after successful drain. Keep the manifest
+unchanged until those paths and the full release gates pass.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-goal-restore.patch`
+wires that display capability into client connection/reconnection, session
+activation, and new-chat session opening. The client assembly retains one native
+Goal port, with late-bound plan hooks for subsequent wizard commands. Restoring
+a conversation without a saved goal clears the previous conversation's goal
+display; restoring a saved goal never starts a turn. The connection frame no
+longer overwrites restored state with empty preference defaults.
+
+The combined candidate passes 71 focused connection, native Goal, sink,
+handler, and history-domain tests and full upstream typecheck. The integration
+test uses the actual core engine, native Goal adapter, and disk state store to
+check initial restore, a new reconnect sink, blank conversation selection, and
+switching back, with zero SDK turns throughout. History-domain tests remain
+regression evidence rather than a live persisted-history browser canary.
+The next component adds explicit Resume and re-admission; browser/image release
+validation remains outstanding. This sixth component is also inactive.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-goal-resume.patch`
+adds explicit `resume_goal` dispatch through the core Goal domain to the native
+adapter. `managed-core-goal-lifecycle.ts` owns display restore, pause, and resume
+orchestration. Resume synchronously claims the paused record to prevent duplicate
+clicks from starting duplicate execution. It starts a fresh execution/review
+cycle using saved preferences and material references, including explicit null
+model selections rather than newer client defaults. Reopening admission after
+a successful drain does not resume a goal. A failed drain remains closed.
+
+Goal commands capture an admission generation before asynchronous setup; drain
+invalidates it so an older pending command cannot revive after unquiesce.
+The seventh inactive component passes 61 focused native Goal/core/domain/wire
+tests, full upstream typecheck, and the generated dispatch-surface check.
+Tests cover duplicate resume, saved settings/materials, failed drain rejection,
+the pending-command race, and actual core unquiesce followed by explicit resume.
+The wire catches asynchronous resume failures and emits a generic error notice.
+The existing managed Resume button still requires validation against the complete
+new runtime; this is not browser or image release evidence.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-model-catalog.patch`
+adds an eighth inactive component: browserless model discovery reads the actual
+installed SDK `ModelRuntime` catalog without opening or adopting a conversation.
+It returns explicit safe fields for all providers, including unavailable ones,
+and retains the saved selection even if it is no longer in the catalog. Model
+IDs containing slashes remain intact. Each completed query releases its runtime
+so the next query reloads changed credentials/configuration; concurrent callers
+share a flight. A timed-out flight stays shared until it settles, preventing
+retries from multiplying hung initialization work. Discovery rejects while
+quiesced, bounds responses to eight seconds, and sanitizes initialization/catalog
+errors into the existing control response shape.
+
+Six tests pass, including a real offline SDK custom-model fixture and checks for
+safe projection, unavailable providers, saved selection, retry behavior, timeout,
+and drain admission. Full upstream typecheck passes with the independent
+components. The combined candidate connects this reader at `server/index.ts`
+and replaces the removed service references with the new execution controller.
+This component alone does not establish working control-socket discovery or
+request execution and must remain inactive.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-run-bridge.patch`
+adds a ninth inactive component. `CoreEngine.openManagedRun` uses the real client
+runtime/session registry to create a persistent user conversation without
+activating it. The handle subscribes before submitting through the existing
+`TurnRunner`, rejects duplicate submissions, and cancels the selected session
+while retaining its conversation. It waits for project credential/model restore
+before applying an explicit model. Missing models/events fail before execution;
+model authentication validation remains the controller's responsibility.
+
+Pending managed setup joins the core drain's attachment barrier. Admission
+generations invalidate setup and unsubmitted handles across a drain/reopen cycle.
+Subscriptions release explicitly or with their opened session, including session
+transfer. Forty core connection/registry/plugin tests and full upstream
+typecheck pass. The tests exercise active-chat isolation, event ownership,
+single submission, prepared-run cancellation, invalid models, and setup/drain
+races with synthetic SDK sessions. They do not prove durable transcript output,
+full unattended interaction cancellation, or live control requests. The combined
+candidate adds controller/reducer wiring; restart metadata and full runtime
+release validation remain required before activating the integration.
+
+The remaining migration must preserve these contracts at their current owners:
+
+| Contract | v0.123 owner / required work |
+| --- | --- |
+| Protocol and service interfaces | `packages/keel/src/protocol.ts` and `engine-service.ts`; server files are re-export shims. Port managed messages and real implementations together. |
+| Persisted state | `packages/keel/src/projects-schema.ts` owns types; `server/client-state.ts` owns storage. Preserve paused goals, model timestamps, and interrupted workspace-request metadata. |
+| Automation and workspace requests | Combined candidate replaces old daemon references with core/controller integration; finish restart metadata/recovery, cleanup, and real child/background completion verification. |
+| Quiesce and counters | Counter, bounded core drain, and background-host components are tested but inactive; native Goal shutdown, process-group escalation validation, and complete admission coverage remain required. |
+| Native Pi Goals | Native adapter persistence, drain, connection/selection restore, explicit Resume, and re-admission are implemented in inactive components; live history/browser validation remains. Old `goal-service.ts` tests do not establish these new runtime paths. |
+| SDK setup | `packages/keel/src/adapters/sdk/session-opener.ts` and host ports must preserve credentials, transcript placement, prompt references, and the single MCP integration. Do not import server modules into the core package. |
+| Embedding and browser surfaces | Revalidate authenticated `/agent/`, native terminal, model selection, Goals, and proxy paths against the actual new engine. |
+
+The independent workspace patch passes 28 tests across
+`managed-core-workspace.test.ts` and `core-domain-sessions-rebind.test.ts`, and
+the full upstream `npm run typecheck` after installing root and mobile locked
+dependencies. This is component evidence only: no full managed image, browser
+release gate, or validated cache publication is implied. Before activating a
+complete patch, run the candidate build/smoke, required release suite, runner
+tests, and actual protocol/browser checks from #676. Keep the fast PR path and
+strict release-cache validation separate.
+
+This inactive artifact changes no deployed runtime. Existing Cloud Run
+revisions and remote guests retain their images; a completed integration will
+need a new validated image and explicit rollout evidence. No Functions deploy
+is required for this checkpoint.
+
 ## v0.122 compatibility port (#590)
 
 The active manifest applies `managed-v0122.patch`. It includes the retained

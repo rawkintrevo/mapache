@@ -1,0 +1,282 @@
+diff --git a/packages/keel/src/adapters/sdk/session-opener.ts b/packages/keel/src/adapters/sdk/session-opener.ts
+index 5608190..2811647 100644
+--- a/packages/keel/src/adapters/sdk/session-opener.ts
++++ b/packages/keel/src/adapters/sdk/session-opener.ts
+@@ -50,6 +50,8 @@ export interface OpenSessionOptions {
+ }
+ 
+ export interface OpenedSession {
++	/** Assembly-owned project credential/model restoration; managed runs await it before explicit selection. */
++	ready?: Promise<void>;
+ 	session: TurnCapableSession;
+ 	sessionId: string;
+ 	sessionFile?: string;
+diff --git a/packages/keel/src/app/core-engine.ts b/packages/keel/src/app/core-engine.ts
+index cdf3c63..cf1e26a 100644
+--- a/packages/keel/src/app/core-engine.ts
++++ b/packages/keel/src/app/core-engine.ts
+@@ -68,6 +68,7 @@ import { isOrphanAdoptionExcludedClientId } from "../client-id-utils.js";
+ import { assembleClient } from "./client-assembly.js";
+ import { ManagedRunAccounting } from "./managed-run-accounting.js";
+ import { drainManagedWriters } from "./managed-drain.js";
++import { openManagedRun, trackManagedSetup, type ManagedRunInput } from "./managed-run-bridge.js";
+ 
+ export { CoreEngineNotReadyError };
+ import type { CoreEngineOptions } from "./core-engine-options.js";
+@@ -115,7 +116,8 @@ export class CoreEngine implements EngineService {
+ 	private quiescedSince: number | undefined;
+ 	private drainFlight: Promise<{ ok: boolean; error?: string }> | undefined;
+ 	private drainFailed = false;
+-	private readonly pendingAttaches = new Set<Promise<DispatchSession>>();
++	private readonly pendingAttaches = new Set<Promise<unknown>>();
++	private admissionGeneration = 0;
+ 
+ 	private readonly stateStore: SettingsStorePort;
+ 	private readonly projectSource: ReturnType<typeof createProjectSource>;
+@@ -162,9 +164,7 @@ export class CoreEngine implements EngineService {
+ 
+ 	attach(clientId: string, send: FrameSender): Promise<DispatchSession> {
+ 		const flight = this.attachInternal(clientId, send);
+-		this.pendingAttaches.add(flight);
+-		void flight.then(() => this.pendingAttaches.delete(flight), () => this.pendingAttaches.delete(flight));
+-		return flight;
++		return trackManagedSetup(this.pendingAttaches, flight);
+ 	}
+ 	private async attachInternal(clientId: string, send: FrameSender): Promise<DispatchSession> {
+ 		if (!(this.options.attach ?? resolvePiEngineAttach())) throw new CoreEngineNotReadyError("attach");
+@@ -337,6 +337,11 @@ export class CoreEngine implements EngineService {
+ 	get(clientId: string): DispatchSession | undefined {
+ 		return this.runtimes.get(clientId)?.handlers();
+ 	}
++	openManagedRun(clientId: string, input: ManagedRunInput) {
++		const generation = this.admissionGeneration;
++		const flight = openManagedRun(this.runtimes.get(clientId), input, () => !this.isQuiesced() && generation === this.admissionGeneration);
++		return trackManagedSetup(this.pendingAttaches, flight);
++	}
+ 
+ 	async disposeAll(): Promise<void> {
+ 		// 先记账再拆：老实现同口径（`disposeAll()` 里第一件事就是 `recordInterruptedRuns()`），
+@@ -371,6 +376,7 @@ export class CoreEngine implements EngineService {
+ 		return this.quiescedSince !== undefined;
+ 	}
+ 	quiesce(timeoutMs = 5000): Promise<{ ok: boolean; error?: string }> {
++		this.admissionGeneration += 1;
+ 		this.quiescedSince ??= Date.now();
+ 		if (this.drainFlight) return this.drainFlight;
+ 		this.drainFlight = drainManagedWriters({
+diff --git a/packages/keel/src/app/engine-sessions.ts b/packages/keel/src/app/engine-sessions.ts
+index d668cf7..d6ef293 100644
+--- a/packages/keel/src/app/engine-sessions.ts
++++ b/packages/keel/src/app/engine-sessions.ts
+@@ -410,7 +410,7 @@ export function createEngineSessionRegistry(deps: EngineSessionDeps): SessionReg
+ 				});
+ 				if (jitUnsubscribe) jitUnsubscribers.set(conv.id, jitUnsubscribe);
+ 				// 项目记忆（该项目的 {模型, provider key}）：晚于预设与门禁，失败不影响会话可用。
+-				void restoreProjectMemory(conv, opened);
++				opened.ready = restoreProjectMemory(conv, opened);
+ 				unsubscribers.set(
+ 					conv.id,
+ 					subscribePluginSessionEvents({
+diff --git a/packages/keel/src/app/managed-run-bridge.ts b/packages/keel/src/app/managed-run-bridge.ts
+new file mode 100644
+index 0000000..124d917
+--- /dev/null
++++ b/packages/keel/src/app/managed-run-bridge.ts
+@@ -0,0 +1,120 @@
++import { Conversation } from "../kernel/conversation/index.js";
++import type { ClientRuntime } from "./client-runtime.js";
++
++export function trackManagedSetup<T>(pending: Set<Promise<unknown>>, flight: Promise<T>): Promise<T> {
++	pending.add(flight);
++	void flight.then(
++		() => pending.delete(flight),
++		() => pending.delete(flight),
++	);
++	return flight;
++}
++
++export interface ManagedRunInput {
++	title: string;
++	modelRef?: string;
++	onEvent(event: unknown): void;
++}
++
++export interface ManagedRunHandle {
++	conversationId: string;
++	sessionFile?: string;
++	submit(prompt: string): Promise<void>;
++	cancel(): Promise<void>;
++	release(): void;
++}
++
++/** Create a durable conversation without activating it. The existing core turn runner owns execution. */
++export async function openManagedRun(
++	runtime: ClientRuntime | undefined,
++	input: ManagedRunInput,
++	admitted: () => boolean,
++): Promise<ManagedRunHandle> {
++	if (!runtime || runtime.isDisposed()) throw new Error("managed_run_client_unavailable");
++	const sessions = runtime.options.sessions;
++	if (!sessions) throw new Error("managed_run_sessions_unavailable");
++	const check = () => {
++		if (!admitted() || runtime.isDisposed()) throw new Error("server_quiesced");
++	};
++	check();
++	const conversation = new Conversation({
++		id: `c-${runtime.registry.nextSeq()}`,
++		clientId: runtime.clientId,
++		cwd: runtime.cwd,
++		kind: "user",
++		createdAt: Date.now(),
++		title: input.title.slice(0, 160),
++		ephemeral: false,
++	});
++	runtime.registry.add(conversation);
++	let unsubscribe: (() => void) | undefined;
++	try {
++		const opened = await sessions.ensure(conversation);
++		await opened.ready;
++		check();
++		if (!opened.session.subscribe) throw new Error("managed_run_events_unavailable");
++		if (input.modelRef) {
++			const slash = input.modelRef.indexOf("/");
++			if (slash <= 0 || slash === input.modelRef.length - 1) throw new Error("automation_model_invalid");
++			const model = await runtime.options.resolveModel?.(
++				input.modelRef.slice(0, slash),
++				input.modelRef.slice(slash + 1),
++			);
++			check();
++			if (!model || !opened.session.setModel) throw new Error("automation_model_unavailable");
++			await opened.session.setModel(model);
++			check();
++		}
++		unsubscribe = opened.session.subscribe(input.onEvent);
++		let released = false;
++		const release = () => {
++			if (!released) {
++				released = true;
++				unsubscribe?.();
++			}
++		};
++		// Follow the opened session when its conversation is transferred to another client.
++		const dispose = opened.dispose.bind(opened);
++		opened.dispose = () => {
++			release();
++			dispose();
++		};
++		let submitted = false;
++		let canceled = false;
++		runtime.surface().conversations().markListed(conversation.id);
++		runtime.pushConversations();
++		return {
++			conversationId: conversation.id,
++			sessionFile: opened.sessionFile,
++			release,
++			async submit(prompt) {
++				check();
++				if (canceled || released || !conversation.acceptsTurns) throw new Error("managed_run_closed");
++				if (submitted) throw new Error("managed_run_already_submitted");
++				if (!prompt.trim()) throw new Error("automation_prompt_required");
++				submitted = true;
++				runtime.surface().conversations().markPrompted(conversation.id);
++				await runtime.turns.start(conversation, opened.session, prompt);
++			},
++			async cancel() {
++				canceled = true;
++				conversation.queues.clear();
++				opened.session.clearQueue?.();
++				if (!opened.session.abort && (conversation.phase === "running" || opened.session.isStreaming)) {
++					throw new Error("managed_run_abort_unavailable");
++				}
++				await opened.session.abort?.();
++				await runtime.turns.whenIdle(conversation.id);
++				if (opened.session.isStreaming || opened.session.isIdle === false) throw new Error("managed_run_still_active");
++			},
++		};
++	} catch (error) {
++		unsubscribe?.();
++		conversation.retire();
++		sessions.close(conversation.id);
++		conversation.finishRetire();
++		runtime.registry.remove(conversation.id);
++		runtime.pushConversations();
++		throw error;
++	}
++}
+diff --git a/tests/unit/core-engine-connect.test.ts b/tests/unit/core-engine-connect.test.ts
+index 97a3af3..599dc94 100644
+--- a/tests/unit/core-engine-connect.test.ts
++++ b/tests/unit/core-engine-connect.test.ts
+@@ -101,6 +101,72 @@ function collector(): { sent: ServerMessage[]; types(): string[] } {
+ }
+ 
+ describe("managed runtime accounting", () => {
++	it("opens managed runs without replacing the active chat and observes only their SDK events", async () => {
++		const engine = engineWith();
++		const session = await engine.attach("managed-browser", () => {});
++		const active = session.activeConversationId?.();
++		const events = vi.fn();
++		const run = await engine.openManagedRun("managed-browser", { title: "Workspace request", onEvent: events });
++		expect(session.activeConversationId?.()).toBe(active);
++		expect(run.conversationId).not.toBe(active);
++		expect(openTurnSession.mock.calls[1][0].ephemeral).not.toBe(true);
++		for (const listener of eventListeners[0]) listener({ type: "agent_end" });
++		expect(events).not.toHaveBeenCalled();
++		for (const listener of eventListeners[1]) listener({ type: "tool_execution_start", toolCallId: "managed" });
++		expect(events).toHaveBeenCalledOnce();
++		await run.submit("execute exactly once");
++		expect(feeds[1]).toHaveBeenCalledOnce();
++		expect(feeds[0]).not.toHaveBeenCalled();
++		await expect(run.submit("duplicate")).rejects.toThrow("managed_run_already_submitted");
++		run.release();
++		for (const listener of eventListeners[1]) listener({ type: "agent_end" });
++		expect(events).toHaveBeenCalledOnce();
++	});
++
++	it("cancels a prepared managed run without submitting it or affecting the active conversation", async () => {
++		const engine = engineWith();
++		const session = await engine.attach("cancel-browser", () => {});
++		const active = session.activeConversationId?.();
++		const run = await engine.openManagedRun("cancel-browser", { title: "Canceled request", onEvent: () => {} });
++		await run.cancel();
++		await expect(run.submit("must not run")).rejects.toThrow("managed_run_closed");
++		expect(abortSession).toHaveBeenCalledOnce();
++		expect(session.activeConversationId?.()).toBe(active);
++		expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(0);
++	});
++
++	it("fails unavailable requested models before any prompt and keeps the browser chat active", async () => {
++		const engine = engineWith();
++		const session = await engine.attach("model-browser", () => {});
++		const active = session.activeConversationId?.();
++		await expect(
++			engine.openManagedRun("model-browser", { title: "Bad model", modelRef: "missing/model", onEvent: () => {} }),
++		).rejects.toThrow("automation_model_unavailable");
++		expect(session.activeConversationId?.()).toBe(active);
++		expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(0);
++	});
++
++	it("drains an in-flight managed setup and rejects its late completion", async () => {
++		const engine = engineWith();
++		await engine.attach("pending-managed", () => {});
++		const open = openTurnSession.getMockImplementation()!;
++		let release!: () => void;
++		openTurnSession.mockImplementation(async (...args) => {
++			await new Promise<void>((resolve) => {
++				release = resolve;
++			});
++			return open(...args);
++		});
++		const opening = engine.openManagedRun("pending-managed", { title: "Delayed request", onEvent: () => {} });
++		const rejected = expect(opening).rejects.toThrow("server_quiesced");
++		await vi.waitFor(() => expect(openTurnSession).toHaveBeenCalledTimes(2));
++		const drain = engine.quiesce(200);
++		release();
++		await rejected;
++		expect(await drain).toEqual({ ok: true });
++		engine.unquiesce();
++		expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(0);
++	});
+ 	it("waits for an attachment already opening its SDK session before draining it", async () => {
+ 		const open = openTurnSession.getMockImplementation()!;
+ 		let release!: () => void;

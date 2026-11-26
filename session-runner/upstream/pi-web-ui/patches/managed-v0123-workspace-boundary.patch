@@ -1,0 +1,153 @@
+diff --git a/server/client-state.ts b/server/client-state.ts
+index aae0859..df74dcf 100644
+--- a/server/client-state.ts
++++ b/server/client-state.ts
+@@ -1,4 +1,5 @@
+ import { renameSync } from "node:fs";
++import { managedWorkspaceRoot, isCanonicalPathWithinRootSync } from "./managed-workspace.js";
+ import * as fsPromises from "node:fs/promises";
+ import { dirname, isAbsolute, resolve } from "node:path";
+ import { readFileSyncRetry, writeJsonAtomicSync } from "./atomic-file.js";
+@@ -577,10 +578,16 @@ export class ClientStateStore {
+ 	}
+ 
+ 	getWorkspaceRoots(clientId: string, cwd: string): string[] {
+-		return this.load()[clientId]?.workspaceRoots?.[cwd] ?? [];
++		const roots = this.load()[clientId]?.workspaceRoots?.[cwd] ?? [];
++		const managedRoot = managedWorkspaceRoot();
++		return managedRoot ? roots.filter((root) => isCanonicalPathWithinRootSync(managedRoot, root)) : roots;
+ 	}
+ 
+ 	saveWorkspaceRoots(clientId: string, cwd: string, roots: string[]): void {
++		const managedRoot = managedWorkspaceRoot();
++		if (managedRoot && roots.some((root) => !isCanonicalPathWithinRootSync(managedRoot, root))) {
++			throw new Error("managed_workspace_required");
++		}
+ 		const all = this.load();
+ 		const state = (all[clientId] ??= { projects: [] });
+ 		this.touchClient(all, clientId);
+diff --git a/server/core-workspace-adapter.ts b/server/core-workspace-adapter.ts
+index 2abaf33..a8c11d5 100644
+--- a/server/core-workspace-adapter.ts
++++ b/server/core-workspace-adapter.ts
+@@ -3,6 +3,7 @@ import { stat } from "node:fs/promises";
+ import { resolve } from "node:path";
+ import type { WorkspaceHostPort, WorkspaceTarget } from "../packages/keel/src/contracts/workspace.js";
+ import { isRemoteWorkspaceUri, resolveWorkspaceSessionDir } from "../packages/keel/src/remote-workspace.js";
++import { managedWorkspaceRoot, isCanonicalPathWithinRoot } from "./managed-workspace.js";
+ 
+ export interface CoreWorkspaceOptions {
+ 	/** `client-state.json` 所在目录（远程工作区的 SDK 会话落 `dataDir/sessions-workspace/...`）。 */
+@@ -40,6 +41,13 @@ export function createCoreWorkspace(options: CoreWorkspaceOptions = {}): Workspa
+ 	return {
+ 		async resolveTarget(input: string, from: string): Promise<WorkspaceTarget> {
+ 			const trimmed = input.trim();
++			const managedRoot = managedWorkspaceRoot();
++			if (managedRoot) {
++				if (isRemoteWorkspaceUri(trimmed)) throw new Error("managed_workspace_required");
++				const target = await resolveLocalTarget(trimmed, from);
++				if (!await isCanonicalPathWithinRoot(managedRoot, target.cwd)) throw new Error("managed_workspace_required");
++				return target;
++			}
+ 			if (trimmed === MACHINE_ROOT) {
+ 				throw new Error("请选择一个具体目录作为工作目录（此电脑本身不是目录）");
+ 			}
+diff --git a/server/managed-workspace.ts b/server/managed-workspace.ts
+new file mode 100644
+index 0000000..80dbab1
+--- /dev/null
++++ b/server/managed-workspace.ts
+@@ -0,0 +1,33 @@
++import { realpathSync } from "node:fs";
++import { realpath } from "node:fs/promises";
++import { isInsideRoots } from "./path-boundary.js";
++import { isManaged } from "./managed.js";
++
++/** The single workspace root exposed by a managed runner. */
++export const MANAGED_WORKSPACE_ROOT = "/workspace";
++
++export function managedWorkspaceRoot(env: NodeJS.ProcessEnv = process.env): string | null {
++	return isManaged(env) ? MANAGED_WORKSPACE_ROOT : null;
++}
++
++/** Use the upstream boundary resolver, including symlinks and missing descendants. */
++export function pathWithinRoot(root: string, target: string): boolean {
++	return isInsideRoots(target, [root]);
++}
++
++/** Follow existing symlinks before accepting a managed workspace path. */
++export function isCanonicalPathWithinRootSync(root: string, target: string): boolean {
++	try {
++		return pathWithinRoot(realpathSync(root), realpathSync(target));
++	} catch {
++		return false;
++	}
++}
++
++export async function isCanonicalPathWithinRoot(root: string, target: string): Promise<boolean> {
++	try {
++		return pathWithinRoot(await realpath(root), await realpath(target));
++	} catch {
++		return false;
++	}
++}
+diff --git a/tests/unit/managed-core-workspace.test.ts b/tests/unit/managed-core-workspace.test.ts
+new file mode 100644
+index 0000000..f217faa
+--- /dev/null
++++ b/tests/unit/managed-core-workspace.test.ts
+@@ -0,0 +1,54 @@
++import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import { createCoreWorkspace } from "../../server/core-workspace-adapter.js";
++import { ClientStateStore } from "../../server/client-state.js";
++
++const mode = vi.hoisted(() => ({ root: null as string | null }));
++vi.mock("../../server/managed-workspace.js", async (original) => ({
++	...await original<typeof import("../../server/managed-workspace.js")>(),
++	managedWorkspaceRoot: () => mode.root,
++}));
++
++describe("managed Keel workspace host", () => {
++	let directory: string;
++	let root: string;
++	let child: string;
++	let outside: string;
++	beforeEach(() => {
++		directory = mkdtempSync(join(tmpdir(), "managed-core-workspace-"));
++		root = join(directory, "workspace"); child = join(root, "child"); outside = join(directory, "outside");
++		mkdirSync(child, { recursive: true }); mkdirSync(outside);
++		symlinkSync(outside, join(root, "escape"));
++		mode.root = root;
++	});
++	afterEach(() => { mode.root = null; rmSync(directory, { recursive: true, force: true }); });
++	it("admits workspace descendants but refuses external targets and symlink escapes", async () => {
++		const host = createCoreWorkspace();
++		expect((await host.resolveTarget("child", root)).cwd).toBe(child);
++		for (const target of [outside, join(root, "escape"), "ssh://foreign/project"]) {
++			await expect(host.resolveTarget(target, root)).rejects.toThrow("managed_workspace_required");
++		}
++	});
++	it("refuses extra roots before persistence and filters stale external roots on restore", () => {
++		const file = join(directory, "state.json");
++		writeFileSync(file, JSON.stringify({ client: { projects: [], workspaceRoots: { [root]: [child, outside, join(root, "escape")] } } }));
++		const store = new ClientStateStore(file);
++		expect(store.getWorkspaceRoots("client", root)).toEqual([child]);
++		const before = readFileSync(file, "utf8");
++		for (const target of [outside, join(root, "escape"), "ssh://foreign/project"]) {
++			expect(() => store.saveWorkspaceRoots("client", root, [child, target])).toThrow("managed_workspace_required");
++			expect(readFileSync(file, "utf8")).toBe(before);
++		}
++		expect(store.getWorkspaceRoots("client", root)).toEqual([child]);
++		store.saveWorkspaceRoots("client", root, [child]);
++		expect(new ClientStateStore(file).getWorkspaceRoots("client", root)).toEqual([child]);
++	});
++	it("preserves standalone remote and external workspace support", async () => {
++		mode.root = null;
++		const host = createCoreWorkspace({ dataDir: directory });
++		expect((await host.resolveTarget(outside, root)).cwd).toBe(outside);
++		expect((await host.resolveTarget("ssh://foreign/project", root)).cwd).toBe("ssh://foreign/project");
++	});
++});

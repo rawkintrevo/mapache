@@ -1,0 +1,267 @@
+diff --git a/packages/keel/src/app/client-assembly.ts b/packages/keel/src/app/client-assembly.ts
+index 6d49e0e..caf19d6 100644
+--- a/packages/keel/src/app/client-assembly.ts
++++ b/packages/keel/src/app/client-assembly.ts
+@@ -48,6 +48,7 @@ const systemClock: ClockPort = {
+ };
+ 
+ export interface ClientAssemblyContext {
++	accounting?: import("./managed-run-accounting.js").ManagedRunAccounting;
+ 	clientId: string;
+ 	cwd: string;
+ 	options: CoreEngineOptions;
+@@ -141,6 +142,7 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 	ctx.askWaiters.set(clientId, askWaiter);
+ 
+ 	const sessions = createEngineSessionRegistry({
++		accounting: ctx.accounting,
+ 		agentDir: options.agentDir ?? cwd,
+ 		cwd,
+ 		clientId,
+diff --git a/packages/keel/src/app/core-engine.ts b/packages/keel/src/app/core-engine.ts
+index 3c55e79..38912e4 100644
+--- a/packages/keel/src/app/core-engine.ts
++++ b/packages/keel/src/app/core-engine.ts
+@@ -66,6 +66,7 @@ import {
+ } from "./engine-takeover.js";
+ import { isOrphanAdoptionExcludedClientId } from "../client-id-utils.js";
+ import { assembleClient } from "./client-assembly.js";
++import { ManagedRunAccounting } from "./managed-run-accounting.js";
+ 
+ export { CoreEngineNotReadyError };
+ import type { CoreEngineOptions } from "./core-engine-options.js";
+@@ -79,6 +80,9 @@ export type FrameSender = (msg: ServerMessage) => void;
+  * 这里禁止出现业务分支——门面里每多一个 `if`，编排就又回到了上帝对象。
+  */
+ export class CoreEngine implements EngineService {
++	private readonly accounting = new ManagedRunAccounting();
++	completedTurns(): number { return this.accounting.completedTurns(); }
++	activeTools(): number { return this.accounting.activeTools(); }
+ 	onQuit?: () => boolean;
+ 	onToolEvent?: ((ev: PluginToolEvent) => void) | undefined;
+ 	onRunEvent?: ((ev: PluginRunEvent) => void) | undefined;
+@@ -208,6 +212,7 @@ export class CoreEngine implements EngineService {
+ 			clientId,
+ 		);
+ 		const { runtime, faces, sessions, deliver } = assembleClient({
++			accounting: this.accounting,
+ 			clientId,
+ 			cwd: this.cwd,
+ 			options: this.options,
+@@ -367,14 +372,14 @@ export class CoreEngine implements EngineService {
+ 	}
+ 
+ 	serviceStatus(): ReturnType<EngineService["serviceStatus"]> {
+-		return serviceStatusOf({
++		return { ...serviceStatusOf({
+ 			version: this.options.version,
+ 			cwd: this.cwd,
+ 			quiesce: this.quiesceInfo(),
+ 			connectedClients: this.socketCount,
+ 			runtimes: this.runtimes,
+ 			service: toServiceInfo(launchOrigin()),
+-		});
++		}), activeTools: this.activeTools(), completedTurns: this.completedTurns() };
+ 	}
+ 
+ 	activeConversations(): number {
+diff --git a/packages/keel/src/app/engine-sessions.ts b/packages/keel/src/app/engine-sessions.ts
+index a892c8b..d668cf7 100644
+--- a/packages/keel/src/app/engine-sessions.ts
++++ b/packages/keel/src/app/engine-sessions.ts
+@@ -37,6 +37,7 @@ import type { PluginRunEvent, PluginToolEvent } from "../contracts/plugin.js";
+ import type { LspPort } from "../contracts/lsp.js";
+ 
+ export interface EngineSessionDeps {
++	accounting?: import("./managed-run-accounting.js").ManagedRunAccounting;
+ 	agentDir: string;
+ 	cwd: string;
+ 	clientId: string;
+@@ -383,6 +384,7 @@ export function createEngineSessionRegistry(deps: EngineSessionDeps): SessionReg
+ 				await deps.mcpProjects?.()?.prepare(conv.meta.cwd);
+ 			},
+ 			onOpened: (conv, opened) => {
++				deps.accounting?.trackOpened(opened);
+ 				const runtime = deps.getRuntime();
+ 				const faces = deps.getFaces();
+ 				runtime.noteSessionFile(opened.sessionFile);
+diff --git a/packages/keel/src/app/managed-run-accounting.ts b/packages/keel/src/app/managed-run-accounting.ts
+new file mode 100644
+index 0000000..2238f40
+--- /dev/null
++++ b/packages/keel/src/app/managed-run-accounting.ts
+@@ -0,0 +1,43 @@
++import type { TurnCapableSession } from "../contracts/session.js";
++
++/** Engine-lifetime counters for the managed scheduler, independent of plugin listeners. */
++export class ManagedRunAccounting {
++	private completed = 0;
++	private readonly tools = new Set<Set<string>>();
++
++	completedTurns(): number { return this.completed; }
++	activeTools(): number {
++		let count = 0;
++		for (const calls of this.tools) count += calls.size;
++		return count;
++	}
++
++	/** Follow the opened session when it transfers between client registries. */
++	trackOpened(opened: { session: TurnCapableSession; dispose(): void }): void {
++		const release = this.track(opened.session);
++		const dispose = opened.dispose.bind(opened);
++		opened.dispose = () => {
++			try { dispose(); } finally { release(); }
++		};
++	}
++
++	track(session: TurnCapableSession): () => void {
++		const calls = new Set<string>();
++		this.tools.add(calls);
++		let closed = false;
++		const unsubscribe = session.subscribe?.((event) => {
++			if (closed || !event || typeof event !== "object") return;
++			const ev = event as { type?: string; toolCallId?: unknown; willRetry?: boolean };
++			if (ev.type === "agent_end" && !ev.willRetry) this.completed += 1;
++			if (typeof ev.toolCallId !== "string") return;
++			if (ev.type === "tool_execution_start") calls.add(ev.toolCallId);
++			if (ev.type === "tool_execution_end") calls.delete(ev.toolCallId);
++		});
++		return () => {
++			if (closed) return;
++			closed = true;
++			this.tools.delete(calls);
++			unsubscribe?.();
++		};
++	}
++}
+diff --git a/packages/keel/src/engine-service.ts b/packages/keel/src/engine-service.ts
+index 007ce69..a72381f 100644
+--- a/packages/keel/src/engine-service.ts
++++ b/packages/keel/src/engine-service.ts
+@@ -414,6 +414,8 @@ export interface EngineService {
+ 		quiescedSince?: number;
+ 		connectedClients: number;
+ 		activeConversations: number;
++		activeTools?: number;
++		completedTurns?: number;
+ 		pendingMessages: number;
+ 		service: UiServiceInfo | null;
+ 	};
+diff --git a/tests/unit/core-app-session-registry.test.ts b/tests/unit/core-app-session-registry.test.ts
+index aff362c..474102c 100644
+--- a/tests/unit/core-app-session-registry.test.ts
++++ b/tests/unit/core-app-session-registry.test.ts
+@@ -1,4 +1,5 @@
+ import { beforeEach, describe, expect, it, vi } from "vitest";
++import { ManagedRunAccounting } from "../../packages/keel/src/app/managed-run-accounting.js";
+ 
+ const openTurnSession = vi.fn();
+ 
+@@ -26,6 +27,36 @@ function fakeOpened(overrides: { sessionFile?: string } = {}) {
+ }
+ 
+ describe("app · SessionRegistry", () => {
++	it("keeps accounting attached across a session transfer and releases it at destination close", async () => {
++		const accounting = new ManagedRunAccounting();
++		const listeners = new Set<(event: unknown) => void>();
++		const emit = (event: unknown) => { for (const listener of listeners) listener(event); };
++		const opened = {
++			session: {
++				dispose() {},
++				subscribe(listener: (event: unknown) => void) {
++					listeners.add(listener);
++					return () => { listeners.delete(listener); };
++				},
++			},
++			dispose() {},
++		};
++		openTurnSession.mockResolvedValue(opened);
++		const source = new SessionRegistry({ agentDir: "/agent", onOpened: (_conv, value) => accounting.trackOpened(value) });
++		const destination = new SessionRegistry({ agentDir: "/agent" });
++		await source.ensure(makeConv());
++		emit({ type: "tool_execution_start", toolCallId: "tool" });
++		destination.transferFrom(source, "c1", "c2");
++		source.closeAll();
++		expect(accounting.activeTools()).toBe(1);
++		emit({ type: "agent_end" });
++		expect(accounting.completedTurns()).toBe(1);
++		destination.closeAll();
++		expect(accounting.activeTools()).toBe(0);
++		expect(listeners.size).toBe(0);
++		emit({ type: "agent_end" });
++		expect(accounting.completedTurns()).toBe(1);
++	});
+ 	beforeEach(() => {
+ 		openTurnSession.mockReset();
+ 	});
+diff --git a/tests/unit/core-engine-connect.test.ts b/tests/unit/core-engine-connect.test.ts
+index 72e0809..3ee61e9 100644
+--- a/tests/unit/core-engine-connect.test.ts
++++ b/tests/unit/core-engine-connect.test.ts
+@@ -33,23 +33,30 @@ let engines: Engine[] = [];
+ let opened: number;
+ /** 每个假会话的 `sendUserMessage`：验「quiesce 期不喂轮」用（喂了就一定经过它）。 */
+ let feeds: ReturnType<typeof vi.fn>[];
++let eventListeners: Set<(event: unknown) => void>[];
+ 
+ beforeEach(() => {
+ 	root = mkdtempSync(join(tmpdir(), "pi-core-connect-"));
+ 	opened = 0;
+ 	feeds = [];
++	eventListeners = [];
+ 	openTurnSession.mockReset();
+ 	openTurnSession.mockImplementation(async () => {
+ 		opened += 1;
+ 		const sendUserMessage = vi.fn(async () => {});
+ 		feeds.push(sendUserMessage);
++		const listeners = new Set<(event: unknown) => void>();
++		eventListeners.push(listeners);
+ 		const session = {
+ 			isStreaming: false,
+ 			sessionFile: undefined,
+ 			messages: [] as unknown[],
+ 			model: { provider: "anthropic", id: "claude" },
+ 			sendUserMessage,
+-			subscribe: () => () => {},
++			subscribe: (listener: (event: unknown) => void) => {
++				listeners.add(listener);
++				return () => { listeners.delete(listener); };
++			},
+ 			dispose: () => {},
+ 		};
+ 		return { session, sessionId: `s${opened}`, dispose: () => {} };
+@@ -80,6 +87,34 @@ function collector(): { sent: ServerMessage[]; types(): string[] } {
+ 	return { sent, types: () => sent.map((m) => m.type) };
+ }
+ 
++describe("managed runtime accounting", () => {
++	it("counts SDK completions without retries and scopes tool IDs to their sessions", async () => {
++		const engine = engineWith();
++		await engine.attach("accounting-a", () => {});
++		await engine.attach("accounting-b", () => {});
++		const emit = (index: number, event: unknown) => {
++			for (const listener of eventListeners[index]!) listener(event);
++		};
++		emit(0, { type: "agent_end", willRetry: true });
++		expect(engine.completedTurns()).toBe(0);
++		emit(0, { type: "agent_end", willRetry: false });
++		emit(1, { type: "agent_end" });
++		emit(0, { type: "tool_execution_start", toolCallId: "same-id" });
++		emit(0, { type: "tool_execution_start", toolCallId: "same-id" });
++		emit(1, { type: "tool_execution_start", toolCallId: "same-id" });
++		expect(engine.serviceStatus()).toMatchObject({ completedTurns: 2, activeTools: 2 });
++		emit(0, { type: "tool_execution_end", toolCallId: "same-id" });
++		expect(engine.activeTools()).toBe(1);
++		await engine.attach("accounting-a", () => {});
++		emit(0, { type: "agent_end" });
++		expect(engine.completedTurns()).toBe(3);
++		await engine.disposeAll();
++		expect(engine.activeTools()).toBe(0);
++		emit(0, { type: "agent_end" });
++		expect(engine.completedTurns()).toBe(3);
++	});
++});
++
+ describe("core/app · 连接期首条对话（A）", () => {
+ 	it("attach 后立刻有一条活动会话，快照 conversationId 非空", async () => {
+ 		const engine = engineWith();

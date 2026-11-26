@@ -1,0 +1,265 @@
+diff --git a/packages/keel/src/app/client-assembly.ts b/packages/keel/src/app/client-assembly.ts
+index ca3c56d..efec883 100644
+--- a/packages/keel/src/app/client-assembly.ts
++++ b/packages/keel/src/app/client-assembly.ts
+@@ -3,7 +3,7 @@ import type { ModelAdminPort } from "../contracts/model-admin.js";
+ import type { SettingsStorePort } from "../contracts/settings-store.js";
+ import type { PluginAgentToolFilter } from "../adapters/tools/plugin-agent-tools.js";
+ import type { PluginToolsBinder } from "./plugin-tools-binder.js";
+-import type { GoalRunPort } from "../contracts/goals.js";
++import type { GoalRunPort, GoalRunHooks } from "../contracts/goals.js";
+ import { createGoalRunSinks } from "../domains/goals/index.js";
+ import { isInsideSessionsDir } from "../session-search.js";
+ import type { createProjectSource } from "../adapters/state/index.js";
+@@ -103,6 +103,8 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 	let faces!: HostFaces;
+ 	let subagents: SubagentRuntime | undefined;
+ 	let goalPort: GoalRunPort | undefined;
++	let goalHooks: GoalRunHooks | undefined;
++	let lastGoalDisplayKey: string | undefined;
+ 
+ 	const deliver = (msg: ServerMessage) => ctx.deliverTo(runtime?.clientId ?? clientId, msg);
+ 	const transport: TransportPort = {
+@@ -172,7 +174,25 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 		onRunEvent: (ev) => ctx.onRunEvent?.(ev),
+ 	});
+ 
++	const getGoalPort = (hooks?: GoalRunHooks): GoalRunPort | undefined => {
++		if (hooks) goalHooks = hooks;
++		return goalPort ??= options.goalRun?.(createGoalRunSinks({
++			runtime, sessions,
++			resolveModel: (provider, id) => faces.resolveModel(provider, id),
++			emit: deliver,
++			isDisposed: () => ctx.runtimes.get(runtime.clientId) !== runtime,
++			getLang: () => ctx.langOf(runtime.clientId),
++			setPlan: (id, steps) => goalHooks?.setPlan?.(id, steps),
++		}));
++	};
+ 	runtime = new ClientRuntime({
++		restoreGoalDisplay: (id) => {
++			if (ctx.runtimes.get(runtime.clientId) !== runtime || !sessions.has(id)) return false;
++			const port = getGoalPort();
++			if (!port?.restoreGoal) return false;
++			port.restoreGoal(id);
++			return true;
++		},
+ 		drainWriters: async (timeoutMs) => {
+ 			const conversations = runtime.registry.list();
+ 			const stopped = await drainManagedWriters({
+@@ -227,20 +247,7 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 				}
+ 			},
+ 		},
+-		goalRun: options.goalRun
+-			? (hooks) =>
+-					(goalPort = options.goalRun!(
+-						createGoalRunSinks({
+-							runtime,
+-							sessions,
+-							resolveModel: (provider, id) => faces.resolveModel(provider, id),
+-							emit: deliver,
+-							isDisposed: () => ctx.runtimes.get(clientId) !== runtime,
+-							getLang: () => ctx.langOf(clientId),
+-							...(hooks?.setPlan ? { setPlan: hooks.setPlan } : {}),
+-						}),
+-					))
+-			: undefined,
++		goalRun: options.goalRun ? getGoalPort : undefined,
+ 		getLang: () => ctx.langOf(clientId),
+ 		resolveToolApproval: (id, decision, editedParams, reason) =>
+ 			approvalWaiter.resolve(id, decision, editedParams, reason),
+@@ -291,7 +298,16 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 				if (heldNotice) ctx.deliverTo(runtime.clientId, heldNotice);
+ 			});
+ 		},
+-		onConversationChanged: () => ctx.onConversationChanged?.(),
++		onConversationChanged: () => {
++			const id = runtime.activeConversationId();
++			const session = id ? sessions.get(id)?.session : undefined;
++			const key = session ? `${id}:${session.sessionId ?? session.sessionFile ?? ""}` : undefined;
++			if (key !== lastGoalDisplayKey) {
++				lastGoalDisplayKey = key;
++				runtime.restoreGoalDisplay();
++			}
++			ctx.onConversationChanged?.();
++		},
+ 		onSessionModelChanged: (conversationId) => {
+ 			options.onSessionModelChanged?.(clientId, conversationId);
+ 			ctx.notifyPluginModelChange(clientId, conversationId);
+diff --git a/packages/keel/src/app/client-runtime.ts b/packages/keel/src/app/client-runtime.ts
+index 5a49789..0787e67 100644
+--- a/packages/keel/src/app/client-runtime.ts
++++ b/packages/keel/src/app/client-runtime.ts
+@@ -53,6 +53,7 @@ export interface ClientFrames {
+ }
+ 
+ export interface ClientRuntimeOptions extends GoalHostPorts {
++	restoreGoalDisplay?(conversationId: string): boolean;
+ 	drainWriters?(timeoutMs: number): Promise<boolean>;
+ 	clientId: ClientId;
+ 	cwd: string;
+@@ -184,6 +185,10 @@ export interface ClientRuntimeOptions extends GoalHostPorts {
+  * 这里是「状态与生命周期」，两者分开才守得住「门面里不写业务」。跨域能力只在这里装配，域之间互不认识。
+  */
+ export class ClientRuntime {
++	restoreGoalDisplay(): boolean {
++		const id = this.activeConversationId();
++		return id ? this.options.restoreGoalDisplay?.(id) ?? false : false;
++	}
+ 	quiesce(timeoutMs: number): Promise<boolean> {
+ 		return this.options.drainWriters?.(timeoutMs) ?? Promise.resolve(false);
+ 	}
+@@ -303,6 +308,7 @@ export class ClientRuntime {
+ 			frames: this.rebindFrames(),
+ 			onActivated: (id) => {
+ 				this.publisher.switchConversation(id);
++				this.restoreGoalDisplay();
+ 				this.options.onConversationChanged?.();
+ 			},
+ 			noteSessionFile: (file) => this.noteSessionFile(file),
+diff --git a/packages/keel/src/app/connection-init.ts b/packages/keel/src/app/connection-init.ts
+index 919d3ba..edba99e 100644
+--- a/packages/keel/src/app/connection-init.ts
++++ b/packages/keel/src/app/connection-init.ts
+@@ -190,7 +190,9 @@ function pushConnectFrames(input: ConnectFrameInput, dispatch: DispatchSession):
+ 	// 4 运行列表：空白对话不入列（`inRunningList` 裁定），所以新连接这里通常是「零行 + activeId」。
+ 	runtime.pushConversations();
+ 	// 6 目标状态：真值是 `client-state.json` 里的偏好，没有目标在跑时就是这一支（老 `makeGoalStatus()`）。
+-	emit({ type: "goal_status", status: goalStatusOfPrefs(stateStore.getGoalPrefs(clientId) ?? DEFAULT_GOAL_PREFS) });
++	if (!runtime.restoreGoalDisplay()) {
++		emit({ type: "goal_status", status: goalStatusOfPrefs(stateStore.getGoalPrefs(clientId) ?? DEFAULT_GOAL_PREFS) });
++	}
+ 	// 7 设置帧：宿主 `SettingsService.push()` 自己兜住「会话还没打开」（资源目录读不到就给空表）。
+ 	dispatch.pushSettings();
+ 	// 8 后台面板：`bg_servers` 由宿主出帧。
+diff --git a/packages/keel/src/app/dispatch-handlers.ts b/packages/keel/src/app/dispatch-handlers.ts
+index 1f497df..49a3536 100644
+--- a/packages/keel/src/app/dispatch-handlers.ts
++++ b/packages/keel/src/app/dispatch-handlers.ts
+@@ -94,6 +94,7 @@ export interface DispatchRuntime {
+ 	noteConversation(conversationId: string, text: string): Promise<void>;
+ 	/** 推一帧 `conversations`（固化对话后由新转录重算这一帧）。 */
+ 	pushConversations(): void;
++	restoreGoalDisplay(): boolean;
+ 	/** 分发表：私聊入口调用时才取（装配期取会与 `handlers()` 成环）。 */
+ 	handlers(): DispatchSession;
+ 	/** 设置帧（还没 attach 就不发）。 */
+@@ -251,7 +252,10 @@ export function createDispatchHandlers(runtime: DispatchRuntime): DispatchAssemb
+ 		transport: runtime.options.transport,
+ 		cwd: () => runtime.cwd,
+ 		...(runtime.options.viewOf ? { viewOf: runtime.options.viewOf } : {}),
+-		onActivated: (id) => runtime.publisher.switchConversation(id),
++		onActivated: (id) => {
++			runtime.publisher.switchConversation(id);
++			runtime.restoreGoalDisplay();
++		},
+ 		// 跨项目切对话（老 `applyCwdSideEffects`）：只跟工作区，不重绑会话。
+ 		followActiveProject: () => surface.followActiveProject(),
+ 		requestSnapshot: () => runtime.publisher.request(),
+@@ -476,7 +480,7 @@ export function createDispatchHandlers(runtime: DispatchRuntime): DispatchAssemb
+ 			// 那一轮拖住（SDK 侧一条条来）。等它会把队列后面的 switch_conversation / set_cwd 一起卡死。
+ 			// 会话仍先开（第一轮不必再等），失败只记一笔：真错误在喂轮时会带着回来。
+ 			if (runtime.options.sessions) {
+-				void runtime.options.sessions.ensure(conv).catch((err) => {
++				void runtime.options.sessions.ensure(conv).then(() => runtime.restoreGoalDisplay()).catch((err) => {
+ 					console.error("[newChat session.ensure error]", err);
+ 				});
+ 			}
+diff --git a/server/core-goal-run-adapter.ts b/server/core-goal-run-adapter.ts
+index 532b6c7..fc26c1a 100644
+--- a/server/core-goal-run-adapter.ts
++++ b/server/core-goal-run-adapter.ts
+@@ -501,7 +501,7 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 			const current = runs.get(parentId);
+ 			if (current) { publish(current); return; }
+ 			const run = restore(parentId);
+-			if (!run) return;
++			if (!run) { publish(); return; }
+ 			runs.set(parentId, run);
+ 			publish(run);
+ 		},
+diff --git a/tests/unit/core-engine-connect.test.ts b/tests/unit/core-engine-connect.test.ts
+index e05235c..35f0998 100644
+--- a/tests/unit/core-engine-connect.test.ts
++++ b/tests/unit/core-engine-connect.test.ts
+@@ -6,6 +6,9 @@ import type { SettingsFramePort } from "../../packages/keel/src/contracts/settin
+ import type { BackgroundPort } from "../../packages/keel/src/contracts/background.js";
+ import type { ServerMessage } from "../../packages/keel/src/protocol.js";
+ import { createFakeSettingsStore } from "../helpers/fake-settings-store.js";
++import { ClientStateStore } from "../../server/client-state.js";
++import { createCoreGoalRunPort } from "../../server/core-goal-run-adapter.js";
++import type { GoalRunSinks } from "../../packages/keel/src/domains/goals/index.js";
+ 
+ /**
+  * 连接期三件事（老实现 `AgentService.attach()` + `ClientSession.attachSink()` 的对应物）：
+@@ -52,6 +55,7 @@ beforeEach(() => {
+ 		const listeners = new Set<(event: unknown) => void>();
+ 		eventListeners.push(listeners);
+ 		const session = {
++			sessionId: `s${opened}`,
+ 			get isStreaming() { return sdkStreaming; },
+ 			abort: () => abortSession(),
+ 			sessionFile: undefined,
+@@ -112,13 +116,14 @@ describe("managed runtime accounting", () => {
+ 	});
+ 
+ 	it("rejects new goal work while draining before invoking the host", async () => {
+-		const goal = vi.fn();
++		const start = vi.fn(async () => {});
++		const goal = vi.fn(() => ({ setGoal: start, startGoalWizard: start, clearGoal: start, quiesce: async () => {} }));
+ 		const engine = engineWith({ goalRun: goal });
+ 		const session = await engine.attach("goal-gate", () => {});
+ 		await engine.quiesce();
+ 		await session.setGoal("must not start");
+ 		await session.startGoalWizard("must not start");
+-		expect(goal).not.toHaveBeenCalled();
++		expect(start).not.toHaveBeenCalled();
+ 		expect(session.isQuiesceActive?.()).toBe(true);
+ 	});
+ 	it("shares a drain flight and waits for the actual SDK abort and tool end", async () => {
+@@ -184,6 +189,32 @@ describe("managed runtime accounting", () => {
+ });
+ 
+ describe("core/app · 连接期首条对话（A）", () => {
++	it("restores the real native goal port on connect/reconnect and changes display with the active conversation", async () => {
++		const store = new ClientStateStore(join(root, "client-state.json"));
++		store.saveConversationGoal("session:s1", {
++			goal: "persisted goal", reviewModel: null, maxRounds: 3, locked: true,
++			round: 2, verdict: "pending", status: "saved", savedAt: 1,
++		});
++		const factory = vi.fn((sinks: GoalRunSinks) => createCoreGoalRunPort({ sinks, stateStore: store }));
++		const engine = engineWith({ stateStore: store, goalRun: factory, retainEvidence: () => ({ hasPendingWake: true }) });
++		const { sent } = collector();
++		const session = await engine.attach("fresh-browser", (message) => sent.push(message));
++		const lastGoal = () => sent.filter((message) => message.type === "goal_status").at(-1)?.status;
++		expect(lastGoal()).toMatchObject({ goal: "persisted goal", paused: true, round: 2 });
++		expect(openTurnSession).toHaveBeenCalledTimes(1);
++		expect(feeds.every((feed) => feed.mock.calls.length === 0)).toBe(true);
++		const reconnect = collector();
++		await engine.attach("fresh-browser", (message) => reconnect.sent.push(message));
++		expect(reconnect.sent.filter((message) => message.type === "goal_status").at(-1)?.status)
++			.toMatchObject({ goal: "persisted goal", paused: true });
++		expect(factory).toHaveBeenCalledTimes(1);
++		await session.newChat(undefined, true);
++		await vi.waitFor(() => expect(lastGoal()?.goal).toBeNull());
++		await session.switchConversation("c-1");
++		expect(session.activeConversationId?.()).toBe("c-1");
++		expect(lastGoal()).toMatchObject({ goal: "persisted goal", paused: true });
++		expect(feeds.every((feed) => feed.mock.calls.length === 0)).toBe(true);
++	});
+ 	it("attach 后立刻有一条活动会话，快照 conversationId 非空", async () => {
+ 		const engine = engineWith();
+ 		const { sent } = collector();
+diff --git a/tests/unit/goal-run-adapter.test.ts b/tests/unit/goal-run-adapter.test.ts
+index c8bb719..e17dcfa 100644
+--- a/tests/unit/goal-run-adapter.test.ts
++++ b/tests/unit/goal-run-adapter.test.ts
+@@ -133,7 +133,7 @@ describe("目标运行宿主适配器（GoalRunPort 的真实现）", () => {
+ 			expect(restored.turns).toEqual([]);
+ 			const unrelated = makeHarness({ stateStore: restoredStore, identity: "session:other" });
+ 			unrelated.port.restoreGoal!("parent");
+-			expect(unrelated.statuses()).toEqual([]);
++			expect(unrelated.statuses().at(-1)?.goal).toBeNull();
+ 			await restored.port.clearGoal("parent");
+ 			expect(new ClientStateStore(file).getConversationGoal("session:stable")).toBeUndefined();
+ 		} finally { rmSync(directory, { recursive: true, force: true }); }

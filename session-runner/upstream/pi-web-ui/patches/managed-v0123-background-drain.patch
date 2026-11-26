@@ -1,0 +1,161 @@
+diff --git a/server/core-background-adapter.ts b/server/core-background-adapter.ts
+index e14b26f..7d6a177 100644
+--- a/server/core-background-adapter.ts
++++ b/server/core-background-adapter.ts
+@@ -4,6 +4,8 @@ import { BG_CLEANUP_FALLBACK_MIN, BgServerTracker } from "./bg-servers.js";
+ import { JOB_TASK_PREFIX, JobRegistry, type JobSnapshot } from "./job-runner.js";
+ import { resolveProjectScripts } from "./project-scripts.js";
+ import type { BgServer, ServerMessage } from "./protocol.js";
++import { pidAlive } from "./process-utils.js";
++import { drainManagedWriters } from "../packages/keel/src/app/managed-drain.js";
+ 
+ /** 宿主实现 `BackgroundPort` 时要拼的几块现成东西：本客户端的帧出口 + 老实现里现取的那几个值。 */
+ export interface CoreBackgroundSinks {
+@@ -86,6 +88,26 @@ export function createCoreBackground(options: { dataDir: string } & CoreBackgrou
+ 	return {
+ 		refreshBgTasks: () => bg.push(),
+ 
++		async quiesce(): Promise<boolean> {
++			// Preserve PIDs before killAll: UI cleanup can remove a row before exit.
++			const rows = bg.list();
++			const pids = rows.flatMap((row) => typeof row.pid === "number" && row.pid > 1 ? [row.pid] : []);
++			const plugins = options.pluginTasks?.() ?? [];
++			return drainManagedWriters({
++				timeoutMs: 4500,
++				stop: [
++					() => bg.killAll(),
++					...plugins.map((task) => () => {
++						if (!task.taskId || !options.stopBgTask?.(task.taskId)) throw new Error("background_plugin_stop_failed");
++						// The upstream plugin API removes rows even when stop throws.
++						// Its boolean cannot prove termination; require runner escalation.
++						throw new Error("background_plugin_stop_unverified");
++					}),
++				],
++				isIdle: () => bg.list().length === 0 && pids.every((pid) => !pidAlive(pid)),
++			});
++		},
++
+ 		listBgServers: () => bg.listAndPush(),
+ 
+ 		async killBackgroundServer(port: number | undefined, taskId?: string): Promise<boolean> {
+diff --git a/tests/unit/core-adapter-background.test.ts b/tests/unit/core-adapter-background.test.ts
+index bc8a95e..d64187e 100644
+--- a/tests/unit/core-adapter-background.test.ts
++++ b/tests/unit/core-adapter-background.test.ts
+@@ -93,6 +93,7 @@ vi.mock("../../server/process-utils.js", async (importOriginal) => ({
+ 		if (!h.stubborn.has(pid)) h.alive.delete(pid);
+ 	},
+ 	waitForPidGone: async (pid: number) => !h.alive.has(pid),
++	pidAlive: (pid: number) => h.alive.has(pid),
+ }));
+ 
+ const { createCoreBackground } = await import("../../server/core-background-adapter.js");
+@@ -157,6 +158,58 @@ afterEach(() => {
+ });
+ 
+ describe("后台任务适配器：装配", () => {
++	it("drains tracked ports through their existing stop owner", async () => {
++		const { port } = makePort();
++		await track(9010, 23456);
++		expect(await port.quiesce!()).toBe(true);
++		expect(h.killedPids).toContain(23456);
++		port.dispose();
++	});
++	it("does not trust a plugin row disappearing as proof of termination", async () => {
++		let plugins = [{ taskId: "plugin-worker", since: 1, kind: "plugin" as const }];
++		const stop = vi.fn(() => { plugins = []; return true; });
++		const { port } = makePort({ pluginTasks: () => plugins, stopBgTask: stop });
++		expect(await port.quiesce!()).toBe(false);
++		expect(stop).toHaveBeenCalledWith("plugin-worker");
++		port.dispose();
++	});
++
++	it("waits for a job PID to exit even if its UI row has already disappeared", async () => {
++		vi.useFakeTimers();
++		h.listed.push({ id: "worker", pid: 34567, since: 1 });
++		h.alive.add(34567);
++		const { port } = makePort();
++		const settled = vi.fn();
++		const result = port.quiesce!().then((ok) => { settled(ok); return ok; });
++		await vi.advanceTimersByTimeAsync(1);
++		h.listed.length = 0;
++		await vi.advanceTimersByTimeAsync(100);
++		expect(settled).not.toHaveBeenCalled();
++		h.alive.delete(34567);
++		await vi.advanceTimersByTimeAsync(25);
++		expect(await result).toBe(true);
++		port.dispose();
++	});
++
++	it("fails within the deadline if a removed job row still has a live PID", async () => {
++		vi.useFakeTimers();
++		h.listed.push({ id: "worker", pid: 34567, since: 1 });
++		h.alive.add(34567);
++		const { port } = makePort();
++		const result = port.quiesce!();
++		await vi.advanceTimersByTimeAsync(1);
++		h.listed.length = 0;
++		await vi.advanceTimersByTimeAsync(4500);
++		expect(await result).toBe(false);
++		port.dispose();
++	});
++
++	it("fails closed when a plugin refuses to stop", async () => {
++		const { port } = makePort({ pluginTasks: () => [{ taskId: "stuck", since: 1 }], stopBgTask: () => false });
++		expect(await port.quiesce!()).toBe(false);
++		expect(h.killAllCalls).toBe(1);
++		port.dispose();
++	});
+ 	it("job 日志落 <dataDir>/jobs，变更即推 bg_servers（onChange 直接接到真叶子的 push）", () => {
+ 		const { bgFrames } = makePort();
+ 		expect(h.registryOptions.logDir()).toBe(join("/data/pi-web", "jobs"));
+diff --git a/tests/unit/managed-background-drain.test.ts b/tests/unit/managed-background-drain.test.ts
+new file mode 100644
+index 0000000..99db1f0
+--- /dev/null
++++ b/tests/unit/managed-background-drain.test.ts
+@@ -0,0 +1,44 @@
++import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { expect, it, vi } from "vitest";
++import { createCoreBackground } from "../../server/core-background-adapter.js";
++import { pidAlive } from "../../server/process-utils.js";
++import type { ServerMessage } from "../../server/protocol.js";
++
++it("drains a real background job and verifies its process exited", async () => {
++	const root = mkdtempSync(join(tmpdir(), "managed-bg-drain-"));
++	writeFileSync(join(root, "worker.cjs"), 'console.log("MANAGED_BG_PID=" + process.pid); setInterval(() => {}, 1000);');
++	writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: {
++		worker: `${JSON.stringify(process.execPath)} worker.cjs`,
++	} }));
++	const frames: ServerMessage[] = [];
++	let disposed = false;
++	const port = createCoreBackground({
++		dataDir: root, emit: (message) => frames.push(message), flushSnapshot() {},
++		isDisposed: () => disposed, getCwd: () => root, activeConversationId: () => "test", cleanupMinutes: () => 0,
++	});
++	try {
++		port.startBgScript("worker");
++		let pid = 0;
++		let childPid = 0;
++		await vi.waitFor(() => {
++			const frame = frames.filter((message) => message.type === "bg_servers").at(-1);
++			const row = frame?.servers.find((row) => row.kind === "job");
++			pid = row?.pid ?? 0;
++			expect(pid).toBeGreaterThan(1);
++			expect(pidAlive(pid)).toBe(true);
++			const log = row?.logPath && existsSync(row.logPath) ? readFileSync(row.logPath, "utf8") : "";
++			childPid = Number(/^MANAGED_BG_PID=(\d+)$/m.exec(log)?.[1] ?? 0);
++			expect(childPid).toBeGreaterThan(1);
++			expect(pidAlive(childPid)).toBe(true);
++		}, { timeout: 5000 });
++		expect(await port.quiesce!()).toBe(true);
++		expect(pidAlive(pid)).toBe(false);
++		expect(pidAlive(childPid)).toBe(false);
++	} finally {
++		disposed = true;
++		port.dispose();
++		rmSync(root, { recursive: true, force: true });
++	}
++}, 15000);
