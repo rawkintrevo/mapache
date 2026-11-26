@@ -100,6 +100,7 @@ class GuestImageTests(unittest.TestCase):
                     directories = [command[i + 1] for i, value in enumerate(command) if value == "--mkdir"]
                     self.assertIn("/usr/local/libexec", directories)
                     self.assertTrue(set(self.manifest["durablePaths"]).issubset(directories))
+                    self.assertIn("ln -s /var/lib/mapache/workspace/workspace /workspace", command)
                     self.assertIn("grub-install --target=i386-pc /dev/sda && update-grub", command)
                     for i, value in enumerate(command):
                         if value == "--upload":

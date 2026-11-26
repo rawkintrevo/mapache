@@ -427,6 +427,8 @@ payload's relocated module directory and excludes ssh2's test fixtures.
 The builder uses `virt-resize` to expand the pinned image's root partition
 and filesystem before installing the payload, and creates all durable
 directories before systemd enters the runtime working directory.
+The guest also exposes `/workspace` as a symlink to the retained workspace
+directory, matching the managed pi-web-ui project root without duplicating data.
 It reinstalls BIOS GRUB and regenerates the menu after resizing: GPT partition
 renumbering otherwise leaves an obsolete GRUB prefix and stops at rescue mode.
 The v1 image masks unused Snap services so network-dependent Snap seeding cannot
