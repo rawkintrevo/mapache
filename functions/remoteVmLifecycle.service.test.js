@@ -197,6 +197,7 @@ test("wrong-owner session cannot configure a guest", async () => {
 
 test("stop releases capacity and resume starts the same guest and disk", async () => {
   const fixtureValue = fixture();
+  fixtureValue.session.status = "running";
   await seed(fixtureValue);
   const host = fakeHost();
   const service = createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: host.operation});
@@ -216,6 +217,19 @@ test("stop releases capacity and resume starts the same guest and disk", async (
   const savedHost = (await fixtureValue.db.collection("remoteHosts").doc("host-1").get()).data();
   assert.equal(savedHost.remoteVmReservations.entries.length, 1);
   assert.equal(host.guests.size, 1);
+});
+
+test("automatic reconciliation leaves permanent failures for explicit retry", async () => {
+  const fixtureValue = fixture();
+  await seed(fixtureValue);
+  const host = fakeHost();
+  const service = createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: host.operation});
+  const started = await service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "start-1"});
+  await fixtureValue.db.collection("remoteVmOperations").doc(started.id).update({state: "error", retryable: false});
+  host.calls.length = 0;
+  assert.equal((await service.reconcileOperation(started.id, {retryFailed: false})).state, "error");
+  assert.deepEqual(host.calls, []);
+  assert.equal((await service.reconcileOperation(started.id)).state, "completed");
 });
 
 test("cancelling a start for a deleted workspace releases capacity before transaction writes", async () => {

@@ -82,6 +82,7 @@ const {
 const {createComputeEngineService} = require("./computeEngine.service");
 const {createRuntimeProviderService} = require("./runtimeProvider.service");
 const {createRemoteVmLifecycleService} = require("./remoteVmLifecycle.service");
+const {createRemoteVmOperationWorker} = require("./remoteVmOperation.worker");
 const {isRuntimeProviderEnabled} = require("./runtimeProvider.helpers");
 const {
   SESSION_RESOURCE_ERROR_CODE,
@@ -799,16 +800,7 @@ exports.reconcileRemoteVmOperation = onDocumentWritten({
   concurrency: 1,
   timeoutSeconds: 540,
   retry: true,
-}, async (event) => {
-  const after = event.data?.after;
-  if (!after?.exists) return null;
-  const next = after.data() || {};
-  const previous = event.data?.before?.exists ? event.data.before.data() || {} : {};
-  if (!["queued", "unreachable", "error"].includes(String(next.state || "")) || previous.state === next.state && previous.updatedAt === next.updatedAt) {
-    return null;
-  }
-  return remoteVmLifecycleService.reconcileOperation(event.params.operationId);
-});
+}, createRemoteVmOperationWorker(remoteVmLifecycleService));
 
 exports.provisionAutomationRun = onDocumentWritten({
   document: "automationRuns/{runId}",

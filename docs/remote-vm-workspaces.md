@@ -463,7 +463,11 @@ Operation completion must read workspace/session/host reservation records before
 any transaction writes. Stop/delete/cancellation release capacity inside that
 same transaction. A confirmed stop also publishes the owned session's stopped
 state, so the UI and credential broker cannot retain a running session after
-the guest is off. The captured boot identity prevents an old stop completion
+the guest is off. This uses an explicit reconciliation transition when the
+session still says running. Only the original queued event drives automatic
+retries, with platform backoff for pending/offline work; error-state writes do
+not recursively enqueue themselves, and permanent failures require an explicit
+retry. The captured boot identity prevents an old stop completion
 from changing a newer boot's session. Successful completion clears earlier
 operation/workspace errors. Deploy `api`, `provisionQueuedSession` and
 `reconcileRemoteVmOperation` together for these shared lifecycle changes.
