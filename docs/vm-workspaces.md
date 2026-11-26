@@ -96,7 +96,10 @@ no public runner, Chrome, terminal, or debug port. The gateway authorizes the
 Firebase owner/access policy and the current runtime generation before routing;
 stale cookies and old generations are rejected. VM IP changes and replacement
 are handled by updating the backend-owned gateway target and reconnecting with
-fresh access material.
+fresh access material. Workspace and session creation resolve that origin from
+the explicit runtime gateway setting or the first non-recovery host in
+`VM_WORKSPACE_GATEWAY_HOSTS`; recovery-only hosts are never persisted as a
+runtime target.
 
 The Compute Engine runtime identity is
 `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. It receives only the
