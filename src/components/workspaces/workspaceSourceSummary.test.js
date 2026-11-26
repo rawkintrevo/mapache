@@ -26,6 +26,10 @@ describe("workspaceSourceSummary", () => {
     expect(workspaceSourceSummary({source: {type: "ssh"}, storagePrefix: "workspaces/user/session-id"})).toBe("");
   });
 
+  it("describes remote VM workspaces without Cloud Run pricing labels", () => {
+    expect(workspaceSourceSummary({source: {type: "remote-libvirt"}})).toBe("Remote VM · pi-web-ui native terminal");
+  });
+
   it("summarizes GitHub source metadata", () => {
     expect(workspaceSourceSummary({
       source: {

@@ -21,6 +21,7 @@ Mapache owns the surrounding workspace/session shell and account connections.
 - Workspace request grant management: `src/controllers/requestGrantsController.js`, `src/components/modals/WorkspaceRequestGrantsModal.jsx`, and `src/services/api.js`
 - SSH gateway assignment management: `src/controllers/sshGatewaysController.js`, `src/components/sshGateways/SshGatewaysPage.jsx`, and `src/services/api.js`
 - Remote host onboarding: `src/controllers/remoteHostsController.js`, `src/components/remoteHosts/RemoteHostsPage.jsx`, and `src/services/api.js`
+- Workspace provider capabilities: `src/utils/workspaceProvider.js`, `src/components/modals/WorkspaceModal.jsx`, and `src/components/layout/Topbar.jsx`
 - Account/connection workflows: `src/workflows/piAuth.js`,
   `src/workflows/mcpServers.js`, `src/workflows/googleWorkspace.js`, and
   `src/workflows/githubConnection.js`
@@ -242,9 +243,17 @@ sudo setup directions, tests SSH/libvirt readiness, and requires explicit host
 fingerprint confirmation before marking a host ready. The controller fences
 every request by authenticated user and epoch so sign-out or account changes
 cannot publish a prior owner's host. It never requests or renders a personal
-SSH private key. Workspace creation includes a setup entry point; the explicit
-remote VM workspace provider remains owned by the later workspace integration
-ticket.
+SSH private key. Workspace creation includes the explicit **VM on remote
+machine** option. Selecting it loads the single owner-scoped host, blocks
+submission until the host is ready, sends its stable `hostId`, and shows the
+fixed v1 guest shape (2 vCPU, 8 GiB RAM, 40 GiB disk, Ubuntu 24.04 with
+pi-web-ui). Blank and GitHub payloads remain unchanged. Remote workspaces use
+the existing power controls and pi-web-ui/native terminal, while Chrome,
+upload, automations, SSH-gateway assignment, workspace resource editing, and
+idle/keep-running/scheduled policy controls are hidden until their provider
+capabilities exist. Remote deletion uses an explicit permanent-delete
+confirmation; host or guest failures remain visible through the normal pending
+and error states. Cloud Run-only logs are also hidden for remote guests.
 
 The automation editor is a controlled component owned by the automation workflow.
 `WorkspacePanel` displays global action errors above an existing session as well

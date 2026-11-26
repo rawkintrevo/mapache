@@ -458,6 +458,7 @@ const workspaceService = createWorkspaceService({
   workspaceAutomationDeletionService,
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
+  remoteHostService,
   runtimeGatewayBaseUrl: () => process.env.VM_RUNTIME_GATEWAY_BASE_URL || "",
   runtimeProviderEnabled: () => isRuntimeProviderEnabled(),
   workspaceStorageMigrationService,

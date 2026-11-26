@@ -10,6 +10,7 @@ import {normalizeSessionImageKey} from "../../config/sessionImages.js";
 import {sessionAuthHarness, sessionSupportsAuth} from "../../utils/sessionHarnesses.js";
 import {ResourceUtilization} from "../sessions/ResourceUtilization.jsx";
 import {SessionRuntimePolicy} from "../sessions/SessionRuntimePolicy.jsx";
+import {isRemoteVmWorkspace} from "../../utils/workspaceProvider.js";
 
 export function Topbar({
   activeCanvas,
@@ -40,6 +41,7 @@ export function Topbar({
   onToggleGateway,
   onToggleWorkspace,
   resourceMetrics,
+  workspaceIsRemote = false,
 }) {
   const busy = hasPendingOperations(state.pendingOperations);
   const selectedWorkspace = state.workspaces.find(
@@ -58,6 +60,7 @@ export function Topbar({
   const hasSessionImageMetadata = Boolean(canonicalSession?.imageKey || canonicalSession?.image);
   const workspaceUnsupported = selectedWorkspace?.source?.type === "ssh" ||
     Boolean(canonicalSession && hasSessionImageMetadata && normalizeSessionImageKey(canonicalSession) !== "gcp-runner");
+  const remoteWorkspace = workspaceIsRemote || isRemoteVmWorkspace(selectedWorkspace);
   const workspaceStartBlocked = workspaceUnsupported && !workspaceOn;
   const workspaceStopUncertain = isRuntimeStopUncertain(canonicalSession || {});
   const workspaceActionDisabled = busy || !selectedWorkspace || workspaceTransitioning || workspaceStartBlocked || workspaceStopUncertain;
@@ -66,7 +69,7 @@ export function Topbar({
   const showManagePiAuth = sessionSupportsAuth(canonicalSession);
   const managePiAuthLabel = authHarness?.manageTitle || "Manage Pi Auth";
   const showWorkspaceTools = isMarkedRuntimeSession(canonicalSession);
-  const showRuntimePolicy = Boolean(selectedWorkspace) && selectedWorkspace.source?.type !== "ssh" &&
+  const showRuntimePolicy = Boolean(selectedWorkspace) && !remoteWorkspace && selectedWorkspace.source?.type !== "ssh" &&
     (selectedWorkspace.agentUiVersion === "pi-web-ui-v1" || isMarkedRuntimeSession(canonicalSession));
   const gatewayStatus = state.sshGateways?.workspace || {};
   const gatewayStatusMatchesWorkspace = gatewayStatus.workspaceId === selectedWorkspace?.id;
@@ -147,15 +150,18 @@ export function Topbar({
           disabled={busy}
           onRefresh={onRefresh}
           onSelectCanvas={onSelectCanvas}
-          onShowAutomations={onShowAutomations}
-          onShowLogs={onShowLogs}
-          onShowUpload={workspaceUnsupported ? null : onShowUpload}
-          onToggleGateway={onToggleGateway}
+          onShowAutomations={remoteWorkspace ? null : onShowAutomations}
+          onShowLogs={remoteWorkspace ? null : onShowLogs}
+          onShowUpload={workspaceUnsupported || remoteWorkspace ? null : onShowUpload}
+          onToggleGateway={remoteWorkspace ? null : onToggleGateway}
           showWorkspaceTools={showWorkspaceTools}
-          gatewayAvailable={gatewayAvailable}
+          gatewayAvailable={gatewayAvailable && !remoteWorkspace}
           gatewayEnabled={gatewayEnabled}
           gatewayLoading={gatewayStatusMatchesWorkspace && gatewayStatus.loading === true}
           gatewaySaving={gatewayStatusMatchesWorkspace && gatewayStatus.saving === true}
+          showGateway={!remoteWorkspace}
+          showAutomations={!remoteWorkspace}
+          showLogs={!remoteWorkspace}
           managePiAuthLabel={managePiAuthLabel}
           genericEnvironmentDisabled={state.piAuth?.loading || state.piAuth?.saving || !onOpenGenericEnvironment}
           googleWorkspaceDisabled={state.googleWorkspace?.loading || state.googleWorkspace?.saving || !onOpenGoogleWorkspace}
@@ -167,7 +173,7 @@ export function Topbar({
           onOpenMcpServers={onOpenMcpServers}
           onOpenRequestGrants={onOpenRequestGrants}
           onOpenPiAuthManage={onOpenPiAuthManage}
-          onOpenWorkspaceEditModal={onOpenWorkspaceEditModal}
+          onOpenWorkspaceEditModal={remoteWorkspace ? null : onOpenWorkspaceEditModal}
           onOpenWorkspaceModal={onOpenWorkspaceModal}
           selectedWorkspace={selectedWorkspace}
         />

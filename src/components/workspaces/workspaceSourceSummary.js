@@ -2,12 +2,16 @@ export function getWorkspaceTag(workspace) {
   const type = workspace?.source?.type || "blank";
   if (type === "github") return "GitHub";
   if (type === "ssh") return "Dev machine";
+  if (type === "remote-libvirt" || type === "remote-vm") return "Remote VM";
   return "Blank";
 }
 
 export function workspaceSourceSummary(workspace) {
   if (!workspace) return "";
   const source = workspace.source || {type: "blank"};
+  if (source.type === "remote-libvirt" || source.type === "remote-vm") {
+    return "Remote VM · pi-web-ui native terminal";
+  }
   if (source.type !== "github") {
     return "";
   }

@@ -59,8 +59,9 @@ Retained authenticated responsibilities are:
 - Mapache-owned credential selection, generic environment keys, workspace MCP,
   Google Workspace connections, and GitHub account/repository connections.
 - Owner-scoped remote host registration, trust verification and key revocation;
-  remote-libvirt guest lifecycle remains separately gated by the remote VM
-  child issues.
+  explicit `remote-libvirt` workspace creation validates a ready owner host and
+  persists the fixed guest runtime descriptor. Real-host admission remains
+  behind the #643 rollout gate.
 
 The embedded upstream application owns the agent protocol and its live files,
 Git, models, skills, extensions, subagents, and native Goals. Mapache does not

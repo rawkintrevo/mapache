@@ -152,6 +152,18 @@ async function createWithWorkspace(workspace, payload) {
   assert.strictEqual(marked.harnessId, "pi");
   assert.strictEqual(marked.capabilities.chrome, true);
   assert.strictEqual(marked.longRunning, false);
+  const remote = await createWithWorkspace({
+    ownerUid: "user-1",
+    agentUiVersion: AGENT_UI_VERSION,
+    bucket: "bucket",
+    storagePrefix: "workspaces/user-1/remote",
+    source: {type: "remote-libvirt"},
+    runtimeProvider: {version: 1, backend: "remote-libvirt", workspaceId: "workspace-1", ownerUid: "user-1", hostId: "host-1"},
+    mcpConfig: {},
+  }, {operationId: "remote-1", resources: {cpu: "1", memory: "2Gi"}});
+  assert.deepStrictEqual(remote.resources, {cpu: "2", memory: "8Gi"});
+  assert.equal(remote.runtimeProvider.backend, "remote-libvirt");
+  assert.equal(remote.capabilities.chrome, false);
   await assert.rejects(
       createWithWorkspace({
         ownerUid: "user-1",

@@ -3,6 +3,7 @@
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError} = require("./backendUtils.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
+const {REMOTE_LIBVIRT_BACKEND} = require("./runtimeProvider.helpers");
 
 const CONFIG_VERSION = 1;
 const MAX_DESCRIPTION_LENGTH = 1000;
@@ -31,6 +32,9 @@ function createMachineConfigurationService(dependencies = {}) {
       const workspace = snapshot.data() || {};
       if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
       if (workspace.deleted === true || workspace.lifecycle === "deleting") throw httpError(409, "workspace_deleted");
+      if (isRemoteWorkspace(workspace) && hasRemoteUnsupportedFields(payload)) {
+        throw httpError(409, "remote_vm_configuration_unsupported");
+      }
       const current = normalizeStoredConfiguration(workspace.machineConfig);
       if (payload.expectedVersion !== undefined && Number(payload.expectedVersion) !== current.desiredVersion) {
         throw httpError(409, "machine_configuration_conflict");
@@ -75,6 +79,15 @@ function createMachineConfigurationService(dependencies = {}) {
     if (workspace.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
     return workspace;
   }
+}
+
+function isRemoteWorkspace(workspace = {}) {
+  return workspace.runtimeProvider?.backend === REMOTE_LIBVIRT_BACKEND || workspace.source?.type === REMOTE_LIBVIRT_BACKEND;
+}
+
+function hasRemoteUnsupportedFields(payload = {}) {
+  return ["resources", "diskSizeGb", "idleStopMinutes", "gatewayId"].some((field) =>
+    Object.prototype.hasOwnProperty.call(payload, field));
 }
 
 async function hasActiveSession(transaction, workspaceRef) {

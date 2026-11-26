@@ -1,6 +1,7 @@
 import {Plus, X} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
 import {parseEnvText} from "../../utils/envText.js";
+import {isReadyRemoteHost} from "../../utils/workspaceProvider.js";
 import {Button} from "../common/Button.jsx";
 import {ModalBackdrop} from "./ModalBackdrop.jsx";
 
@@ -9,15 +10,20 @@ export function WorkspaceModal({
   onConnectGithub,
   onCreateWorkspace,
   onLoadConnectedRepos,
+  onLoadRemoteHosts,
   onShowRemoteHosts,
   repoPicker,
+  remoteHostState,
   environmentEntries = [],
 }) {
   const [sourceType, setSourceType] = useState("blank");
   const [manualRepoUrl, setManualRepoUrl] = useState("");
   const [selectedRepoKey, setSelectedRepoKey] = useState("");
   const isGithub = sourceType === "github";
+  const isRemoteVm = sourceType === "remote-libvirt";
   const repos = repoPicker && Array.isArray(repoPicker.repos) ? repoPicker.repos : [];
+  const remoteHosts = remoteHostState && Array.isArray(remoteHostState.hosts) ? remoteHostState.hosts : [];
+  const readyRemoteHost = remoteHosts.find(isReadyRemoteHost) || null;
   const selectedRepo = useMemo(
       () => repos.find((repo) => connectedRepoKey(repo) === selectedRepoKey) || null,
       [repos, selectedRepoKey],
@@ -28,6 +34,10 @@ export function WorkspaceModal({
       onLoadConnectedRepos();
     }
   }, [isGithub, onLoadConnectedRepos]);
+
+  useEffect(() => {
+    if (isRemoteVm && onLoadRemoteHosts) void onLoadRemoteHosts();
+  }, [isRemoteVm, onLoadRemoteHosts]);
 
   return (
     <ModalBackdrop onClose={onClose}>
@@ -45,7 +55,10 @@ export function WorkspaceModal({
             const formData = new FormData(event.currentTarget);
             const branch = formData.get("branch");
             const repoUrl = manualRepoUrl;
-            const source = selectedRepo ? {
+            const source = isRemoteVm ? {
+              type: "remote-libvirt",
+              hostId: readyRemoteHost?.id || readyRemoteHost?.hostId || "",
+            } : selectedRepo ? {
               type: "github",
               mode: "connected",
               installationId: selectedRepo.installationId,
@@ -73,7 +86,7 @@ export function WorkspaceModal({
           }}
         >
           <label><span>Workspace Name</span><input autoComplete="off" name="name" placeholder="default" required /></label>
-          <div className="workspace-source-choice">
+          <div aria-label="Workspace source" className="workspace-source-choice" role="radiogroup">
             <label className="source-choice">
               <input
                 checked={sourceType === "blank"}
@@ -96,6 +109,19 @@ export function WorkspaceModal({
                 onChange={() => setSourceType("github")}
               />
               <span>GitHub</span>
+            </label>
+            <label className="source-choice">
+              <input
+                checked={isRemoteVm}
+                name="workspaceSource"
+                type="radio"
+                value="remote-libvirt"
+                onChange={() => {
+                  setSourceType("remote-libvirt");
+                  setSelectedRepoKey("");
+                }}
+              />
+              <span>VM on remote machine</span>
             </label>
           </div>
           {isGithub ? (
@@ -161,19 +187,39 @@ export function WorkspaceModal({
               </label>
             </div>
           ) : null}
-          <div className="workspace-remote-host-callout">
+          {isRemoteVm ? (
+            <section aria-label="Remote VM settings" className="workspace-remote-vm-fields">
+              <div>
+                <strong>Remote VM resources</strong>
+                <p className="subtle">This first version uses a fixed 2 vCPU, 8 GiB RAM, and 40 GiB disk guest.</p>
+              </div>
+              <dl className="workspace-remote-vm-specs">
+                <div><dt>Host</dt><dd>{readyRemoteHost ? readyRemoteHost.displayName || readyRemoteHost.address : "No ready host"}</dd></div>
+                <div><dt>Guest</dt><dd>Ubuntu 24.04 · pi-web-ui</dd></div>
+                <div><dt>Resources</dt><dd>2 vCPU · 8 GiB RAM · 40 GiB disk</dd></div>
+              </dl>
+              {remoteHostState?.loading ? <p className="subtle" role="status">Loading remote host…</p> : null}
+              {!remoteHostState?.loading && !readyRemoteHost ? (
+                <div className="workspace-remote-host-warning" role="alert">
+                  <p>{remoteHosts.length ? "The configured host is not ready yet. Finish setup and verify its connection before creating a remote VM." : "Set up a remote host before creating a remote VM workspace."}</p>
+                  <Button type="button" variant="secondary" onClick={onShowRemoteHosts}>Set up remote host</Button>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+          {!isRemoteVm ? <div className="workspace-remote-host-callout">
             <div>
               <strong>Using a home machine?</strong>
               <p className="subtle">Set up its restricted SSH connection before choosing the remote VM workspace option.</p>
             </div>
             <Button type="button" variant="secondary" onClick={onShowRemoteHosts}>Set up remote host</Button>
-          </div>
+          </div> : null}
           <label>
             <span>Workspace env</span>
             <textarea name="env" placeholder={"FOO=workspace-value\nNODE_ENV=development"} rows={4} />
           </label>
           {environmentEntries.length ? <fieldset><legend>Saved generic environment keys</legend>{environmentEntries.map((entry) => <label className="checkbox-label" key={entry.id}><input name="environmentEntryId" type="checkbox" value={entry.id} /><span>{entry.label || entry.name} ({entry.name})</span></label>)}</fieldset> : null}
-          <Button type="submit">
+          <Button disabled={isRemoteVm && !readyRemoteHost} type="submit">
             <Plus aria-hidden="true" />
             Create Workspace
           </Button>

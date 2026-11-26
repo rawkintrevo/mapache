@@ -261,6 +261,26 @@ test("does not show the runtime policy editor for historical sessions", () => {
   expect(screen.queryByRole("group", {name: "Runtime policy"})).not.toBeInTheDocument();
 });
 
+test("hides deferred controls for remote VM workspaces while keeping power controls", async () => {
+  const user = userEvent.setup();
+  renderTopbar(
+      {id: "session-1", status: "running", agentUiVersion: "pi-web-ui-v1", capabilities: {terminal: true, chrome: true}},
+      null,
+      {source: {type: "remote-libvirt"}, runtimeProvider: {backend: "remote-libvirt"}},
+      {configured: true, canEnable: true},
+  );
+  expect(screen.queryByRole("group", {name: "Runtime policy"})).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", {name: "More workspace actions"}));
+  expect(screen.queryByRole("menuitem", {name: "Automations"})).not.toBeInTheDocument();
+  expect(screen.queryByRole("menuitem", {name: "Logs"})).not.toBeInTheDocument();
+  expect(screen.queryByRole("menuitem", {name: "Gateway: Off"})).not.toBeInTheDocument();
+  expect(screen.getByRole("menuitem", {name: "Upload file"})).toBeDisabled();
+  expect(screen.getByRole("menuitem", {name: "Edit workspace HubSpot"})).toBeDisabled();
+  await user.click(screen.getByRole("button", {name: "More workspace actions"}));
+  await user.click(screen.getByRole("button", {name: "Workspace power controls: running"}));
+  expect(screen.getByRole("menuitem", {name: "Stop workspace"})).toBeEnabled();
+});
+
 test("upload is available before starting a workspace and in the More menu", async () => {
   const user = userEvent.setup();
   const {onShowUpload} = renderTopbar();

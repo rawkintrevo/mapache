@@ -29,6 +29,9 @@ const {isMainRuntime} = require("./runtimePaths.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
 const {
   COMPUTE_ENGINE_BACKEND,
+  REMOTE_GUEST_MEMORY_MIB,
+  REMOTE_GUEST_VCPUS,
+  REMOTE_LIBVIRT_BACKEND,
   createRuntimeDescriptor,
 } = require("./runtimeProvider.helpers");
 
@@ -84,6 +87,9 @@ async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
     updatedAt: workspaceAdmin.firestore.FieldValue.serverTimestamp(),
   };
   if (payload && Object.prototype.hasOwnProperty.call(payload, "resources")) {
+    if (workspace.runtimeProvider?.backend === REMOTE_LIBVIRT_BACKEND || workspace.source?.type === REMOTE_LIBVIRT_BACKEND) {
+      throw httpError(409, "remote_vm_resources_fixed");
+    }
     try {
       update.resources = normalizeSessionResources(payload.resources || {});
     } catch (error) {
@@ -155,7 +161,10 @@ async function createWorkspace(uid, payload, dependencies = {}) {
   const source = await normalizeWorkspaceSourcePayload(uid, payload, dependencies);
   let resources;
   try {
-    resources = normalizeSessionResources(payload.resources || payload);
+    resources = source.type === REMOTE_LIBVIRT_BACKEND ? {
+      cpu: String(REMOTE_GUEST_VCPUS),
+      memory: `${REMOTE_GUEST_MEMORY_MIB / 1024}Gi`,
+    } : normalizeSessionResources(payload.resources || payload);
   } catch (error) {
     if (error && error.code === "invalid_session_resources") {
       throw httpError(400, error.code, error);
@@ -198,19 +207,23 @@ async function createWorkspace(uid, payload, dependencies = {}) {
     createdAt: now,
     updatedAt: now,
   };
-  const useComputeEngine = dependencies.runtimeProviderEnabled?.() === true;
-  if (useComputeEngine) {
+  const useComputeEngine = source.type !== REMOTE_LIBVIRT_BACKEND && dependencies.runtimeProviderEnabled?.() === true;
+  if (source.type === REMOTE_LIBVIRT_BACKEND) {
+    doc.runtimeBackend = REMOTE_LIBVIRT_BACKEND;
+    doc.runtimeProviderVersion = 1;
+  } else if (useComputeEngine) {
     doc.runtimeBackend = COMPUTE_ENGINE_BACKEND;
     doc.runtimeProviderVersion = 1;
   }
   const ref = await workspaceDb.collection("workspaces").add(doc);
-  if (useComputeEngine) {
+  if (source.type === REMOTE_LIBVIRT_BACKEND || useComputeEngine) {
     await ref.update({runtimeProvider: createRuntimeDescriptor({
-      backend: COMPUTE_ENGINE_BACKEND,
+      backend: source.type === REMOTE_LIBVIRT_BACKEND ? REMOTE_LIBVIRT_BACKEND : COMPUTE_ENGINE_BACKEND,
       workspaceId: ref.id,
       ownerUid: uid,
       region: process.env.SESSION_REGION || "us-central1",
       gateway: runtimeGatewayPayload(dependencies.runtimeGatewayBaseUrl?.()),
+      ...(source.type === REMOTE_LIBVIRT_BACKEND ? {hostId: source.hostId} : {}),
     })});
   }
   const snap = await ref.get();
@@ -253,6 +266,18 @@ async function normalizeWorkspaceSourcePayload(uid, payload, dependencies = {}) 
   }
   if (type === "ssh" || type === "dev-machine" || type === "dev-machine-backed") {
     throw httpError(400, "unsupported_workspace_source_type");
+  }
+  if (["remote-vm", "remote-libvirt", REMOTE_LIBVIRT_BACKEND].includes(type)) {
+    const hostId = cleanName(source.hostId || payload.hostId || "");
+    if (!hostId) throw httpError(400, "remote_host_required");
+    if (typeof dependencies.remoteHostService?.getRemoteHost !== "function") {
+      throw httpError(503, "remote_host_service_unavailable");
+    }
+    const host = await dependencies.remoteHostService.getRemoteHost(uid, hostId);
+    if (!host || (host.ready !== true && host.status !== "ready")) {
+      throw httpError(409, "remote_host_not_ready");
+    }
+    return {type: REMOTE_LIBVIRT_BACKEND, hostId};
   }
   if (type !== "github") {
     throw httpError(400, "unsupported_workspace_source_type");

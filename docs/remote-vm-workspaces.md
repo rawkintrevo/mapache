@@ -3,15 +3,17 @@
 This page defines the contract for the remote-libvirt workspace provider under
 #630. Host registration, the lifecycle adapter, the host helper, and the
 authenticated gateway are implemented behind explicit provider dispatch. Guest
-connection materialization is implemented below; the workspace-creation UI and
-real-host rollout remain separate children. Existing Cloud Run, Compute Engine,
-and retained SSH providers are unchanged.
+connection materialization is implemented below; the integrated workspace
+creation and lifecycle UI is now covered by child #642. The real-host rollout
+remains the separate #643 gate. Existing Cloud Run, Compute Engine, and
+retained SSH providers are unchanged.
 
 The host registry portion is implemented by `functions/remoteHost.service.js`
 and the authenticated API route composition in `functions/apiRouteManifest.js`,
 `functions/apiRoutes.helpers.js`, `functions/apiDispatch.helpers.js`, and
-`functions/apiHandlers.helpers.js`. It remains a registry-only capability until
-the bootstrap, guest, lifecycle and gateway children are complete.
+`functions/apiHandlers.helpers.js`. Workspace admission validates this
+owner-scoped registry and requires a ready host before creating a remote
+provider descriptor.
 
 The host bootstrap portion is implemented by the versioned pair
 `scripts/remote-vm-host/install.py` and `scripts/remote-vm-host/helper.py`.
@@ -27,13 +29,13 @@ one host in v1 and supports registration, copyable public-key/setup directions,
 readiness testing, explicit SSH fingerprint confirmation, retry after setup or
 connectivity failures, and safe removal. The controller fences requests by
 owner identity and clears state on sign-out. Workspace creation links to this
-surface, while the explicit remote VM provider option remains part of the
-follow-up workspace integration work.
+surface. The modal admits creation only when the owner-scoped host is ready and
+sends its stable `hostId`; setup and retry remain in the host surface.
 
 ## Product boundary
 
 The existing authenticated `/app` remains the entry point. Workspace creation
-will eventually offer `VM on remote machine` beside `Blank` and `GitHub`.
+offers `VM on remote machine` beside `Blank` and `GitHub`.
 Remote VM workspaces always start blank. They do not have GitHub workspace
 source metadata or managed clone/branch/commit behavior; a user can clone a
 repository from pi-web-ui's own terminal.
@@ -66,7 +68,7 @@ introduced with the implementation):
 | --- | --- | --- |
 | `remoteHosts/{hostId}` | `ownerUid`, display name, address, SSH port, managed username, pinned host-key fingerprint, setup version, readiness state, capacity snapshot, created/updated timestamps, removal tombstone | No private key or credential body in client DTOs. |
 | `users/{uid}/private/remoteHosts/{hostId}` | Host SSH private key reference, key version, revocation state and server-only secret metadata | Stored/read only by the backend secret boundary; never returned to browser, guest, logs or URLs. |
-| `workspaces/{workspaceId}` | Existing workspace fields plus `source.type=blank`, `runtimeProvider.backend=remote-libvirt`, `hostId`, fixed guest preset, provider state, desired/applied config versions and deletion tombstone | Only IDs and redacted status are public. |
+| `workspaces/{workspaceId}` | Existing workspace fields plus `source.type=remote-libvirt`, `source.hostId`, `runtimeProvider.backend=remote-libvirt`, fixed guest preset, provider state, desired/applied config versions and deletion tombstone | Only IDs and redacted status are public. |
 | `workspaces/{workspaceId}/sessions/{sessionId}` | Runtime generation, guest identity, access generation, tunnel route reference, lifecycle state and operation reference | Browser/session tokens are short-lived and audience-scoped. |
 | `remoteVmOperations/{operationId}` | UID, workspace/host IDs, operation kind, idempotency key, state, attempt, timestamps, worker lease, safe error code and provider generation | Never include private keys, raw SSH output or arbitrary command text. |
 | `remoteVmRoutes/{routeId}` | Owner/workspace/session IDs, host/guest target selected by the backend, runtime/access generation, expiry and gateway status | The browser receives a signed access URL, never a target address or forwarding authority. |
@@ -329,7 +331,7 @@ The v1 work is deliberately split so each ticket has one owner boundary:
 | #639 | Remote libvirt lifecycle, capacity reservation, idempotency and deletion |
 | #640 | Authenticated HTTP/WebSocket gateway and SSH relay/reconnect behavior |
 | #641 | Reuse of existing Pi auth, environment, MCP, Google and GitHub connections |
-| #642 | Existing `/app` workspace creation, list, lifecycle and capability UI |
+| #642 | Existing `/app` workspace creation, list, lifecycle and capability UI (implemented) |
 | #643 | Rollout gate, real-host QA, deployment, rollback and release evidence |
 
 Deferred policies, headed Chrome, custom resources, disk growth, multiple hosts,

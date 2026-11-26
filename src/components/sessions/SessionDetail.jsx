@@ -14,6 +14,7 @@ export function SessionDetail({
   session,
   workspaceId,
   access,
+  isRemoteWorkspace = false,
   onSelectCanvas,
 }) {
   const [localActiveCanvas, setLocalActiveCanvas] = useState(() => (
@@ -30,7 +31,7 @@ export function SessionDetail({
   const refreshAfterConnectionFailure = access?.refreshAfterConnectionFailure;
   const refreshAccess = access?.refresh;
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
-  const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
+  const hasBrowser = Boolean(!isRemoteWorkspace && capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
   const hasAgent = Boolean(hasRunnerUrl && accessUrls?.agentUrl);
   const shellUrl = deriveShellUrl(accessUrls?.terminalUrl);
   const hasShell = Boolean(hasRunnerUrl && session.status === "running" && shellUrl);
@@ -69,7 +70,7 @@ export function SessionDetail({
         />
       ) : null}
       {!isManagedAgentSurface ? <div className="canvas-header">
-        {(hasAgent || capabilities.chrome) ? (
+        {(hasAgent || (capabilities.chrome && !isRemoteWorkspace)) ? (
           <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
           <Button
             aria-selected={activeCanvas === "terminal"}
@@ -89,7 +90,7 @@ export function SessionDetail({
               Agent
             </Button>
           ) : null}
-          {capabilities.chrome ? (
+          {capabilities.chrome && !isRemoteWorkspace ? (
             <Button
               aria-selected={activeCanvas === "chrome"}
               disabled={!hasRunnerUrl}
@@ -129,6 +130,7 @@ export function SessionDetail({
           capabilities={capabilities}
           hasAgent={hasAgent}
           hasBrowser={hasBrowser}
+          isRemoteWorkspace={isRemoteWorkspace}
           onAccessRefreshNeeded={refreshAfterConnectionFailure}
           onSelectCanvas={setActiveCanvas}
           session={session}
@@ -171,7 +173,7 @@ export function SessionDetail({
             />
           </div>
         ) : null}
-        {activeCanvas === "chrome" && capabilities.chrome ? (
+        {activeCanvas === "chrome" && capabilities.chrome && !isRemoteWorkspace ? (
           hasBrowser ? (
             <BrowserCanvas sessionName={session.name} url={accessUrls.browserUrl} />
           ) : (
