@@ -18,7 +18,9 @@ deletes the VM and its auto-delete boot disk, while the data disk remains
 attached to no writer. A replacement creates a new boot disk and VM, verifies
 the data-disk identity, and attaches that same disk read/write. A workspace
 never silently changes from a stored VM provider back to a stale Cloud Run
-checkpoint.
+checkpoint. Once the provider deletion succeeds, the common session lifecycle
+also publishes the stopped state so the UI and schedulers do not retain a
+transient stopping status.
 
 The default region is `us-central1`; the initial proof zone is `us-central1-a`.
 The initial machine preset is `e2-standard-2`, with a `pd-balanced` data disk
@@ -96,7 +98,10 @@ no public runner, Chrome, terminal, or debug port. The gateway authorizes the
 Firebase owner/access policy and the current runtime generation before routing;
 stale cookies and old generations are rejected. VM IP changes and replacement
 are handled by updating the backend-owned gateway target and reconnecting with
-fresh access material.
+fresh access material. Workspace and session creation resolve that origin from
+the explicit runtime gateway setting or the first non-recovery host in
+`VM_WORKSPACE_GATEWAY_HOSTS`; recovery-only hosts are never persisted as a
+runtime target.
 
 The Compute Engine runtime identity is
 `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`. It receives only the
@@ -106,7 +111,12 @@ owns provisioning and requires `roles/iam.serviceAccountUser` on the runner
 identity. The runner cannot create/delete arbitrary Compute Engine resources or
 read another workspace's disk. Every instance and disk carries immutable
 `mapache-owner-uid`, `mapache-workspace-id`, `mapache-operation-id`, and
-`mapache-runtime-provider` labels; cleanup refuses foreign labels.
+`mapache-runtime-provider` labels; cleanup refuses foreign labels. Compute
+Engine label values are deterministic lowercase-safe projections of the full
+owner/workspace/operation identifiers (with a bounded hash suffix when needed);
+the full identifiers remain authoritative in Firestore, the disk marker and
+instance metadata. This keeps Firebase's mixed-case workspace IDs valid for
+Compute Engine without weakening ownership checks.
 
 The canonical health contract remains `/runner/health`, with a functional
 agent/readiness check in addition to HTTP readiness. No alternate health path

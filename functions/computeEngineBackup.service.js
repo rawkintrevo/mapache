@@ -2,6 +2,7 @@
 
 const {GoogleAuth} = require("google-auth-library");
 const {COMPUTE_ENGINE_BACKEND, normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
+const {normalizeComputeEngineLabelValue} = require("./computeEngineLabels.helpers");
 
 function createComputeEngineBackupService(dependencies = {}) {
   const auth = dependencies.auth || new GoogleAuth({scopes: ["https://www.googleapis.com/auth/cloud-platform"]});
@@ -67,16 +68,18 @@ function createComputeEngineBackupService(dependencies = {}) {
   function diskUrl(descriptor) { return `${zoneUrl(descriptor)}/disks/${encodeURIComponent(descriptor.dataDiskName)}`; }
   function labels(descriptor, operationId, retentionDays) {
     return {
-      "mapache-owner-uid": descriptor.ownerUid,
-      "mapache-workspace-id": descriptor.workspaceId,
+      "mapache-owner-uid": normalizeComputeEngineLabelValue(descriptor.ownerUid),
+      "mapache-workspace-id": normalizeComputeEngineLabelValue(descriptor.workspaceId),
       "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND,
-      "mapache-operation-id": String(operationId || "snapshot"),
-      "mapache-retention-days": String(retentionDays || 14),
+      "mapache-operation-id": normalizeComputeEngineLabelValue(operationId || "snapshot"),
+      "mapache-retention-days": normalizeComputeEngineLabelValue(retentionDays || 14),
     };
   }
   function assertOwnership(resource, descriptor) {
     const actual = resource?.labels || {};
-    if (actual["mapache-owner-uid"] !== descriptor.ownerUid || actual["mapache-workspace-id"] !== descriptor.workspaceId || actual["mapache-runtime-provider"] !== COMPUTE_ENGINE_BACKEND) {
+    if (actual["mapache-owner-uid"] !== normalizeComputeEngineLabelValue(descriptor.ownerUid) ||
+        actual["mapache-workspace-id"] !== normalizeComputeEngineLabelValue(descriptor.workspaceId) ||
+        actual["mapache-runtime-provider"] !== COMPUTE_ENGINE_BACKEND) {
       const error = new Error("runtime_resource_ownership_mismatch");
       error.code = "runtime_resource_ownership_mismatch";
       throw error;

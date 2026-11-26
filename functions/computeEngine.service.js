@@ -1,7 +1,9 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const {GoogleAuth} = require("google-auth-library");
 const {COMPUTE_ENGINE_BACKEND, normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
+const {normalizeComputeEngineLabelValue} = require("./computeEngineLabels.helpers");
 
 const COMPUTE_API = "https://compute.googleapis.com/compute/v1";
 const DEFAULT_MACHINE_TYPE = "e2-standard-2";
@@ -169,7 +171,7 @@ function createComputeEngineService(dependencies = {}) {
     const response = await requestImpl({
       url: `${zoneUrl(descriptor)}/disks`,
       method: "POST",
-      params: {requestId: operationId(options.operationId || descriptor.workspaceId)},
+      params: {requestId: computeRequestId(options.operationId || descriptor.workspaceId, "disk")},
       data: {
         name: descriptor.dataDiskName,
         sizeGb,
@@ -206,7 +208,7 @@ function createComputeEngineService(dependencies = {}) {
     const response = await requestImpl({
       url: `${zoneUrl(descriptor)}/instances`,
       method: "POST",
-      params: {requestId: operationId(options.operationId || descriptor.workspaceId)},
+      params: {requestId: computeRequestId(options.operationId || descriptor.workspaceId, "instance")},
       data: instanceBody(descriptor, disk, {...options, allowNewDisk: disk._mapacheCreated === true}),
     });
     await waitForOperation(response.data, descriptor, options);
@@ -234,7 +236,7 @@ function createComputeEngineService(dependencies = {}) {
   }
 
   async function deleteResource(url, options = {}, descriptor = null) {
-    const response = await requestImpl({url, method: "DELETE", params: {requestId: operationId(options.operationId || "delete")}});
+    const response = await requestImpl({url, method: "DELETE", params: {requestId: computeRequestId(options.operationId || "delete", "delete")}});
     await waitForOperation(response.data, descriptor, options);
   }
 
@@ -347,22 +349,34 @@ function createComputeEngineService(dependencies = {}) {
 
   function ownershipLabels(descriptor, options = {}) {
     return {
-      "mapache-owner-uid": descriptor.ownerUid,
-      "mapache-workspace-id": descriptor.workspaceId,
-      "mapache-operation-id": String(options.operationId || descriptor.generation),
+      "mapache-owner-uid": normalizeComputeEngineLabelValue(descriptor.ownerUid),
+      "mapache-workspace-id": normalizeComputeEngineLabelValue(descriptor.workspaceId),
+      "mapache-operation-id": normalizeComputeEngineLabelValue(options.operationId || descriptor.generation),
       "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND,
     };
   }
 
   function assertOwnership(resource, descriptor) {
     const labels = resource?.labels || {};
-    if (labels["mapache-owner-uid"] !== descriptor.ownerUid || labels["mapache-workspace-id"] !== descriptor.workspaceId || labels["mapache-runtime-provider"] !== COMPUTE_ENGINE_BACKEND) {
+    if (labels["mapache-owner-uid"] !== normalizeComputeEngineLabelValue(descriptor.ownerUid) ||
+        labels["mapache-workspace-id"] !== normalizeComputeEngineLabelValue(descriptor.workspaceId) ||
+        labels["mapache-runtime-provider"] !== COMPUTE_ENGINE_BACKEND) {
       throw computeError("runtime_resource_ownership_mismatch", "Compute resource ownership labels do not match the admitted workspace");
     }
   }
 
   function operationId(value) {
     return String(value || "operation").replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 64) || "operation";
+  }
+
+  function computeRequestId(value, phase) {
+    const digest = crypto.createHash("sha256")
+        .update(`${String(value || "operation")}::${String(phase || "request")}`)
+        .digest();
+    digest[6] = (digest[6] & 0x0f) | 0x50;
+    digest[8] = (digest[8] & 0x3f) | 0x80;
+    const hex = digest.toString("hex");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
   }
 
   function shellQuote(value) {
