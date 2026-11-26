@@ -68,7 +68,9 @@ def inspect_guest(guest_id, *, runner=subprocess.run):
         return {"version": VERSION, "network": NETWORK, "guestName": guest_id,
                 "diskName": f"{guest_id}.qcow2", "exists": False, "state": "stopped",
                 "guestIp": None, "autostart": False}
-    addresses = virsh_optional("domifaddr", guest_id, "--source", "agent", runner=runner)
+    # The image has no QEMU guest agent; the managed NAT network provides
+    # DHCP leases that libvirt can inspect without guest-installed software.
+    addresses = virsh_optional("domifaddr", guest_id, "--source", "lease", runner=runner)
     ip_match = re.search(r"\b(192\.168\.250\.(?:[2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4]))/", getattr(addresses, "stdout", "") or "")
     autostart = re.search(r"^Autostart:\s+enable", getattr(info, "stdout", "") or "", re.MULTILINE) is not None
     return {"version": VERSION, "network": NETWORK, "guestName": guest_id,
@@ -92,7 +94,6 @@ def guest_xml(guest_id):
     <disk type="file" device="disk"><driver name="qemu" type="qcow2"/><source file="{disk}"/><target dev="vda" bus="virtio"/></disk>
     <interface type="network"><source network="{NETWORK}"/><model type="virtio"/></interface>
     <console type="pty"><target type="serial" port="0"/></console>
-    <graphics type="none"/>
   </devices>
 </domain>\n'''
 
