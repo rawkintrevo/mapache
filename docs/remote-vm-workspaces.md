@@ -16,7 +16,8 @@ owner-scoped registry and requires a ready host before creating a remote
 provider descriptor.
 
 The host bootstrap portion is implemented by the versioned pair
-`scripts/remote-vm-host/install.py` and `scripts/remote-vm-host/helper.py`.
+`scripts/remote-vm-host/install.py` and `scripts/remote-vm-host/helper.py`, with
+the seed renderer in `scripts/remote-vm-host/mapache_guest_config.py`.
 The installer supports Ubuntu 22.04 and 24.04, writes only files carrying the
 Mapache marker (or the exact managed libvirt network definition), and reports
 readiness with `--check-only --json`. It refuses an unmanaged account, helper,
@@ -229,7 +230,7 @@ secret-store authority. Keep the gateway host in the
 The backend generates a dedicated SSH keypair for each owner/host registration.
 The UI shows only the public key and a one-time, inspectable `sudo` setup
 command. The user downloads the matching `scripts/remote-vm-host/install.py`
-and `helper.py`, inspects them, and runs
+with `helper.py` and `mapache_guest_config.py`, inspects them, and runs
 `sudo python3 install.py --public-key ./mapache-remote-host.pub`. The user then
 explicitly verifies the host fingerprint. The helper account may manage
 only Mapache-owned libvirt guests, disks and the private NAT network; it is not
@@ -271,6 +272,28 @@ runner health path remains `/runner/health`; `/healthz` is not an alias or
 fallback.
 
 ### Versioned guest image (child #638)
+
+Before starting a guest, the lifecycle worker reads the owning session and
+constructs an allowlisted configuration in `remoteVmGuestConfig.helpers.js`.
+Only the session ID, owner/workspace identity, generation/boot identity,
+browser/shutdown secrets, and the fixed credential broker URL are included.
+The configuration travels over SSH stdin, never command arguments or operation
+records. The `configure` helper refuses a running VM and uses `cloud-localds`
+to atomically install a mode-0640 NoCloud seed ISO beside the disk. An opaque
+configuration hash makes retries idempotent. Changing configuration on a live
+guest first stops it; the retained filesystem is preserved.
+
+Cloud-init installs a root-only `guest.env` and a network setup unit that
+selects the private DHCP address on each boot before starting the runner on
+port 8787. A new configuration changes cloud-init's instance ID. Host startup
+waits for a DHCP lease, and the worker verifies the configured identity before
+marking the guest running. The broker continues to require the session's
+running state, generation, and boot identity. Host deletion removes seed,
+configuration marker, and disk even after an interrupted domain undefine.
+Reinstall all three host scripts and use the updated guest bootstrap that
+accepts the full managed address range. Deploy API and both provisioning and
+remote-operation workers together; existing Cloud Run runners do not need
+new revisions. Live guest boot and broker readiness remain the rollout gate.
 
 The checked-in `scripts/remote-vm-guest/manifest.json` defines guest image
 `ubuntu-24.04-v1`: Ubuntu 24.04 LTS amd64, 2 vCPU, 8192 MiB RAM, and a 40 GiB
@@ -398,6 +421,12 @@ payload's relocated module directory and excludes ssh2's test fixtures.
 The builder uses `virt-resize` to expand the pinned image's root partition
 and filesystem before installing the payload, and creates all durable
 directories before systemd enters the runtime working directory.
+It reinstalls BIOS GRUB and regenerates the menu after resizing: GPT partition
+renumbering otherwise leaves an obsolete GRUB prefix and stops at rescue mode.
+The v1 image masks unused Snap services so network-dependent Snap seeding cannot
+block cloud-final. The runner retries startup every five seconds without a
+systemd start-rate cutoff, allowing the credential broker and session state to
+become available after guest boot.
 The image validator rejects saved credential filenames and private-key
 material while allowing dependency source filenames and documentation that
 only illustrate key headers. With Snap Docker, extract into a non-hidden

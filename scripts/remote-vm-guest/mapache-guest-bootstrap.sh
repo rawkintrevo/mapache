@@ -50,7 +50,7 @@ if [[ "${RUNNER_BIND_HOST}" == "private-guest-interface" ]]; then
   echo "lifecycle worker must provide the private guest address" >&2
   exit 78
 fi
-if [[ ! "${RUNNER_BIND_HOST}" =~ ^192\.168\.250\.(2|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9])$ ]]; then
+if [[ ! "${RUNNER_BIND_HOST}" =~ ^192\.168\.250\.([2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])$ ]]; then
   echo "guest runtime must bind to the managed private network" >&2
   exit 78
 fi

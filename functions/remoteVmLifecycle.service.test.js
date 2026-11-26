@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {createRemoteVmLifecycleService} = require("./remoteVmLifecycle.service");
+const {guestConfigurationId} = require("./remoteVmGuestConfig.helpers");
 const {createRuntimeDescriptor, REMOTE_LIBVIRT_BACKEND} = require("./runtimeProvider.helpers");
 
 class Snapshot {
@@ -71,7 +72,8 @@ function fixture() {
     hostId: "host-1",
   });
   const workspace = {id: "workspace-1", ownerUid: "owner-1", runtimeProvider: descriptor};
-  const session = {workspaceId: "workspace-1", ownerUid: "owner-1", runtimeProvider: descriptor, status: "provisioning"};
+  const session = {workspaceId: "workspace-1", ownerUid: "owner-1", runtimeProvider: descriptor, status: "provisioning",
+    browserAccessTokenSecret: "a".repeat(64), shutdownToken: "b".repeat(48)};
   const host = {
     ownerUid: "owner-1", hostId: "host-1", status: "ready", ready: true,
     capacity: {cpuCount: 8, memoryBytes: 32 * 1024 ** 3, freeDiskBytes: 200 * 1024 ** 3},
@@ -83,6 +85,7 @@ function fixture() {
 async function seed(fixtureValue) {
   const {db, workspace, host, privateKey} = fixtureValue;
   await db.collection("workspaces").doc(workspace.id).set(workspace);
+  await db.collection("workspaces").doc(workspace.id).collection("sessions").doc("session-1").set(fixtureValue.session);
   await db.collection("remoteHosts").doc(host.hostId).set(host);
   await db.collection("users").doc("owner-1").collection("private").doc("remoteHosts")
       .collection("entries").doc("host-1").set(privateKey);
@@ -91,7 +94,7 @@ async function seed(fixtureValue) {
 function fakeHost(behavior = {}) {
   const guests = new Map();
   const calls = [];
-  const operation = async ({action, guest}) => {
+  const operation = async ({action, guest, configuration}) => {
     calls.push(action);
     if (behavior[action]) return behavior[action]({action, guest, guests, calls});
     const current = guests.get(guest.guestName) || {exists: false, state: "stopped"};
@@ -101,12 +104,17 @@ function fakeHost(behavior = {}) {
       return {exists: true, state: "stopped", guestName: guest.guestName, diskName: guest.diskName};
     }
     if (action === "start") {
-      guests.set(guest.guestName, {exists: true, state: "running", guestIp: "192.168.250.42"});
-      return {exists: true, state: "running", guestIp: "192.168.250.42", guestName: guest.guestName, diskName: guest.diskName};
+      guests.set(guest.guestName, {...current, exists: true, state: "running", guestIp: "192.168.250.42"});
+      return {...guests.get(guest.guestName), guestName: guest.guestName, diskName: guest.diskName};
+    }
+    if (action === "configure") {
+      assert.equal(current.state, "stopped");
+      guests.set(guest.guestName, {...current, configurationId: guestConfigurationId(configuration)});
+      return {...guests.get(guest.guestName), guestName: guest.guestName, diskName: guest.diskName};
     }
     if (action === "stop") {
-      guests.set(guest.guestName, {exists: true, state: "stopped"});
-      return {exists: true, state: "stopped", guestName: guest.guestName, diskName: guest.diskName};
+      guests.set(guest.guestName, {...current, exists: true, state: "stopped"});
+      return {...guests.get(guest.guestName), guestName: guest.guestName, diskName: guest.diskName};
     }
     if (action === "destroy") {
       guests.delete(guest.guestName);
@@ -129,8 +137,25 @@ test("duplicate start requests converge on one retained guest and reservation", 
   assert.equal(host.guests.get(fixtureValue.descriptor.guestName).state, "running");
   assert.equal(host.calls.filter((action) => action === "start").length, 1);
   assert.equal(host.calls.filter((action) => action === "create").length, 1);
+  assert.deepEqual(host.calls.slice(0, 4), ["inspect", "create", "configure", "start"]);
+  const savedSession = (await fixtureValue.db.collection("workspaces").doc("workspace-1").collection("sessions").doc("session-1").get()).data();
+  assert.equal(savedSession.agentRuntimeBootInstanceId, first.bootId);
+  const savedOperation = (await fixtureValue.db.collection("remoteVmOperations").doc(first.id).get()).data();
+  assert.equal(JSON.stringify(savedOperation).includes(fixtureValue.session.browserAccessTokenSecret), false);
   const savedHost = (await fixtureValue.db.collection("remoteHosts").doc("host-1").get()).data();
   assert.equal(savedHost.remoteVmReservations.entries.length, 1);
+});
+
+test("wrong-owner session cannot configure a guest", async () => {
+  const fixtureValue = fixture();
+  await seed(fixtureValue);
+  await fixtureValue.db.collection("workspaces").doc("workspace-1").collection("sessions").doc("session-1").update({ownerUid: "another-owner"});
+  const host = fakeHost();
+  const service = createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: host.operation});
+  await assert.rejects(service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "wrong-session"}), /remote_vm_session_invalid/);
+  assert.deepEqual(host.calls, []);
+  const workspace = (await fixtureValue.db.collection("workspaces").doc("workspace-1").get()).data();
+  assert.equal(workspace.runtimeProviderState, "error");
 });
 
 test("stop releases capacity and resume starts the same guest and disk", async () => {
@@ -182,14 +207,14 @@ test("lost SSH response reconciles by inspecting the owned guest", async () => {
   let lost = true;
   const host = fakeHost({
     start: ({guest, guests}) => {
-      guests.set(guest.guestName, {exists: true, state: "running", guestIp: "192.168.250.42"});
+      guests.set(guest.guestName, {...guests.get(guest.guestName), exists: true, state: "running", guestIp: "192.168.250.42"});
       if (lost) {
         lost = false;
         const error = new Error("response lost");
         error.code = "remote_vm_response_lost";
         throw error;
       }
-      return {exists: true, state: "running", guestIp: "192.168.250.42", guestName: guest.guestName, diskName: guest.diskName};
+      return {...guests.get(guest.guestName), guestName: guest.guestName, diskName: guest.diskName};
     },
   });
   const service = createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: host.operation});

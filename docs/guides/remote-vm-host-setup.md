@@ -9,15 +9,15 @@ your personal private key.
 
 1. Register the host in Mapache and save the generated public key as
    `mapache-remote-host.pub`.
-2. Download `install.py` and `helper.py` from the same Mapache release. Inspect
-   both files and verify their release checksum before running them.
+2. Download `install.py`, `helper.py`, and `mapache_guest_config.py` from the
+   same Mapache release. Inspect the files and verify their release checksums.
 3. Verify the host's SSH fingerprint through an independent channel. The
    installer reports the same fingerprint from
    `/etc/ssh/ssh_host_ed25519_key.pub`.
 
 ## Install
 
-Run this command from the directory containing both scripts and the public key:
+Run this command from the directory containing the scripts and the public key:
 
 ```bash
 sudo python3 install.py --public-key ./mapache-remote-host.pub
@@ -29,6 +29,9 @@ command helper, creates the private `mapache-vm` NAT network, and configures the
 managed storage directory. It validates `sshd` before reloading it. It does
 not flush the host firewall, restart unrelated guests, replace an existing
 network definition, or overwrite an unmanaged account/configuration.
+It also installs `cloud-image-utils` for private cloud-init seed disks. Each
+workspace seed contains only its own session settings and access tokens; treat
+it as sensitive alongside the retained workspace disk. Deletion removes both.
 
 The generated account uses the restricted helper as its login shell, with no
 interactive shell or arbitrary command evaluation. Its key can run only the

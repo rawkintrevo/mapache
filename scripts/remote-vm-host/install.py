@@ -32,7 +32,7 @@ NETWORK_CIDR = "192.168.250.0/24"
 NETWORK_GATEWAY = "192.168.250.1"
 ALLOWED_PACKAGES = (
     "qemu-kvm", "libvirt-daemon-system", "libvirt-clients", "qemu-utils",
-    "dnsmasq-base", "openssh-server", "nftables", "python3",
+    "dnsmasq-base", "openssh-server", "nftables", "python3", "cloud-image-utils",
 )
 
 
@@ -132,7 +132,7 @@ def service_active(service, runner=run):
 
 def readiness(*, runner=run, os_release=None, root=Path("/")):
     os_release = os_release or read_os_release(root / "etc/os-release")
-    required = ["virsh", "qemu-img", "ssh-keygen", "sshd", "systemctl", "useradd"]
+    required = ["virsh", "qemu-img", "cloud-localds", "ssh-keygen", "sshd", "systemctl", "useradd"]
     command_state = {command: command_available(command) for command in required}
     kvm = Path("/dev/kvm").exists()
     libvirt = service_active("libvirtd", runner) or service_active("virtqemud", runner)
@@ -246,6 +246,9 @@ def install(public_key, *, runner=run, dry_run=False):
     ensure_packages(runner=runner)
     CONFIG_DIR.mkdir(mode=0o755, exist_ok=True)
     ensure_managed_file(HELPER_PATH, helper_source(), 0o755, "Forced-command boundary")
+    ensure_managed_file(HELPER_PATH.with_name("mapache_guest_config.py"),
+                        Path(__file__).with_name("mapache_guest_config.py").read_text(),
+                        0o644, "Managed guest configuration")
     ensure_user(runner=runner)
     marker = CONFIG_DIR / "managed-account"
     marker.write_text(f"mapache-vm installer version {INSTALL_VERSION}\n")

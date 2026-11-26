@@ -10,6 +10,8 @@ import tempfile
 import subprocess
 import os
 import shutil
+import io
+import json
 from contextlib import ExitStack
 from functools import partial
 
@@ -29,6 +31,26 @@ installer = load("install")
 
 
 class HostToolTests(unittest.TestCase):
+    def test_configure_refuses_live_guest_and_bounds_stdin(self):
+        from test_guest_config import configuration
+        stream = SimpleNamespace(buffer=io.BytesIO(json.dumps(configuration()).encode()))
+        with patch.object(helper.sys, "stdin", stream), patch.object(helper, "inspect_guest", return_value={"exists": True, "state": "running"}), patch.object(helper, "write_seed") as writer:
+            with self.assertRaisesRegex(ValueError, "stop the managed"):
+                helper.handle(["configure", "mapache-ws-test"])
+            writer.assert_not_called()
+        stream = SimpleNamespace(buffer=io.BytesIO(b"x" * (helper.MAX_CONFIG_BYTES + 1)))
+        with patch.object(helper.sys, "stdin", stream), patch.object(helper, "write_seed") as writer:
+            with self.assertRaisesRegex(ValueError, "too large"):
+                helper.handle(["configure", "mapache-ws-test"])
+            writer.assert_not_called()
+
+    def test_destroy_removes_orphan_seed_and_disk_after_domain_is_absent(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(helper, "DISK_DIR", Path(directory)), patch.object(helper, "inspect_guest", return_value={"exists": False, "state": "stopped"}):
+            for suffix in ("qcow2", "seed.iso", "config-id"):
+                (Path(directory) / f"mapache-ws-test.{suffix}").write_text("test")
+            helper.handle(["destroy", "mapache-ws-test"])
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
     @unittest.skipUnless(shutil.which("virt-xml-validate"), "libvirt schema validator is not installed")
     def test_generated_guest_matches_installed_libvirt_domain_schema(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -41,7 +63,7 @@ class HostToolTests(unittest.TestCase):
         for active, readable, expected in [(False, True, False), (True, False, False), (True, True, True)]:
             def runner(command, **kwargs):
                 return SimpleNamespace(returncode=0, stdout=f"Active: {'yes' if active else 'no'}\n")
-            with patch.object(helper.os, "access", return_value=readable), patch.object(helper.Path, "exists", return_value=True):
+            with patch.object(helper.os, "access", return_value=readable), patch.object(helper.Path, "exists", return_value=True), patch.object(helper.shutil, "which", return_value="/usr/bin/cloud-localds"):
                 self.assertEqual(helper.handle(["status"], runner=runner)["ready"], expected)
 
     def test_install_creates_readable_public_key_and_restricted_account(self):

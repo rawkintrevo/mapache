@@ -6,10 +6,12 @@ import os
 from pathlib import Path
 import re
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
+from mapache_guest_config import MAX_CONFIG_BYTES, configuration_id, write_seed
 
 VERSION = "1"
 APP_PREFIX = "mapache-ws-"
@@ -23,7 +25,7 @@ IMAGE_PATH = IMAGE_DIR / f"{IMAGE_VERSION}.qcow2"
 DISK_SIZE = "40G"
 VCPUS = 2
 MEMORY_MIB = 8192
-ALLOWED_ACTIONS = {"status", "capacity", "inspect", "create", "start", "stop", "destroy", "forward"}
+ALLOWED_ACTIONS = {"status", "capacity", "inspect", "create", "configure", "start", "stop", "destroy", "forward"}
 ID_PATTERN = re.compile(r"^mapache-ws-[a-z0-9][a-z0-9-]{0,62}$")
 
 
@@ -73,10 +75,13 @@ def inspect_guest(guest_id, *, runner=subprocess.run):
     addresses = virsh_optional("domifaddr", guest_id, "--source", "lease", runner=runner)
     ip_match = re.search(r"\b(192\.168\.250\.(?:[2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4]))/", getattr(addresses, "stdout", "") or "")
     autostart = re.search(r"^Autostart:\s+enable", getattr(info, "stdout", "") or "", re.MULTILINE) is not None
+    marker = DISK_DIR / f"{guest_id}.config-id"
+    config_id = marker.read_text().strip() if marker.is_file() and (DISK_DIR / f"{guest_id}.seed.iso").is_file() else None
     return {"version": VERSION, "network": NETWORK, "guestName": guest_id,
             "diskName": f"{guest_id}.qcow2", "exists": True,
             "state": parse_state(getattr(info, "stdout", "")),
-            "guestIp": ip_match.group(1) if ip_match else None, "autostart": autostart}
+            "guestIp": ip_match.group(1) if ip_match else None, "autostart": autostart,
+            "configurationId": config_id}
 
 
 def guest_xml(guest_id):
@@ -92,6 +97,7 @@ def guest_xml(guest_id):
   <features><acpi/><apic/></features>
   <devices>
     <disk type="file" device="disk"><driver name="qemu" type="qcow2"/><source file="{disk}"/><target dev="vda" bus="virtio"/></disk>
+    <disk type="file" device="cdrom"><driver name="qemu" type="raw"/><source file="{DISK_DIR / (guest_id + '.seed.iso')}"/><target dev="sda" bus="sata"/><readonly/></disk>
     <interface type="network"><source network="{NETWORK}"/><model type="virtio"/></interface>
     <console type="pty"><target type="serial" port="0"/></console>
   </devices>
@@ -126,7 +132,15 @@ def mutate_guest(action, guest_id, *, runner=subprocess.run):
         if not observed["exists"]:
             observed = create_guest(guest_id, runner=runner)
         if observed["state"] != "running":
+            if not (DISK_DIR / f"{guest_id}.seed.iso").is_file():
+                raise ValueError("managed guest configuration is missing")
             runner(["virsh", "-c", "qemu:///system", "start", guest_id], check=True, text=True, capture_output=True)
+        for _ in range(30):
+            observed = inspect_guest(guest_id, runner=runner)
+            if observed.get("guestIp"):
+                return observed
+            time.sleep(1)
+        raise ValueError("managed guest DHCP address is not ready")
     elif action == "stop":
         if not observed["exists"]:
             raise ValueError("managed guest does not exist")
@@ -145,6 +159,8 @@ def mutate_guest(action, guest_id, *, runner=subprocess.run):
         disk = DISK_DIR / f"{guest_id}.qcow2"
         if disk.exists():
             disk.unlink()
+        for suffix in ("seed.iso", "config-id"):
+            (DISK_DIR / f"{guest_id}.{suffix}").unlink(missing_ok=True)
         return inspect_guest(guest_id, runner=runner)
     return inspect_guest(guest_id, runner=runner)
 
@@ -182,7 +198,8 @@ def handle(arguments, *, runner=subprocess.run):
         network_ready = network.returncode == 0 and bool(re.search(
             r"^Active:\s+yes\s*$", network.stdout or "", re.MULTILINE))
         return {"version": VERSION, "network": NETWORK, "guestId": None,
-                "ready": bool(network_ready and Path("/dev/kvm").exists() and os.access(IMAGE_PATH, os.R_OK)),
+                "ready": bool(network_ready and Path("/dev/kvm").exists() and os.access(IMAGE_PATH, os.R_OK)
+                              and shutil.which("cloud-localds")),
                 "virsh": result.stdout[-12000:]}
     if action == "inspect":
         if not guest_id:
@@ -190,6 +207,24 @@ def handle(arguments, *, runner=subprocess.run):
         return inspect_guest(guest_id, runner=runner)
     if action == "create":
         return create_guest(guest_id, runner=runner)
+    if action == "configure":
+        raw = sys.stdin.buffer.read(MAX_CONFIG_BYTES + 1)
+        if len(raw) > MAX_CONFIG_BYTES:
+            raise ValueError("guest configuration is too large")
+        try:
+            config = json.loads(raw)
+        except (ValueError, UnicodeDecodeError):
+            raise ValueError("guest configuration is invalid") from None
+        identity = configuration_id(config)
+        observed = inspect_guest(guest_id, runner=runner)
+        if not observed["exists"]:
+            raise ValueError("managed guest does not exist")
+        if observed.get("configurationId") == identity:
+            return observed
+        if observed["state"] != "stopped":
+            raise ValueError("stop the managed guest before changing configuration")
+        write_seed(guest_id, config, DISK_DIR, runner=runner)
+        return inspect_guest(guest_id, runner=runner)
     return mutate_guest(action, guest_id, runner=runner)
 
 
