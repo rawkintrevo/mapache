@@ -56,6 +56,27 @@ The accounting patch passes 29 tests across `core-engine-connect.test.ts`,
 Coverage uses the actual core engine/registry with synthetic SDK events,
 including retries, reconnects, per-session tool IDs, transfer, and disposal.
 
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-drain.patch` applies
+after those two inactive components. It introduces a bounded drain through the
+real core/client assembly. Pending attachments settle before interrupted-run
+state is recorded and stop requests are issued. Concurrent drain callers share
+one promise. Stop failures, unreadable state, active writers, and hung adapters
+fail closed. A failed drain requires process restart before unquiescing because
+late stop operations may still be outstanding. Terminal and bash drain helpers
+retain their records until termination can be observed rather than clearing the
+records when sending a stop request. New goal, background, bot, and native CLI
+work is gated during drain; the terminal dispatcher can inspect the same gate.
+
+This is **not yet a complete shutdown integration**. Instantiated native Goal
+and background hosts without their new `quiesce` capability explicitly fail
+the drain. Their pause/persistence and verified process-stop implementations,
+automation/request admission, and full runtime validation remain required.
+Do not activate the patch set while those adapters are missing. The component
+passes 50 focused drain/core/terminal/bash/interrupted-run tests, the generated
+dispatch-surface tests, and full upstream typecheck. Tests cover delayed and
+hung SDK aborts, attachment races, retry sharing, terminal stop failure, late
+rejection handling, and refusal of unsupported background drain.
+
 The remaining migration must preserve these contracts at their current owners:
 
 | Contract | v0.123 owner / required work |
@@ -63,7 +84,7 @@ The remaining migration must preserve these contracts at their current owners:
 | Protocol and service interfaces | `packages/keel/src/protocol.ts` and `engine-service.ts`; server files are re-export shims. Port managed messages and real implementations together. |
 | Persisted state | `packages/keel/src/projects-schema.ts` owns types; `server/client-state.ts` owns storage. Preserve paused goals, model timestamps, and interrupted workspace-request metadata. |
 | Automation and workspace requests | Replace old daemon hooks with current core runtime/host integration; preserve status, cancellation, readiness, model validation, and restart recovery. |
-| Quiesce and counters | Counter component is tested but inactive; actual bounded turn/tool draining is still required. A timestamp-only quiesce or type cast is insufficient. |
+| Quiesce and counters | Counter and bounded core-drain components are tested but inactive; native Goal/background host shutdown and complete admission coverage remain required. |
 | Native Pi Goals | `server/core-goal-run-adapter.ts`, core goal contracts/handlers, and runtime state own execution. Passing old `goal-service.ts` tests does not establish persistence or paused restore here. |
 | SDK setup | `packages/keel/src/adapters/sdk/session-opener.ts` and host ports must preserve credentials, transcript placement, prompt references, and the single MCP integration. Do not import server modules into the core package. |
 | Embedding and browser surfaces | Revalidate authenticated `/agent/`, native terminal, model selection, Goals, and proxy paths against the actual new engine. |
