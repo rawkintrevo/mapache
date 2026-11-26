@@ -7,7 +7,17 @@ const RUNTIME_DESCRIPTOR_VERSION = 1;
 const CLOUD_RUN_BACKEND = "cloud-run";
 const COMPUTE_ENGINE_BACKEND = "compute-engine";
 const SSH_BACKEND = "ssh";
-const SUPPORTED_BACKENDS = new Set([CLOUD_RUN_BACKEND, COMPUTE_ENGINE_BACKEND, SSH_BACKEND]);
+const REMOTE_LIBVIRT_BACKEND = "remote-libvirt";
+const REMOTE_GUEST_IMAGE_VERSION = "ubuntu-24.04-v1";
+const REMOTE_GUEST_VCPUS = 2;
+const REMOTE_GUEST_MEMORY_MIB = 8192;
+const REMOTE_GUEST_DISK_GIB = 40;
+const SUPPORTED_BACKENDS = new Set([
+  CLOUD_RUN_BACKEND,
+  COMPUTE_ENGINE_BACKEND,
+  SSH_BACKEND,
+  REMOTE_LIBVIRT_BACKEND,
+]);
 
 function runtimeDescriptorError(code, details = {}) {
   const error = httpError(409, code);
@@ -43,6 +53,14 @@ function instanceName(workspaceId, generation = 0) {
   return `mapache-vm-${digest}`;
 }
 
+function remoteGuestName(workspaceId) {
+  return workspaceDiskName(workspaceId);
+}
+
+function remoteDiskName(workspaceId) {
+  return `${remoteGuestName(workspaceId)}.qcow2`;
+}
+
 function normalizeRuntimeDescriptor(value, {workspaceId, ownerUid, allowMissing = false} = {}) {
   if (value == null || value === "") {
     if (allowMissing) return null;
@@ -75,11 +93,44 @@ function normalizeRuntimeDescriptor(value, {workspaceId, ownerUid, allowMissing 
     gateway: normalizeGateway(value.gateway),
     state: String(value.state || "stopped").trim().toLowerCase() || "stopped",
     desiredConfigVersion: Number.isSafeInteger(Number(value.desiredConfigVersion)) ? Number(value.desiredConfigVersion) : 0,
+    hostId: value.hostId ? safeIdentifier(value.hostId, "hostId") : null,
+    guestImageVersion: String(value.guestImageVersion || REMOTE_GUEST_IMAGE_VERSION),
+    guestName: value.guestName ? safeIdentifier(value.guestName, "guestName") : null,
+    guestIp: value.guestIp ? String(value.guestIp).trim() : null,
+    guestResources: value.guestResources && typeof value.guestResources === "object" ? {
+      vcpus: Number(value.guestResources.vcpus || REMOTE_GUEST_VCPUS),
+      memoryMiB: Number(value.guestResources.memoryMiB || REMOTE_GUEST_MEMORY_MIB),
+      diskGiB: Number(value.guestResources.diskGiB || REMOTE_GUEST_DISK_GIB),
+    } : {
+      vcpus: REMOTE_GUEST_VCPUS,
+      memoryMiB: REMOTE_GUEST_MEMORY_MIB,
+      diskGiB: REMOTE_GUEST_DISK_GIB,
+    },
   };
   if (backend === COMPUTE_ENGINE_BACKEND) {
     descriptor.zone = descriptor.zone || `${descriptor.region}-a`;
     descriptor.dataDiskName = descriptor.dataDiskName || workspaceDiskName(descriptor.workspaceId);
     descriptor.instanceName = descriptor.instanceName || instanceName(descriptor.workspaceId, descriptor.generation);
+  }
+  if (backend === REMOTE_LIBVIRT_BACKEND) {
+    descriptor.hostId = safeIdentifier(descriptor.hostId, "hostId");
+    descriptor.guestImageVersion = descriptor.guestImageVersion || REMOTE_GUEST_IMAGE_VERSION;
+    descriptor.guestName = descriptor.guestName || remoteGuestName(descriptor.workspaceId);
+    descriptor.dataDiskName = descriptor.dataDiskName || remoteDiskName(descriptor.workspaceId);
+    descriptor.instanceName = descriptor.instanceName || descriptor.guestName;
+    if (descriptor.guestName !== remoteGuestName(descriptor.workspaceId) ||
+        descriptor.dataDiskName !== remoteDiskName(descriptor.workspaceId) ||
+        descriptor.instanceName !== descriptor.guestName) {
+      throw runtimeDescriptorError("runtime_provider_descriptor_invalid", {field: "guestIdentity"});
+    }
+    if (!/^ubuntu-24\.04-v[0-9]+$/.test(descriptor.guestImageVersion)) {
+      throw runtimeDescriptorError("runtime_provider_descriptor_invalid", {field: "guestImageVersion"});
+    }
+    if (descriptor.guestResources.vcpus !== REMOTE_GUEST_VCPUS ||
+        descriptor.guestResources.memoryMiB !== REMOTE_GUEST_MEMORY_MIB ||
+        descriptor.guestResources.diskGiB !== REMOTE_GUEST_DISK_GIB) {
+      throw runtimeDescriptorError("runtime_provider_descriptor_invalid", {field: "guestResources"});
+    }
   }
   return descriptor;
 }
@@ -103,7 +154,7 @@ function normalizeGateway(value) {
   return {baseUrl: url.origin};
 }
 
-function createRuntimeDescriptor({backend, workspaceId, ownerUid, region, zone, generation, dataDiskName, instanceName: vmName, gateway, desiredConfigVersion} = {}) {
+function createRuntimeDescriptor({backend, workspaceId, ownerUid, region, zone, generation, dataDiskName, instanceName: vmName, gateway, desiredConfigVersion, hostId, guestImageVersion, guestName, guestIp, guestResources} = {}) {
   return normalizeRuntimeDescriptor({
     version: RUNTIME_DESCRIPTOR_VERSION,
     backend,
@@ -116,6 +167,11 @@ function createRuntimeDescriptor({backend, workspaceId, ownerUid, region, zone, 
     instanceName: vmName,
     gateway,
     desiredConfigVersion,
+    hostId,
+    guestImageVersion,
+    guestName,
+    guestIp,
+    guestResources,
   }, {workspaceId, ownerUid});
 }
 
@@ -164,6 +220,11 @@ function isComputeEngineRuntime(value = {}) {
   return normalizeRuntimeBackend(descriptor.backend) === COMPUTE_ENGINE_BACKEND;
 }
 
+function isRemoteLibvirtRuntime(value = {}) {
+  const descriptor = value.runtimeProvider || value.runtimeProviderDescriptor || value;
+  return normalizeRuntimeBackend(descriptor.backend) === REMOTE_LIBVIRT_BACKEND;
+}
+
 function isRuntimeProviderEnabled(env = process.env) {
   return String(env.VM_WORKSPACE_RUNTIME_ENABLED || "").trim().toLowerCase() === "true";
 }
@@ -171,14 +232,22 @@ function isRuntimeProviderEnabled(env = process.env) {
 module.exports = {
   CLOUD_RUN_BACKEND,
   COMPUTE_ENGINE_BACKEND,
+  REMOTE_LIBVIRT_BACKEND,
+  REMOTE_GUEST_DISK_GIB,
+  REMOTE_GUEST_IMAGE_VERSION,
+  REMOTE_GUEST_MEMORY_MIB,
+  REMOTE_GUEST_VCPUS,
   RUNTIME_DESCRIPTOR_VERSION,
   SSH_BACKEND,
   createRuntimeDescriptor,
   instanceName,
   isComputeEngineRuntime,
+  isRemoteLibvirtRuntime,
   isRuntimeProviderEnabled,
   normalizeRuntimeBackend,
   normalizeRuntimeDescriptor,
+  remoteDiskName,
+  remoteGuestName,
   runtimeDescriptorError,
   runtimeDescriptorForSession,
   runtimeDescriptorForWorkspace,

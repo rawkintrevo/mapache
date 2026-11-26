@@ -1,0 +1,249 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const test = require("node:test");
+const {createRemoteVmLifecycleService} = require("./remoteVmLifecycle.service");
+const {createRuntimeDescriptor, REMOTE_LIBVIRT_BACKEND} = require("./runtimeProvider.helpers");
+
+class Snapshot {
+  constructor(ref, value) {
+    this.ref = ref;
+    this.id = ref.id;
+    this._value = value;
+    this.exists = value !== undefined;
+  }
+
+  data() { return this._value; }
+}
+
+class Ref {
+  constructor(db, path, id) {
+    this.db = db;
+    this.path = path;
+    this.id = id;
+  }
+
+  async get() { return new Snapshot(this, this.db.values.get(this.path)); }
+  async set(value, options = {}) {
+    const current = this.db.values.get(this.path) || {};
+    this.db.values.set(this.path, options.merge ? {...current, ...value} : {...value});
+  }
+  async update(value) { return this.set(value, {merge: true}); }
+  async delete() { this.db.values.delete(this.path); }
+  collection(name) { return new Collection(this.db, `${this.path}/${name}`); }
+}
+
+class Collection {
+  constructor(db, path) { this.db = db; this.path = path; }
+  doc(id) { return new Ref(this.db, `${this.path}/${id}`, id); }
+  where(field, operator, value) {
+    return {get: async () => {
+      const prefix = `${this.path}/`;
+      const docs = [...this.db.values.entries()]
+          .filter(([path, data]) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/") && operator === "==" && data?.[field] === value)
+          .map(([path, data]) => new Snapshot(new Ref(this.db, path, path.slice(prefix.length)), data));
+      return {docs, size: docs.length};
+    }};
+  }
+}
+
+class Db {
+  constructor() { this.values = new Map(); this.lock = Promise.resolve(); }
+  collection(name) { return new Collection(this, name); }
+  runTransaction(callback) {
+    const next = this.lock.then(() => callback({
+      get: (ref) => ref.get(),
+      set: (ref, value, options) => ref.set(value, options),
+      update: (ref, value) => ref.update(value),
+      delete: (ref) => ref.delete(),
+    }));
+    this.lock = next.catch(() => undefined);
+    return next;
+  }
+}
+
+function fixture() {
+  const db = new Db();
+  const descriptor = createRuntimeDescriptor({
+    backend: REMOTE_LIBVIRT_BACKEND,
+    workspaceId: "workspace-1",
+    ownerUid: "owner-1",
+    hostId: "host-1",
+  });
+  const workspace = {id: "workspace-1", ownerUid: "owner-1", runtimeProvider: descriptor};
+  const session = {workspaceId: "workspace-1", ownerUid: "owner-1", runtimeProvider: descriptor, status: "provisioning"};
+  const host = {
+    ownerUid: "owner-1", hostId: "host-1", status: "ready", ready: true,
+    capacity: {cpuCount: 8, memoryBytes: 32 * 1024 ** 3, freeDiskBytes: 200 * 1024 ** 3},
+  };
+  const privateKey = {ownerUid: "owner-1", privateKey: "test-private-key"};
+  return {db, descriptor, workspace, session, host, privateKey};
+}
+
+async function seed(fixtureValue) {
+  const {db, workspace, host, privateKey} = fixtureValue;
+  await db.collection("workspaces").doc(workspace.id).set(workspace);
+  await db.collection("remoteHosts").doc(host.hostId).set(host);
+  await db.collection("users").doc("owner-1").collection("private").doc("remoteHosts")
+      .collection("entries").doc("host-1").set(privateKey);
+}
+
+function fakeHost(behavior = {}) {
+  const guests = new Map();
+  const calls = [];
+  const operation = async ({action, guest}) => {
+    calls.push(action);
+    if (behavior[action]) return behavior[action]({action, guest, guests, calls});
+    const current = guests.get(guest.guestName) || {exists: false, state: "stopped"};
+    if (action === "inspect") return {...current, guestName: guest.guestName, diskName: guest.diskName};
+    if (action === "create") {
+      guests.set(guest.guestName, {exists: true, state: "stopped"});
+      return {exists: true, state: "stopped", guestName: guest.guestName, diskName: guest.diskName};
+    }
+    if (action === "start") {
+      guests.set(guest.guestName, {exists: true, state: "running", guestIp: "192.168.250.42"});
+      return {exists: true, state: "running", guestIp: "192.168.250.42", guestName: guest.guestName, diskName: guest.diskName};
+    }
+    if (action === "stop") {
+      guests.set(guest.guestName, {exists: true, state: "stopped"});
+      return {exists: true, state: "stopped", guestName: guest.guestName, diskName: guest.diskName};
+    }
+    if (action === "destroy") {
+      guests.delete(guest.guestName);
+      return {exists: false, state: "stopped", guestName: guest.guestName, diskName: guest.diskName};
+    }
+    throw new Error(`unexpected host action ${action}`);
+  };
+  return {operation, guests, calls};
+}
+
+test("duplicate start requests converge on one retained guest and reservation", async () => {
+  const fixtureValue = fixture();
+  await seed(fixtureValue);
+  const host = fakeHost();
+  const service = createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: host.operation, now: () => "2026-11-25T21:00:00.000Z"});
+  const first = await service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "start-1"});
+  const second = await service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "start-1"});
+  assert.equal(first.state, "completed");
+  assert.equal(second.state, "completed");
+  assert.equal(host.guests.get(fixtureValue.descriptor.guestName).state, "running");
+  assert.equal(host.calls.filter((action) => action === "start").length, 1);
+  assert.equal(host.calls.filter((action) => action === "create").length, 1);
+  const savedHost = (await fixtureValue.db.collection("remoteHosts").doc("host-1").get()).data();
+  assert.equal(savedHost.remoteVmReservations.entries.length, 1);
+});
+
+test("stop releases capacity and resume starts the same guest and disk", async () => {
+  const fixtureValue = fixture();
+  await seed(fixtureValue);
+  const host = fakeHost();
+  const service = createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: host.operation});
+  await service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "start-1"});
+  const stopped = await service.stop({id: "session-1"}, fixtureValue.session, {idempotencyKey: "stop-1"});
+  const resumed = await service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "start-2"});
+  assert.equal(stopped.state, "completed");
+  assert.equal(resumed.state, "completed");
+  assert.equal(resumed.guestName, fixtureValue.descriptor.guestName);
+  assert.equal(resumed.diskName, fixtureValue.descriptor.dataDiskName);
+  const savedHost = (await fixtureValue.db.collection("remoteHosts").doc("host-1").get()).data();
+  assert.equal(savedHost.remoteVmReservations.entries.length, 1);
+  assert.equal(host.guests.size, 1);
+});
+
+test("capacity admission is serialized across workspaces", async () => {
+  const first = fixture();
+  const second = fixture();
+  second.workspace.id = "workspace-2";
+  second.session = {...second.session, workspaceId: "workspace-2"};
+  second.descriptor = createRuntimeDescriptor({backend: REMOTE_LIBVIRT_BACKEND, workspaceId: "workspace-2", ownerUid: "owner-1", hostId: "host-1"});
+  second.workspace.runtimeProvider = second.descriptor;
+  second.session.runtimeProvider = second.descriptor;
+  second.host.capacity = {cpuCount: 4, memoryBytes: 20 * 1024 ** 3, freeDiskBytes: 100 * 1024 ** 3};
+  await seed(first);
+  await first.db.collection("workspaces").doc("workspace-2").set(second.workspace);
+  const hostRef = first.db.collection("remoteHosts").doc("host-1");
+  await hostRef.set(second.host);
+  const privateRef = first.db.collection("users").doc("owner-1").collection("private").doc("remoteHosts").collection("entries").doc("host-1");
+  await privateRef.set(second.privateKey);
+  const remote = fakeHost();
+  const service = createRemoteVmLifecycleService({db: first.db, hostOperation: remote.operation});
+  const results = await Promise.allSettled([
+    service.start(first.workspace, {id: "session-1"}, first.session, {idempotencyKey: "one"}),
+    service.start(second.workspace, {id: "session-2"}, second.session, {idempotencyKey: "two"}),
+  ]);
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  const rejected = results.find((result) => result.status === "rejected");
+  assert.match(String(rejected?.reason?.publicMessage || rejected?.reason?.message), /remote_vm_capacity_exhausted/);
+});
+
+test("lost SSH response reconciles by inspecting the owned guest", async () => {
+  const fixtureValue = fixture();
+  await seed(fixtureValue);
+  let lost = true;
+  const host = fakeHost({
+    start: ({guest, guests}) => {
+      guests.set(guest.guestName, {exists: true, state: "running", guestIp: "192.168.250.42"});
+      if (lost) {
+        lost = false;
+        const error = new Error("response lost");
+        error.code = "remote_vm_response_lost";
+        throw error;
+      }
+      return {exists: true, state: "running", guestIp: "192.168.250.42", guestName: guest.guestName, diskName: guest.diskName};
+    },
+  });
+  const service = createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: host.operation});
+  const result = await service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "lost"});
+  assert.equal(result.state, "completed");
+  assert.equal(host.calls.filter((action) => action === "start").length, 1);
+  assert.ok(host.calls.includes("inspect"));
+});
+
+test("offline deletion remains pending and reconciles without deleting the workspace early", async () => {
+  const fixtureValue = fixture();
+  await seed(fixtureValue);
+  const host = fakeHost();
+  const service = createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: host.operation});
+  await service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "start"});
+  let offline = true;
+  const original = host.operation;
+  const operation = async (request) => {
+    if (offline && request.action === "inspect") {
+      const error = new Error("offline");
+      error.code = "remote_host_unreachable";
+      throw error;
+    }
+    return original(request);
+  };
+  const pending = await createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: operation})
+      .delete({id: "session-1"}, fixtureValue.session, {deleteWorkspace: true, idempotencyKey: "delete"});
+  assert.equal(pending.state, "unreachable");
+  assert.equal((await fixtureValue.db.collection("workspaces").doc("workspace-1").get()).data().deleted, undefined);
+  offline = false;
+  const reconciled = await createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: operation})
+      .reconcileOperation(pending.id);
+  assert.equal(reconciled.state, "completed");
+  assert.equal((await fixtureValue.db.collection("workspaces").doc("workspace-1").get()).data().deleted, true);
+  assert.equal(host.guests.size, 0);
+});
+
+test("owner and managed guest fences reject foreign identifiers", async () => {
+  const fixtureValue = fixture();
+  await seed(fixtureValue);
+  const service = createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: async ({action, guest}) => {
+    if (action === "inspect") return {exists: true, state: "running", guestName: "mapache-ws-foreign", diskName: guest.diskName};
+    return {exists: true, state: "running", guestName: guest.guestName, diskName: guest.diskName};
+  }});
+  const foreignSession = {
+    ...fixtureValue.session,
+    ownerUid: "owner-2",
+    runtimeProvider: createRuntimeDescriptor({
+      backend: REMOTE_LIBVIRT_BACKEND,
+      workspaceId: "workspace-1",
+      ownerUid: "owner-2",
+      hostId: "host-1",
+    }),
+  };
+  await assert.rejects(() => service.start(fixtureValue.workspace, {id: "session-1"}, foreignSession), /workspace_forbidden/);
+  await assert.rejects(() => service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "foreign-guest"}), /remote_vm_foreign_guest/);
+});

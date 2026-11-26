@@ -81,6 +81,7 @@ const {
 } = require("./cloudRun.service");
 const {createComputeEngineService} = require("./computeEngine.service");
 const {createRuntimeProviderService} = require("./runtimeProvider.service");
+const {createRemoteVmLifecycleService} = require("./remoteVmLifecycle.service");
 const {isRuntimeProviderEnabled} = require("./runtimeProvider.helpers");
 const {
   SESSION_RESOURCE_ERROR_CODE,
@@ -303,9 +304,11 @@ const computeEngineService = createComputeEngineService({
   projectId: "pi-agents-cloud",
   runnerServiceAccount: runnerServiceAccountValue() || "mapache-runner@pi-agents-cloud.iam.gserviceaccount.com",
 });
+const remoteVmLifecycleService = createRemoteVmLifecycleService({admin, db});
 const runtimeProviderService = createRuntimeProviderService({
   cloudRunService,
   computeEngineService,
+  remoteVmService: remoteVmLifecycleService,
 });
 const {
   deleteSessionService,
@@ -720,6 +723,23 @@ exports.provisionQueuedSession = onDocumentWritten({
     GOOGLE_OAUTH_ENCRYPTION_KEY,
   ],
 }, provisionQueuedSession);
+
+exports.reconcileRemoteVmOperation = onDocumentWritten({
+  document: "remoteVmOperations/{operationId}",
+  memory: "512MiB",
+  concurrency: 1,
+  timeoutSeconds: 540,
+  retry: true,
+}, async (event) => {
+  const after = event.data?.after;
+  if (!after?.exists) return null;
+  const next = after.data() || {};
+  const previous = event.data?.before?.exists ? event.data.before.data() || {} : {};
+  if (!["queued", "unreachable", "error"].includes(String(next.state || "")) || previous.state === next.state && previous.updatedAt === next.updatedAt) {
+    return null;
+  }
+  return remoteVmLifecycleService.reconcileOperation(event.params.operationId);
+});
 
 exports.provisionAutomationRun = onDocumentWritten({
   document: "automationRuns/{runId}",

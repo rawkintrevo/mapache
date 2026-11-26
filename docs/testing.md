@@ -129,6 +129,17 @@ Run slower checks when a change touches the related subsystem:
   requires the pinned Ubuntu artifact, an immutable `gcp-runner` payload,
   `qemu-img`, and `virt-customize`; an isolated KVM boot/readiness/reboot proof
   is reserved for the #643 rollout gate.
+- Remote-libvirt lifecycle changes: run
+  `node --test functions/remoteVmLifecycle.service.test.js
+  functions/runtimeProvider.helpers.test.js functions/runtimeProvider.service.test.js`,
+  `node --test functions/sessionLifecycle.service.test.js
+  functions/workspaceRuntimeSchedule.service.test.js`, and
+  `python3 -m unittest scripts/remote-vm-host/test_host_tools.py`. The local
+  fixtures cover deterministic guest identity, serialized capacity admission,
+  duplicate requests, stop/resume disk retention, lost SSH responses, offline
+  deletion retry, owner fencing, and the no-idle/no-scheduled remote policy.
+  A real isolated-host create/stop/start/delete and reboot-persistence proof is
+  reserved for #643.
 - Runner image cache changes: provision the private `pi-agents-cloud-build-cache` bucket as
   described in [Deployment](./deployment.md), then run three Cloud Builds with the same
   source inputs. The first build is the cold miss; a second build submitted from a fresh

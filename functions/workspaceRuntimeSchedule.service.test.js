@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {createWorkspaceRuntimeScheduleService} = require("./workspaceRuntimeSchedule.service");
+const {createRuntimeDescriptor, REMOTE_LIBVIRT_BACKEND} = require("./runtimeProvider.helpers");
 
 const DELETE = Symbol("delete");
 const FIXED_NOW = new Date("2026-10-19T18:00:00.000Z");
@@ -144,6 +145,23 @@ function workspace(overrides = {}) {
     assert.equal(harness.restarted.length, result.opened);
     assert.equal(harness.stopped.length, result.closed);
     assert.equal(harness.cursor.lastWorkspacePath, "", "a completed scan resets the cursor");
+  }
+
+  {
+    const remoteDescriptor = createRuntimeDescriptor({
+      backend: REMOTE_LIBVIRT_BACKEND,
+      workspaceId: "workspace-1",
+      ownerUid: "user-1",
+      hostId: "host-1",
+    });
+    const harness = makeHarness({
+      workspace: workspace({runtimeProvider: remoteDescriptor}),
+      sessions: [{id: "session-1", status: "running", ownerUid: "user-1"}],
+    });
+    const result = await harness.service.runTick();
+    assert.equal(result.skipped, 1);
+    assert.equal(harness.restarted.length, 0);
+    assert.equal(harness.stopped.length, 0);
   }
 
   {

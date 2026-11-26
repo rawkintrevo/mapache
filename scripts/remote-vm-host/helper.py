@@ -8,12 +8,22 @@ import re
 import signal
 import subprocess
 import sys
+import tempfile
+import time
 
 VERSION = "1"
 APP_PREFIX = "mapache-ws-"
 NETWORK = "mapache-vm"
 GUEST_NETWORK_CIDR = "192.168.250.0/24"
-ALLOWED_ACTIONS = {"status", "create", "start", "stop", "destroy", "forward"}
+STORAGE_DIR = Path("/var/lib/mapache-vm")
+IMAGE_DIR = STORAGE_DIR / "images"
+DISK_DIR = STORAGE_DIR / "disks"
+IMAGE_VERSION = "ubuntu-24.04-v1"
+IMAGE_PATH = IMAGE_DIR / f"{IMAGE_VERSION}.qcow2"
+DISK_SIZE = "40G"
+VCPUS = 2
+MEMORY_MIB = 8192
+ALLOWED_ACTIONS = {"status", "capacity", "inspect", "create", "start", "stop", "destroy", "forward"}
 ID_PATTERN = re.compile(r"^mapache-ws-[a-z0-9][a-z0-9-]{0,62}$")
 
 
@@ -38,6 +48,106 @@ def virsh(*args, runner=subprocess.run):
     return runner(["virsh", "-c", "qemu:///system", *args], check=True, text=True, capture_output=True)
 
 
+def virsh_optional(*args, runner=subprocess.run):
+    return runner(["virsh", "-c", "qemu:///system", *args], check=False, text=True, capture_output=True)
+
+
+def parse_state(output):
+    match = re.search(r"^State:\s+(.+)$", output or "", re.MULTILINE)
+    state = match.group(1).strip().lower() if match else "unknown"
+    if state in {"running", "blocked", "paused"}:
+        return "running"
+    if state in {"shut off", "shutdown", "in shutdown", "crashed", "pmsuspended"}:
+        return "stopped"
+    return "unknown"
+
+
+def inspect_guest(guest_id, *, runner=subprocess.run):
+    info = virsh_optional("dominfo", guest_id, runner=runner)
+    if getattr(info, "returncode", 1) != 0:
+        return {"version": VERSION, "network": NETWORK, "guestName": guest_id,
+                "diskName": f"{guest_id}.qcow2", "exists": False, "state": "stopped",
+                "guestIp": None, "autostart": False}
+    addresses = virsh_optional("domifaddr", guest_id, "--source", "agent", runner=runner)
+    ip_match = re.search(r"\b(192\.168\.250\.(?:[2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4]))/", getattr(addresses, "stdout", "") or "")
+    autostart = re.search(r"^Autostart:\s+enable", getattr(info, "stdout", "") or "", re.MULTILINE) is not None
+    return {"version": VERSION, "network": NETWORK, "guestName": guest_id,
+            "diskName": f"{guest_id}.qcow2", "exists": True,
+            "state": parse_state(getattr(info, "stdout", "")),
+            "guestIp": ip_match.group(1) if ip_match else None, "autostart": autostart}
+
+
+def guest_xml(guest_id):
+    # All values are generated after valid_guest_id; no caller-supplied path,
+    # bridge, disk, or network XML reaches libvirt.
+    disk = DISK_DIR / f"{guest_id}.qcow2"
+    return f'''<domain type="kvm">
+  <name>{guest_id}</name>
+  <memory unit="MiB">{MEMORY_MIB}</memory>
+  <currentMemory unit="MiB">{MEMORY_MIB}</currentMemory>
+  <vcpu placement="static">{VCPUS}</vcpu>
+  <os><type arch="x86_64">hvm</type><boot dev="hd"/></os>
+  <features><acpi/><apic/></features>
+  <devices>
+    <disk type="file" device="disk"><driver name="qemu" type="qcow2"/><source file="{disk}"/><target dev="vda" bus="virtio"/></disk>
+    <interface type="network"><source network="{NETWORK}"/><model type="virtio"/></interface>
+    <console type="pty"><target type="serial" port="0"/></console>
+    <graphics type="none"/>
+  </devices>
+</domain>\n'''
+
+
+def create_guest(guest_id, *, runner=subprocess.run):
+    existing = inspect_guest(guest_id, runner=runner)
+    disk = DISK_DIR / f"{guest_id}.qcow2"
+    if not disk.exists():
+        if not IMAGE_PATH.exists():
+            raise ValueError(f"guest image {IMAGE_PATH} is not installed")
+        DISK_DIR.mkdir(mode=0o750, parents=True, exist_ok=True)
+        runner(["qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-b", str(IMAGE_PATH), str(disk), DISK_SIZE], check=True, text=True, capture_output=True)
+    if not existing["exists"]:
+        with tempfile.NamedTemporaryFile("w", prefix="mapache-vm-", suffix=".xml", delete=False) as xml_file:
+            xml_file.write(guest_xml(guest_id))
+            xml_path = xml_file.name
+        try:
+            runner(["virsh", "-c", "qemu:///system", "define", xml_path], check=True, text=True, capture_output=True)
+        finally:
+            Path(xml_path).unlink(missing_ok=True)
+        # Guests are explicitly managed by Mapache; host reboot does not
+        # override the persisted stopped/running intent.
+        runner(["virsh", "-c", "qemu:///system", "autostart", guest_id, "--disable"], check=True, text=True, capture_output=True)
+    return inspect_guest(guest_id, runner=runner)
+
+
+def mutate_guest(action, guest_id, *, runner=subprocess.run):
+    observed = inspect_guest(guest_id, runner=runner)
+    if action == "start":
+        if not observed["exists"]:
+            observed = create_guest(guest_id, runner=runner)
+        if observed["state"] != "running":
+            runner(["virsh", "-c", "qemu:///system", "start", guest_id], check=True, text=True, capture_output=True)
+    elif action == "stop":
+        if not observed["exists"]:
+            raise ValueError("managed guest does not exist")
+        if observed["state"] == "running":
+            runner(["virsh", "-c", "qemu:///system", "shutdown", guest_id], check=True, text=True, capture_output=True)
+            for _ in range(30):
+                observed = inspect_guest(guest_id, runner=runner)
+                if observed["state"] == "stopped":
+                    break
+                time.sleep(1)
+    elif action == "destroy":
+        if observed["exists"]:
+            if observed["state"] == "running":
+                runner(["virsh", "-c", "qemu:///system", "destroy", guest_id], check=True, text=True, capture_output=True)
+            runner(["virsh", "-c", "qemu:///system", "undefine", guest_id], check=True, text=True, capture_output=True)
+        disk = DISK_DIR / f"{guest_id}.qcow2"
+        if disk.exists():
+            disk.unlink()
+        return inspect_guest(guest_id, runner=runner)
+    return inspect_guest(guest_id, runner=runner)
+
+
 def handle(arguments, *, runner=subprocess.run):
     if not arguments:
         raise ValueError("missing Mapache helper action")
@@ -52,17 +162,40 @@ def handle(arguments, *, runner=subprocess.run):
         # The SSH daemon applies the same PermitOpen network boundary. The
         # helper only emits a target descriptor; it never runs a shell command.
         return {"version": VERSION, "network": NETWORK, "target": arguments[1]}
+    if action == "capacity":
+        if len(arguments) != 1:
+            raise ValueError("capacity does not accept a guest id")
+        storage = __import__("shutil").disk_usage(STORAGE_DIR if STORAGE_DIR.exists() else Path("/var/lib"))
+        return {"version": VERSION, "network": NETWORK, "cpuCount": os.cpu_count() or 0,
+                "memoryBytes": memory_bytes(), "freeDiskBytes": storage.free}
     if len(arguments) > 2 or (len(arguments) == 2 and not valid_guest_id(arguments[1])):
         raise ValueError("guest id is not a Mapache-managed workspace id")
     guest_id = arguments[1] if len(arguments) == 2 else ""
+    if action not in {"status"} and not guest_id:
+        raise ValueError(f"{action} requires a managed guest id")
     if action == "status":
+        if guest_id:
+            return inspect_guest(guest_id, runner=runner)
         result = virsh("list", "--all", runner=runner)
-        return {"version": VERSION, "network": NETWORK, "guestId": guest_id or None,
+        return {"version": VERSION, "network": NETWORK, "guestId": None,
                 "virsh": result.stdout[-12000:]}
-    command = {"create": "define", "start": "start", "stop": "shutdown", "destroy": "destroy"}[action]
-    # Lifecycle code supplies an already validated, managed XML/path through a
-    # separate helper protocol. No caller-controlled path reaches this command.
-    raise ValueError(f"{action} requires the lifecycle worker protocol")
+    if action == "inspect":
+        if not guest_id:
+            raise ValueError("inspect requires a managed guest id")
+        return inspect_guest(guest_id, runner=runner)
+    if action == "create":
+        return create_guest(guest_id, runner=runner)
+    return mutate_guest(action, guest_id, runner=runner)
+
+
+def memory_bytes():
+    try:
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            if line.startswith("MemTotal:"):
+                return int(line.split()[1]) * 1024
+    except (OSError, ValueError):
+        return 0
+    return 0
 
 
 def handle_ssh(original_arguments):
