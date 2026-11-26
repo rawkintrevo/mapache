@@ -108,6 +108,21 @@ test("startup smoke mode does not require workspace authority coordination", asy
   assert.equal(await authority.assertCurrentWriter(), true);
 });
 
+test("remote-libvirt guests do not require Firebase workspace authority", async () => {
+  const authority = createWorkspaceAuthority({
+    config: {
+      agentRuntimeEnabled: true,
+      agentUiVersion: "pi-web-ui-v1",
+      remoteGuestMode: true,
+    },
+  });
+
+  await authority.acquire();
+  assert.equal(authority.status().enabled, false);
+  assert.equal(authority.isCurrentWriter(), true);
+  assert.equal(await authority.assertCurrentWriter(), true);
+});
+
 test("fences duplicate boots and rejects delayed work after controlled generation handoff", async () => {
   const store = initialStore();
   const stopped = [];

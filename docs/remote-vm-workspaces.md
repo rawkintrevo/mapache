@@ -374,6 +374,13 @@ Image construction requires `qemu-img`, `virt-customize`, and a KVM-capable
 libvirt host. The real boot, authenticated readiness, and reboot-persistence
 proof is part of #643.
 
+Remote-libvirt guests do not acquire the shared Cloud Run Firestore workspace
+authority lease. The control plane serializes each guest's lifecycle and the
+gateway fences browser access to the current session boot, while the guest
+deliberately receives no Firebase credentials. This keeps startup independent
+of Cloud Run authority coordination without weakening the host, workspace,
+session, generation, or boot checks performed before a tunnel is issued.
+
 ## Authenticated gateway and SSH transport
 
 The gateway authenticates the Firebase owner/access policy, workspace/session

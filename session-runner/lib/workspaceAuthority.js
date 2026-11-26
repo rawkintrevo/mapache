@@ -27,7 +27,12 @@ function createWorkspaceAuthority({
   randomUUIDImpl = randomUUID,
   setIntervalFn = setInterval,
 } = {}) {
-  const enabled = !config.startupSmoke && (config.agentRuntimeEnabled === true || config.agentUiVersion === "pi-web-ui-v1");
+  // Remote-libvirt guests are already fenced by the control-plane lifecycle
+  // operation and the authenticated gateway boot token. They intentionally do
+  // not receive Firebase credentials, so the Cloud Run Firestore authority
+  // lease cannot be acquired inside the guest.
+  const enabled = !config.startupSmoke && config.remoteGuestMode !== true &&
+    (config.agentRuntimeEnabled === true || config.agentUiVersion === "pi-web-ui-v1");
   const automationRuntime = String(config.runtimeKind || "").trim().toLowerCase() === "automation";
   const bootInstanceId = String(instanceId || randomUUIDImpl()).trim();
   const renewalIntervalMs = positiveNumber(
