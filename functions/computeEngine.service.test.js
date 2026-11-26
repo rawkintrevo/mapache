@@ -98,8 +98,8 @@ test("mixed-case Firebase workspace IDs produce valid Compute Engine labels", as
   const diskRequest = calls.find((call) => call.method === "POST" && call.url.endsWith("/disks"));
   const instanceRequest = calls.find((call) => call.method === "POST" && call.url.endsWith("/instances"));
   assert.notEqual(diskRequest.params.requestId, instanceRequest.params.requestId);
-  assert.match(diskRequest.params.requestId, /^[A-Za-z0-9_-]{1,64}$/);
-  assert.match(instanceRequest.params.requestId, /^[A-Za-z0-9_-]{1,64}$/);
+  assert.match(diskRequest.params.requestId, /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.match(instanceRequest.params.requestId, /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   for (const request of [diskRequest, instanceRequest]) {
     assert.equal(request.data.labels["mapache-workspace-id"], normalizeComputeEngineLabelValue("CWgOpYpwJTY4Cd5mwPEo"));
     assert.match(request.data.labels["mapache-workspace-id"], /^[a-z][a-z0-9_-]*$/);
