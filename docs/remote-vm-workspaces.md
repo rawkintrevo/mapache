@@ -345,12 +345,19 @@ remote-operation workers together; existing Cloud Run runners do not need
 new revisions. Live guest boot and broker readiness remain the rollout gate.
 
 The checked-in `scripts/remote-vm-guest/manifest.json` defines guest image
-`ubuntu-24.04-v1`: Ubuntu 24.04 LTS amd64, 2 vCPU, 8192 MiB RAM, and a 40 GiB
+`ubuntu-24.04-v2`: Ubuntu 24.04 LTS amd64, 2 vCPU, 8192 MiB RAM, and a 40 GiB
 thin-provisioned QCOW2 disk. `build-image.py` verifies the dated Ubuntu cloud
 image SHA-256 before producing a standalone QCOW2, validates an immutable
-`gcp-runner` payload, and records a sidecar manifest with the source and
-payload hashes. `prepare-payload.sh` requires a content-addressed runner image;
-mutable tags are not accepted.
+`gcp-runner` payload, and records a sidecar manifest with the base, upstream
+digest, guest overlay, payload and output hashes. `prepare-payload.sh` requires
+a content-addressed runner image; mutable tags are not accepted.
+
+`prepare-repaired-payload.sh` is the v2 packaging entry point. It calls the
+immutable extraction command and overlays only the committed #682 guest files,
+recording their source commit and individual hashes in `payload.json`. No
+upstream runner release is rebuilt for this repair. v2 is installed alongside
+v1: the provider default is v2 for newly created workspaces, while existing v1
+descriptors and retained disks are never silently rebased.
 
 The payload reuses the pinned `pi-web-ui-v1` runtime and session runner, so the
 guest has the existing pi-web-ui experience and native terminal protocol. The

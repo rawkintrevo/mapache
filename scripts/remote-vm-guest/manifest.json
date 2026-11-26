@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "imageVersion": "ubuntu-24.04-v1",
+  "imageVersion": "ubuntu-24.04-v2",
   "distribution": {
     "id": "ubuntu",
     "version": "24.04",
