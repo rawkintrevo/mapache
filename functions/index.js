@@ -84,6 +84,7 @@ const {createRuntimeProviderService} = require("./runtimeProvider.service");
 const {createRemoteVmLifecycleService} = require("./remoteVmLifecycle.service");
 const {createRemoteVmOperationWorker} = require("./remoteVmOperation.worker");
 const {isRuntimeProviderEnabled} = require("./runtimeProvider.helpers");
+const {resolveRuntimeGatewayBaseUrl} = require("./runtimeGateway.helpers");
 const {
   SESSION_RESOURCE_ERROR_CODE,
   normalizeSessionResources,
@@ -157,12 +158,7 @@ function githubAutomationTokenRefreshUrl() {
 }
 
 function remoteVmGatewayBaseUrl() {
-  const configured = process.env.VM_REMOTE_VM_GATEWAY_BASE_URL || process.env.VM_RUNTIME_GATEWAY_BASE_URL ||
-    String(process.env.VM_WORKSPACE_GATEWAY_HOSTS || "").split(",")
-        .map((value) => value.trim())
-        .find((value) => value && !value.startsWith("backup-recovery---"));
-  if (!configured) return "";
-  return String(configured).startsWith("http") ? configured : `https://${configured}`;
+  return resolveRuntimeGatewayBaseUrl();
 }
 
 function remoteVmCredentialsUrl() {
@@ -275,7 +271,7 @@ const sessionCreationService = createSessionCreationService({
   reserveWorkspaceSyncSession,
   resolveHarness,
   resolveRunnerImage,
-  runtimeGatewayBaseUrl: () => process.env.VM_RUNTIME_GATEWAY_BASE_URL || "",
+  runtimeGatewayBaseUrl: () => remoteVmGatewayBaseUrl(),
   runtimeProviderEnabled: () => isRuntimeProviderEnabled(),
   requireWorkspace,
   runnerServiceAccountValue,
@@ -462,7 +458,7 @@ const workspaceService = createWorkspaceService({
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,
   remoteHostService,
-  runtimeGatewayBaseUrl: () => process.env.VM_RUNTIME_GATEWAY_BASE_URL || "",
+  runtimeGatewayBaseUrl: () => remoteVmGatewayBaseUrl(),
   runtimeProviderEnabled: () => isRuntimeProviderEnabled(),
   workspaceStorageMigrationService,
 });

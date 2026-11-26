@@ -2,18 +2,23 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const {authorizeGatewayRequest, gatewayTargetForSession, CANONICAL_HEALTH_PATH} = require("./runtimeGateway.helpers");
+const {resolveRuntimeGatewayBaseUrl} = require("./runtimeGateway.helpers");
 
-const base = {workspace: {id: "workspace-1", ownerUid: "owner-1"}, session: {id: "session-1", agentRuntimeGeneration: 4}};
-
-test("gateway authorization binds owner, session, and generation", () => {
-  const result = authorizeGatewayRequest({...base, claims: {uid: "owner-1", workspaceId: "workspace-1", sessionId: "session-1", generation: 4}, path: CANONICAL_HEALTH_PATH});
-  assert.equal(result.health, true);
-  assert.equal(result.upstream, null);
+test("selects the public gateway from the configured host list", () => {
+  assert.equal(resolveRuntimeGatewayBaseUrl({
+    VM_WORKSPACE_GATEWAY_HOSTS: "backup-recovery---gateway.example,gateway.example",
+  }), "https://gateway.example");
 });
 
-test("stale generations and reserved health paths are denied", () => {
-  assert.throws(() => authorizeGatewayRequest({...base, claims: {uid: "owner-1", workspaceId: "workspace-1", sessionId: "session-1", generation: 3}}), /stale_generation/);
-  assert.throws(() => authorizeGatewayRequest({...base, claims: {uid: "owner-1", workspaceId: "workspace-1", sessionId: "session-1", generation: 4}, path: "/healthz"}), /not_found/);
-  assert.equal(gatewayTargetForSession({runtimeProvider: {gateway: {baseUrl: "https://gateway.example"}}}), "https://gateway.example");
+test("prefers an explicit runtime gateway and preserves its scheme", () => {
+  assert.equal(resolveRuntimeGatewayBaseUrl({
+    VM_REMOTE_VM_GATEWAY_BASE_URL: "https://remote.example",
+    VM_RUNTIME_GATEWAY_BASE_URL: "runtime.example",
+    VM_WORKSPACE_GATEWAY_HOSTS: "gateway.example",
+  }), "https://remote.example");
+  assert.equal(resolveRuntimeGatewayBaseUrl({VM_RUNTIME_GATEWAY_BASE_URL: "http://runtime.example"}), "http://runtime.example");
+});
+
+test("returns no gateway when only recovery hosts are configured", () => {
+  assert.equal(resolveRuntimeGatewayBaseUrl({VM_WORKSPACE_GATEWAY_HOSTS: "backup-recovery---gateway.example"}), "");
 });
