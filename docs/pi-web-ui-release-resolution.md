@@ -22,6 +22,51 @@ pi-ai `1.6.0`. A future stable release must either be intentionally selected in
 the manifest and accept the managed patch or fail the candidate image build
 until its integration is ported.
 
+## v0.123 migration in progress (#676)
+
+The upstream v0.123.0 release (commit
+`db6ff914de6cd1509edb224919dda2d547272f12`) changes the package identity to
+`keel-agent` and replaces the old `AgentService`/`AgentServiceDaemon` runtime
+with `packages/keel/src/app/core-engine.ts`. The active manifest remains on the
+last integrated target above. Fresh builds fail safely on the newer stable
+release until the complete managed integration is validated; changing only
+the version or package name cannot repair the runtime.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-workspace-boundary.patch`
+is an **inactive, partial migration artifact**. It applies independently to the
+official v0.123.0 source and is deliberately absent from the manifest. It
+enforces canonical workspace containment in `server/core-workspace-adapter.ts`
+and validates extra roots at `ClientStateStore` read/write boundaries. Managed
+mode rejects external local paths, symlink escapes, and remote workspace URIs;
+standalone behavior remains available. Rejected writes leave persisted state
+unchanged, and stale external roots are filtered during restore.
+
+The remaining migration must preserve these contracts at their current owners:
+
+| Contract | v0.123 owner / required work |
+| --- | --- |
+| Protocol and service interfaces | `packages/keel/src/protocol.ts` and `engine-service.ts`; server files are re-export shims. Port managed messages and real implementations together. |
+| Persisted state | `packages/keel/src/projects-schema.ts` owns types; `server/client-state.ts` owns storage. Preserve paused goals, model timestamps, and interrupted workspace-request metadata. |
+| Automation and workspace requests | Replace old daemon hooks with current core runtime/host integration; preserve status, cancellation, readiness, model validation, and restart recovery. |
+| Quiesce and counters | Implement actual turn/tool draining and completed-turn accounting in the new runtime. A timestamp-only quiesce or type cast is insufficient. |
+| Native Pi Goals | `server/core-goal-run-adapter.ts`, core goal contracts/handlers, and runtime state own execution. Passing old `goal-service.ts` tests does not establish persistence or paused restore here. |
+| SDK setup | `packages/keel/src/adapters/sdk/session-opener.ts` and host ports must preserve credentials, transcript placement, prompt references, and the single MCP integration. Do not import server modules into the core package. |
+| Embedding and browser surfaces | Revalidate authenticated `/agent/`, native terminal, model selection, Goals, and proxy paths against the actual new engine. |
+
+The independent workspace patch passes 28 tests across
+`managed-core-workspace.test.ts` and `core-domain-sessions-rebind.test.ts`, and
+the full upstream `npm run typecheck` after installing root and mobile locked
+dependencies. This is component evidence only: no full managed image, browser
+release gate, or validated cache publication is implied. Before activating a
+complete patch, run the candidate build/smoke, required release suite, runner
+tests, and actual protocol/browser checks from #676. Keep the fast PR path and
+strict release-cache validation separate.
+
+This inactive artifact changes no deployed runtime. Existing Cloud Run
+revisions and remote guests retain their images; a completed integration will
+need a new validated image and explicit rollout evidence. No Functions deploy
+is required for this checkpoint.
+
 ## v0.122 compatibility port (#590)
 
 The active manifest applies `managed-v0122.patch`. It includes the retained
