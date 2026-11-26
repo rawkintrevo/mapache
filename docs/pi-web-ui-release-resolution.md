@@ -32,6 +32,42 @@ last integrated target above. Fresh builds fail safely on the newer stable
 release until the complete managed integration is validated; changing only
 the version or package name cannot repair the runtime.
 
+### Combined candidate checkpoint
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-candidate.patch` is the
+current **inactive combined candidate**. It applies directly to the official
+v0.123.0 baseline; do not stack the component patches below on top of it. Those
+files remain incremental audit artifacts. The combined patch includes their
+changes, retained managed server/web integration, and the new
+`server/managed-run-controller.ts` wired at `server/index.ts`.
+
+The controller reserves run IDs before asynchronous setup, shares browserless
+client initialization, validates saved/explicit models against the runtime
+catalog, and submits through `CoreEngine.openManagedRun`. It observes SDK events
+through the existing completion reducer, excludes retries, preserves cancellation
+during setup, and rejects admission from an older drain generation. Cancellation
+is recorded before abort and failed abort can be retried without re-submission.
+Private automation accepts one run ID and cancels unattended question waits.
+The core question waiter now has a per-conversation cancellation hook.
+
+This combined candidate applies cleanly to a fresh v0.123 checkout and passes
+full upstream typecheck, production `npm run build`, and 42 focused reducer,
+controller, core connection, and local control-socket tests. One test sends a
+workspace request through the actual core bridge with synthetic SDK events.
+The obsolete `quiesce.test.ts` and `workspace-request-models.test.ts` fixtures
+imported the deleted service; their delayed/hung drain, admission, shared
+initialization, and sanitized-error cases are covered by the core/drain and
+managed catalog/controller tests. Control-socket fixtures now include the new
+required service-status field.
+
+**Not release-ready:** the SDK opener still needs managed transcript-root,
+credential, MCP, and operating-reference integration. Incoming request metadata
+and restart reconciliation, private automation cleanup, and actual background/
+subagent termination evidence need integration/validation. Parent SDK tool-end
+events alone do not prove detached children stopped. Full image tests, browser
+Goal/history/embedding QA, and release-cache validation remain open. The active
+manifest and deployed runtime are unchanged.
+
 `session-runner/upstream/pi-web-ui/patches/managed-v0123-workspace-boundary.patch`
 is an **inactive, partial migration artifact**. It applies independently to the
 official v0.123.0 source and is deliberately absent from the manifest. It
@@ -163,10 +199,10 @@ errors into the existing control response shape.
 Six tests pass, including a real offline SDK custom-model fixture and checks for
 safe projection, unavailable providers, saved selection, retry behavior, timeout,
 and drain admission. Full upstream typecheck passes with the independent
-components. The in-progress full port connects this reader at `server/index.ts`,
-but automation/request execution still references the removed service and that
-full port does not typecheck. This component alone does not establish working
-control-socket discovery or request execution and must remain inactive.
+components. The combined candidate connects this reader at `server/index.ts`
+and replaces the removed service references with the new execution controller.
+This component alone does not establish working control-socket discovery or
+request execution and must remain inactive.
 
 `session-runner/upstream/pi-web-ui/patches/managed-v0123-run-bridge.patch`
 adds a ninth inactive component. `CoreEngine.openManagedRun` uses the real client
@@ -184,9 +220,9 @@ transfer. Forty core connection/registry/plugin tests and full upstream
 typecheck pass. The tests exercise active-chat isolation, event ownership,
 single submission, prepared-run cancellation, invalid models, and setup/drain
 races with synthetic SDK sessions. They do not prove durable transcript output,
-full unattended interaction cancellation, or live control requests. Execution
-controllers, their completion reducer wiring, restart metadata, and release
-validation remain required before activating the integration.
+full unattended interaction cancellation, or live control requests. The combined
+candidate adds controller/reducer wiring; restart metadata and full runtime
+release validation remain required before activating the integration.
 
 The remaining migration must preserve these contracts at their current owners:
 
@@ -194,7 +230,7 @@ The remaining migration must preserve these contracts at their current owners:
 | --- | --- |
 | Protocol and service interfaces | `packages/keel/src/protocol.ts` and `engine-service.ts`; server files are re-export shims. Port managed messages and real implementations together. |
 | Persisted state | `packages/keel/src/projects-schema.ts` owns types; `server/client-state.ts` owns storage. Preserve paused goals, model timestamps, and interrupted workspace-request metadata. |
-| Automation and workspace requests | Replace old daemon hooks with current core runtime/host integration; preserve status, cancellation, readiness, model validation, and restart recovery. |
+| Automation and workspace requests | Combined candidate replaces old daemon references with core/controller integration; finish restart metadata/recovery, cleanup, and real child/background completion verification. |
 | Quiesce and counters | Counter, bounded core drain, and background-host components are tested but inactive; native Goal shutdown, process-group escalation validation, and complete admission coverage remain required. |
 | Native Pi Goals | Native adapter persistence, drain, connection/selection restore, explicit Resume, and re-admission are implemented in inactive components; live history/browser validation remains. Old `goal-service.ts` tests do not establish these new runtime paths. |
 | SDK setup | `packages/keel/src/adapters/sdk/session-opener.ts` and host ports must preserve credentials, transcript placement, prompt references, and the single MCP integration. Do not import server modules into the core package. |
