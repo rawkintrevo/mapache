@@ -1,0 +1,22 @@
+{
+  "id": "remote-vm.gateway-isolation",
+  "title": "Remote gateway browser cookies remain scoped to each workspace",
+  "description": "Synthetic local browser transport regression, followed separately by real guest validation. This case makes no Firebase login or real-host acceptance claim.",
+  "baseUrl": "http://127.0.0.1:18843",
+  "artifactsDir": "artifacts/qa/remote-vm.gateway-isolation",
+  "requires": {
+    "chromeDevtools": true,
+    "fixture": "Run node vm-gateway/workspaceBrowser.fixture.js; it binds loopback only and uses synthetic credentials and targets"
+  },
+  "steps": [
+    {"assert": "manual", "expected": "Open /workspaces/alpha/agent/?mapache_access=fixture-alpha and /workspaces/beta/agent/?mapache_access=fixture-beta in two tabs of the same Chrome profile. Both redirect without the token and display matching HTTP and WebSocket identities."},
+    {"assert": "manual", "expected": "In alpha then beta then alpha, run window.probe() through DevTools. Each returns its own HTTP and WebSocket identity with status 200 after the other workspace has opened."},
+    {"assert": "manual", "expected": "Reload both tabs without query tokens and repeat probes. Inspect cookies: both are HttpOnly, Secure, SameSite=None, with distinct /workspaces/alpha/agent and /workspaces/beta/agent paths."},
+    {"assert": "manual", "expected": "Inspect Network: the compiled-style preload helper and CSS font/image URLs stay under each workspace prefix. No /agent root asset request, failed request, or unexpected console error occurs during loading or reload."},
+    {"assert": "manual", "expected": "Request the beta path with fixture-alpha as the query token. It returns 404, sets no cookie, and does not change beta's subsequent probe result."},
+    {"capture": "screenshot", "fileName": "alpha.png"},
+    {"capture": "screenshot", "fileName": "beta.png"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}

@@ -150,6 +150,19 @@ test("remote resolution is owner and generation fenced and returns only the SSH 
   }
 });
 
+test("workspace URL namespace must match the signed remote token", async () => {
+  const f = fixture();
+  for (const suffix of ["/", "/assets/app.js", "/ws"]) {
+    assert.equal((await f.call({path: `/workspaces/workspace-1/agent${suffix}`})).transport, "ssh");
+    await assert.rejects(f.call({path: `/workspaces/workspace-2/agent${suffix}`}), /not_found/);
+  }
+  for (const path of ["/workspaces/workspace-1/runner/health", "/workspaces/workspace%2D1/agent/",
+    "/workspaces/workspace-1/other", "/workspaces//agent/"]) {
+    await assert.rejects(f.call({path}));
+  }
+  await assert.rejects(f.call({path: "/workspaces/workspace-1/agent/", token: f.token({wid: undefined})}), /not_found/);
+});
+
 test("remote host and guest targets cannot be changed into arbitrary forwarding", async () => {
   const rebound = fixture();
   await rebound.call();

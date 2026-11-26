@@ -7,7 +7,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev --no-package-lock
-COPY proxy.js server.js sshTransport.js ./
+COPY proxy.js server.js sshTransport.js workspacePaths.js ./
 USER node
 ENV PORT=8080
 CMD ["node", "server.js"]

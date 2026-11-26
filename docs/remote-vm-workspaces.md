@@ -189,8 +189,9 @@ when changing it; no guest image revision is required.
 
 `vm-gateway/` is the separately deployed `mapache-vm-gateway-v2` Cloud Run
 relay. The browser receives a short-lived `agent` token from
-`functions/preview.service.js` and opens only `/agent/` and `/agent/ws` on the
-gateway origin. `functions/vmGatewayResolve.service.js` is an IAM-only
+`functions/preview.service.js` and opens `/workspaces/{workspaceId}/agent/`
+and its child asset/API/WebSocket paths on the gateway origin.
+`functions/vmGatewayResolve.service.js` is an IAM-only
 `vmGatewayResolve_v2` resolver; it verifies the signed token, owner/workspace
 binding, running runtime generation, ready host, pinned host fingerprint, and
 the fixed `192.168.250.x:8787` guest endpoint. It returns a bounded relay
@@ -199,14 +200,13 @@ only inside the server-to-server resolver/relay path and is never logged or
 forwarded to the guest.
 
 The resolver converts existing PKCS8 Ed25519 keys to OpenSSH format in memory
-for the gateway's SSH process and resolves the host to a validated public IP
-on each authorization. The gateway scans only Ed25519 keys and writes only
-the exact fingerprint-matching key to `known_hosts`; unrelated scan results
-are never trusted. A changed host-key pin closes an existing relay at its next
+for the gateway's bundled SSH client and resolves the host to a validated public IP
+on each authorization. The client verifies the pinned fingerprint before
+authentication. A changed host-key pin closes an existing relay at its next
 authorization check. Deploy both `vmGatewayResolve_v2` and the gateway image
 when changing this transport contract; session runner revisions are unchanged.
 
-The relay opens a pinned `ssh -W` stdio connection to the managed host, strips
+The relay opens pinned SSH forwarding channels to the managed host, strips
 browser credentials and forwarding headers, and injects the short-lived access
 cookie on the private guest request. HTTP bodies and WebSocket frames stream
 with backpressure. A five-second bounded reauthorization loop closes a route
@@ -215,10 +215,30 @@ gateway/SSH loss closes the route without stopping the guest, and the client
 must request a fresh access URL. The legacy Compute Engine route remains an
 explicit direct-target branch; remote-libvirt errors never fall back to it.
 For an authorized remote guest GET containing `mapache_access`, the gateway
-sets a Secure, HttpOnly, SameSite=None cookie scoped to `/agent` and redirects
+sets a Secure, HttpOnly, SameSite=None cookie scoped to
+`/workspaces/{workspaceId}/agent` and redirects
 to the same URL without the token. This permits the following asset and
 WebSocket requests to authenticate. Invalid tokens never set a cookie; every
 subsequent request still checks current session authority and token expiry.
+The resolver also requires the URL workspace to equal the signed token's `wid`;
+namespaced paths cannot select legacy Compute routes. `vm-gateway/workspacePaths.js`
+strips the public prefix only on the private guest hop. It rewrites the small
+HTML entry document's root asset links and inserts its workspace base URL so
+upstream `appUrl`/`appWsUrl` requests retain the namespace. Vite's compiled preload
+helper still embeds the build-time `/agent/` base: a focused rewrite of its
+return-prefix expression scopes lazy JS/CSS preload requests as well. CSS asset
+`url(/agent/...)` references are scoped too. Entry HTML and static JS/CSS assets
+are requested uncompressed and bounded to 1 MiB and
+8 MiB respectively. API bodies and streamed content are not rewritten. Changes
+to the upstream bundler require rechecking lazy terminal loading with no legacy
+`/agent` cookie present. Guest redirects under `/agent` retain the public prefix and
+upstream cookies cannot overwrite the gateway cookie. Browser local storage is
+still origin-scoped; the namespace isolates routing authority, not browser origins.
+Existing unprefixed URLs remain accepted for deployment compatibility; refresh
+access URLs to obtain isolated paths. Deploy the gateway image and resolver
+before the API URL producer. Roll back the API producer first if necessary;
+leave namespace-capable readers deployed until existing URLs expire. No guest
+image or standard runner revision is needed for this change.
 Remote access tokens also carry the current `agentRuntimeBootInstanceId`.
 The resolver requires an exact match and returns that boot identity for ongoing
 route renewal. Disk/provider generation is retained across ordinary restarts,

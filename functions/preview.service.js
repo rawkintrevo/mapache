@@ -43,7 +43,7 @@ async function createSessionAccessUrls(uid, workspaceId, sessionId, dependencies
       previewUrl: null,
       browserUrl: null,
       browserStatusUrl: null,
-      agentUrl: appendQuery(`${baseUrl}/agent/`, "mapache_access", token),
+      agentUrl: appendQuery(`${baseUrl}/workspaces/${encodeURIComponent(workspaceId)}/agent/`, "mapache_access", token),
     };
   }
   const token = signSessionBrowserAccessToken(session, expiresAtMs);
