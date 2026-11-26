@@ -60,6 +60,7 @@ const {createAutomationAgentApiService} = require("./lib/automationAgentApi.serv
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
 const {createRemoteWorkspaceAuthority} = require("./lib/remoteWorkspaceAuthority");
+const {createRemoteAuthorityLossHandler} = require("./lib/remoteAuthorityLoss");
 const {createQaFaultHarness} = require("./lib/qaFaultHarness");
 const {isAutomationRuntime} = require("./lib/runtimePaths");
 
@@ -98,7 +99,8 @@ const workspaceAuthority = (config.remoteGuestMode === true ? createRemoteWorksp
   config,
   db,
   remoteCredentials,
-  onLost: () => piWebUi?.stop?.(),
+  onLost: config.remoteGuestMode === true ?
+    createRemoteAuthorityLossHandler({stop: () => piWebUi?.stop?.()}) : () => piWebUi?.stop?.(),
 });
 const activity = createActivityService({
   admin,

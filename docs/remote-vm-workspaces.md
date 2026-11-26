@@ -495,7 +495,15 @@ Home guests have no Firebase service-account credentials. The server selects
 `remoteWorkspaceAuthority.js` instead of the Cloud Run Firestore authority.
 It validates the lifecycle-issued boot/session/generation through the existing
 credential broker every five seconds, caps local admission at fifteen seconds,
-and stops pi-web-ui on denial, transport failure or expiry. A released boot
+and stops pi-web-ui on denial, transport failure or expiry. The remote-only
+`remoteAuthorityLoss.js` handler then exits the runner with status 1, including
+when agent shutdown fails or exceeds five seconds. Systemd's existing
+`Restart=on-failure`/`RestartSec=5` policy retries the full bootstrap; every retry
+must obtain current broker admission before starting pi-web-ui. Continued
+revocation stays unavailable, while a transient outage can recover without a
+manual VM restart. It issues no agent-task resume command and does not change boot identity.
+The guest unit cleans up remaining processes before starting its replacement.
+A released boot
 cannot be readmitted by a late response. Broker requests have a ten-second
 deadline. The host enforces the one-VM-per-workspace invariant; the broker fences
 superseded boot identities. Lifecycle state remains control-plane-owned.

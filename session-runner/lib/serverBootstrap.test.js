@@ -6,13 +6,16 @@ const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
 
-for (const remoteGuestMode of [false, true]) test(`server bootstrap wires authority before consumers (remote=${remoteGuestMode})`, () => {
+for (const remoteGuestMode of [false, true]) test(`server bootstrap wires authority before consumers (remote=${remoteGuestMode})`, async () => {
   const noop = () => {};
   const service = new Proxy({}, {get: () => noop});
   const activity = {};
   const isCurrentWriter = () => true;
   let started = false;
   let gitCreated = false;
+  let onLost;
+  let stopped = 0;
+  const exits = [];
   const express = Object.assign(() => service, {json: noop, static: noop});
   const overrides = {
     path,
@@ -21,14 +24,26 @@ for (const remoteGuestMode of [false, true]) test(`server bootstrap wires author
     ws: {WebSocketServer: function() { return service; }},
     "./lib/config": {createConfig: () => ({remoteGuestMode})},
     "./lib/workspaceAuthority": {
-      createWorkspaceAuthority: () => { assert.equal(remoteGuestMode, false); return {...service, isCurrentWriter}; },
+      createWorkspaceAuthority: (options) => {
+        assert.equal(remoteGuestMode, false);
+        onLost = options.onLost;
+        return {...service, isCurrentWriter};
+      },
     },
     "./lib/remoteWorkspaceAuthority": {
       createRemoteWorkspaceAuthority: (options) => {
         assert.equal(remoteGuestMode, true);
         assert.ok(options.remoteCredentials);
+        onLost = options.onLost;
         return {...service, isCurrentWriter};
       },
+    },
+    "./lib/remoteAuthorityLoss": {
+      createRemoteAuthorityLossHandler: (options) => require("./remoteAuthorityLoss")
+          .createRemoteAuthorityLossHandler({...options, exit: (code) => exits.push(code)}),
+    },
+    "./lib/piWebUiProcess": {
+      createPiWebUiProcess: () => ({...service, stop: async () => { stopped++; }}),
     },
     "./lib/activity": {
       createActivityService: (options) => {
@@ -61,4 +76,7 @@ for (const remoteGuestMode of [false, true]) test(`server bootstrap wires author
   }, {filename});
   assert.equal(gitCreated, true);
   assert.equal(started, true);
+  await onLost();
+  assert.equal(stopped, 1);
+  assert.deepEqual(exits, remoteGuestMode ? [1] : []);
 });
