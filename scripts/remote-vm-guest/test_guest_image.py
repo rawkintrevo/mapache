@@ -6,6 +6,7 @@ from pathlib import Path
 import stat
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).parent
@@ -83,6 +84,28 @@ class GuestImageTests(unittest.TestCase):
         self.assertEqual(result["resources"]["diskGiB"], 40)
         self.assertIn("/var/lib/mapache/workspace/home", result["durablePaths"])
         self.assertEqual(self.manifest["build"]["upgradePolicy"], "new-workspaces-only-unless-explicit-migration")
+
+    def test_builder_copies_directory_and_uploads_individual_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = root / "payload"
+            payload.mkdir()
+            commands = []
+            def run(command, **kwargs):
+                commands.append(command)
+                if command[0] == "virt-customize":
+                    source, destination = command[command.index("--copy-in") + 1].split(":", 1)
+                    self.assertTrue(Path(source).is_dir())
+                    self.assertEqual(destination, "/opt/mapache")
+                    for i, value in enumerate(command):
+                        if value == "--upload":
+                            self.assertTrue(Path(command[i + 1].split(":", 1)[0]).is_file())
+            with patch.object(builder, "verify_base_image", return_value={}), \
+                 patch.object(builder, "validate_payload", return_value={}), \
+                 patch.object(builder, "qemu_info", return_value={"format": "qcow2"}), \
+                 patch.object(builder.shutil, "which", return_value="available"):
+                builder.build_image(root / "base", payload, root / "guest.qcow2", self.manifest, runner=run)
+            self.assertEqual(sum(command[0] == "virt-customize" for command in commands), 1)
 
 
 if __name__ == "__main__":

@@ -236,7 +236,7 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
             "--mkdir", "/opt/mapache",
             "--mkdir", "/etc/mapache-vm",
             "--mkdir", "/var/lib/mapache/workspace",
-            "--upload", f"{staged_payload}:/opt/mapache/payload",
+            "--copy-in", f"{staged_payload}:/opt/mapache",
             "--upload", f"{bootstrap}:/usr/local/libexec/mapache-guest-bootstrap",
             "--upload", f"{unit}:/etc/systemd/system/mapache-guest.service",
             "--run-command", "useradd --system --home-dir /var/lib/mapache --shell /usr/sbin/nologin mapache || true",
