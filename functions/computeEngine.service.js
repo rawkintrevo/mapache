@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const {GoogleAuth} = require("google-auth-library");
 const {COMPUTE_ENGINE_BACKEND, normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
 const {normalizeComputeEngineLabelValue} = require("./computeEngineLabels.helpers");
@@ -369,10 +370,13 @@ function createComputeEngineService(dependencies = {}) {
   }
 
   function computeRequestId(value, phase) {
-    const suffix = String(phase || "request").replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 16) || "request";
-    const base = operationId(value);
-    const available = Math.max(1, 64 - suffix.length - 1);
-    return `${base.slice(0, available)}-${suffix}`;
+    const digest = crypto.createHash("sha256")
+        .update(`${String(value || "operation")}::${String(phase || "request")}`)
+        .digest();
+    digest[6] = (digest[6] & 0x0f) | 0x50;
+    digest[8] = (digest[8] & 0x3f) | 0x80;
+    const hex = digest.toString("hex");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
   }
 
   function shellQuote(value) {
