@@ -130,7 +130,7 @@ const {
 const automationAdmissionService = createAutomationAdmissionService({admin, db});
 const activeInstancesService = createActiveInstancesService({db});
 const browserEgressManagementService = createBrowserEgressManagementService({admin, db});
-const remoteHostService = createRemoteHostService({admin, db});
+const remoteHostService = createRemoteHostService({admin, db, env: process.env});
 let automationRetryService;
 const {
   assertMainAdmissionAllowed,
@@ -456,6 +456,7 @@ const workspaceService = createWorkspaceService({
   db,
   deleteSessionService,
   deleteWorkspaceSharedStorage: (...args) => workspaceSharedStorageService.deleteWorkspaceSharedStorage(...args),
+  env: process.env,
   workspaceAutomationDeletionService,
   isConnectedGithubSourcePayload: githubService.isConnectedGithubSourcePayload,
   normalizeConnectedGithubSourcePayload: githubService.normalizeConnectedGithubSourcePayload,

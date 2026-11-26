@@ -77,6 +77,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/ssh-gateways-empty.json`: SSH gateway user-menu navigation, empty-state setup guidance, and inventory request.
 - `cases/remote-hosts-onboarding.json`: Remote VM host user-menu navigation, first-run setup guidance, and owner inventory request.
 - `cases/remote-vm-workspace-option.json`: Remote VM workspace creation option, fixed guest summary, and ready-host submission gate; does not create a guest.
+- `cases/remote-vm-admission-default-off.json`: Creation-only remote VM admission is visibly disabled by the backend rollout switch while Blank/GitHub remain available.
 - `cases/remote-vm-security-boundary.json`: Authenticated forged-host admission rejection with no workspace or guest side effect.
 - `cases/remote-vm-rollout-canary.json`: Release-gate live host canary for remote workspace/session, native terminal, persistence, reconnect, failure recovery, and confirmed cleanup; requires a deliberately prepared host and operator-supplied `remoteHostId`.
 - `cases/remote-vm-gateway-isolation.json`: Two-tab browser cookie, HTTP and WebSocket isolation against loopback synthetic guests; real guest and Firebase owner validation remain separate release checks.

@@ -48,6 +48,20 @@ describe("remote hosts controller", () => {
 
     expect(state.remoteHosts.hosts).toEqual([]);
     expect(state.remoteHosts.attempted).toBe(false);
+    expect(state.remoteHosts.remoteVmAdmissionEnabled).toBe(false);
+  });
+
+  test("carries the backend admission switch and fails closed on load errors", async () => {
+    const state = makeState();
+    const api = {getRemoteHosts: vi.fn().mockResolvedValue({hosts: [], remoteVmAdmissionEnabled: true})};
+    const controller = createRemoteHostsController({state, api});
+
+    await controller.load();
+    expect(state.remoteHosts.remoteVmAdmissionEnabled).toBe(true);
+
+    api.getRemoteHosts.mockRejectedValueOnce(new Error("temporary"));
+    await controller.load();
+    expect(state.remoteHosts.remoteVmAdmissionEnabled).toBe(false);
   });
 
   test("holds a newly observed fingerprint for explicit confirmation", async () => {

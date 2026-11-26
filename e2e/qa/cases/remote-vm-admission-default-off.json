@@ -1,0 +1,21 @@
+{
+  "id": "remote-vm.admission-default-off",
+  "title": "Remote VM creation is fail-closed while admission is disabled",
+  "description": "Open workspace creation with REMOTE_VM_ADMISSION_ENABLED=false and verify that Blank/GitHub remain available while the remote source is visibly unavailable. This case does not create a workspace.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/remote-vm.admission-default-off",
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/open-workspace-modal.json"},
+    {"assert": "snapshot-text", "expected": "Remote VM workspace creation is currently disabled."},
+    {"assert": "snapshot-text", "expected": "Blank"},
+    {"assert": "snapshot-text", "expected": "GitHub"},
+    {"assert": "network-status", "requestUrlIncludes": "/api/remote-hosts", "method": "GET", "expectedStatus": 200},
+    {"capture": "screenshot", "fileName": "remote-vm-admission-disabled.png"},
+    {"capture": "console"},
+    {"capture": "network"}
+  ],
+  "cleanup": [
+    {"type": "clearLocalStorageKeys", "keys": ["mapache.qaLogin", "mapache.qaSecret"]}
+  ]
+}

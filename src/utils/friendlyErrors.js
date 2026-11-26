@@ -60,6 +60,7 @@ export function friendlyWorkspaceError(error) {
   if (message === "remote_host_not_ready") return "The remote host is not ready. Finish setup and verify its SSH connection before creating a VM.";
   if (message === "remote_host_not_found") return "That remote host is no longer available. Refresh host setup and try again.";
   if (message === "remote_host_service_unavailable") return "Remote VM host setup is temporarily unavailable. Try again shortly.";
+  if (message === "remote_vm_admission_disabled") return "Remote VM workspace creation is not enabled yet.";
   if (message === "remote_vm_resources_fixed") return "Remote VM workspaces use fixed 2 vCPU, 8 GiB RAM, and 40 GiB disk resources in v1.";
   if (message === "remote_vm_configuration_unsupported") return "This remote VM setting is not available in v1. Use the guest's pi-web-ui settings for supported connections.";
   return message;

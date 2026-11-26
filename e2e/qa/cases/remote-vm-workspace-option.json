@@ -1,7 +1,7 @@
 {
   "id": "remote-vm.workspace-option",
   "title": "Remote VM workspace option shows readiness gate",
-  "description": "Open workspace creation, select VM on remote machine, and verify the fixed guest shape plus the ready-host/setup gate. This case does not create a guest; a separate owner canary is required for live lifecycle evidence.",
+  "description": "Run with REMOTE_VM_ADMISSION_ENABLED=true. Open workspace creation, select VM on remote machine, and verify the fixed guest shape plus the ready-host/setup gate. This case does not create a guest; a separate owner canary is required for live lifecycle evidence.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/remote-vm.workspace-option",
   "steps": [
