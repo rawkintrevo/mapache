@@ -22,6 +22,7 @@ function fixture() {
     workspaceId: "workspace-1",
     runnerSessionId: "session-1",
     status: "running",
+    agentRuntimeBootInstanceId: "boot-1",
     browserAccessTokenSecret: "browser-secret",
     shutdownToken: "shutdown-secret",
     runtimeProvider,
@@ -65,7 +66,7 @@ function fixture() {
   const token = (claims = {}, secret = session.browserAccessTokenSecret) => {
     const payload = Buffer.from(JSON.stringify({
       aud: "agent", exp: Math.floor((time + 30_000) / 1000), gen: 3,
-      sid: "session-1", uid: "owner-1", wid: "workspace-1", ...claims,
+      sid: "session-1", uid: "owner-1", wid: "workspace-1", boot: session.agentRuntimeBootInstanceId, ...claims,
     })).toString("base64url");
     return `${payload}.${createHmac("sha256", secret).update(payload).digest("base64url")}`;
   };
@@ -122,7 +123,7 @@ test("remote resolution is owner and generation fenced and returns only the SSH 
     guestPort: 8787,
     sessionId: "session-1",
     generation: 3,
-    bootId: "3",
+    bootId: "boot-1",
     validUntil: result.validUntil,
   });
   assert.ok(result.validUntil <= Date.now() + 10_000);
@@ -167,6 +168,22 @@ test("remote host and guest targets cannot be changed into arbitrary forwarding"
   const health = fixture();
   const healthResult = await health.call({path: "/runner/health", shutdownToken: "shutdown-secret"});
   assert.equal(healthResult.transport, "ssh");
+});
+
+test("restart rejects old and bootless links even when session, secret and disk generation are unchanged", async () => {
+  const f = fixture();
+  const oldToken = f.token();
+  const first = await f.call({token: oldToken});
+  assert.equal(first.bootId, "boot-1");
+  f.session.agentRuntimeBootInstanceId = "boot-2";
+  await assert.rejects(f.call({token: oldToken}), /not_found/);
+  await assert.rejects(f.call({token: f.token({boot: undefined})}), /not_found/);
+  await assert.rejects(f.call({token: f.token({boot: ""})}), /not_found/);
+  const next = await f.call();
+  assert.equal(next.bootId, "boot-2");
+  assert.equal(next.generation, first.generation);
+  delete f.session.agentRuntimeBootInstanceId;
+  await assert.rejects(f.call(), /not_found/);
 });
 
 test("stopping or deleting a guest closes the route instead of implying host loss", async () => {

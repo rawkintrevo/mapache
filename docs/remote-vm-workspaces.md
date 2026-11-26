@@ -219,7 +219,15 @@ sets a Secure, HttpOnly, SameSite=None cookie scoped to `/agent` and redirects
 to the same URL without the token. This permits the following asset and
 WebSocket requests to authenticate. Invalid tokens never set a cookie; every
 subsequent request still checks current session authority and token expiry.
-This behavior requires deploying a new gateway image revision.
+Remote access tokens also carry the current `agentRuntimeBootInstanceId`.
+The resolver requires an exact match and returns that boot identity for ongoing
+route renewal. Disk/provider generation is retained across ordinary restarts,
+so it cannot substitute for the boot fence. Old and bootless tokens are rejected;
+clients obtain a fresh access URL after the API/resolver deployment or restart.
+Deploy the API signer before enabling the resolver's required boot check;
+the existing resolver already accepts the additional claim. The boot fence
+requires Functions updates only. Cookie bootstrap requires the gateway image
+revision described above.
 The gateway pools authenticated SSH connections by host, username, pinned key
 fingerprint and transport public-key digest (independent of private-key
 serialization). Each authorized HTTP/WebSocket request
