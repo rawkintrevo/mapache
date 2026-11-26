@@ -2,6 +2,7 @@
 
 const assert = require("assert");
 const {createSessionLifecycleService, isIdleSession} = require("./sessionLifecycle.service");
+const {createRuntimeDescriptor, REMOTE_LIBVIRT_BACKEND} = require("./runtimeProvider.helpers");
 
 const timestamp = {
   toDate: () => new Date("2026-01-01T00:00:00.000Z"),
@@ -504,6 +505,30 @@ assert.strictEqual(isIdleSession({
     eligible: 0,
     bypassed: 1,
     bypassedByReason: {automation_active_run: 1},
+    stopped: 0,
+    failed: 0,
+  });
+
+  const remoteDescriptor = createRuntimeDescriptor({
+    backend: REMOTE_LIBVIRT_BACKEND,
+    workspaceId: "workspace-1",
+    ownerUid: "user-1",
+    hostId: "host-1",
+  });
+  const remoteReaper = createSessionLifecycleService({
+    admin,
+    now: () => scheduleNow,
+    db: {collectionGroup: () => ({where: () => ({get: async () => ({docs: [{
+      ref: {update: async () => { throw new Error("remote guest must not be idle-stopped"); }},
+      data: () => ({workspaceId: "workspace-1", ownerUid: "user-1", status: "running", lastActivityAt: scheduleNow.getTime() - 2 * 60 * 60 * 1000, runtimeProvider: remoteDescriptor}),
+    }], size: 1})})})},
+    deleteSessionService: async () => { throw new Error("remote guest must not be idle-stopped"); },
+  });
+  assert.deepStrictEqual(await remoteReaper.reapIdleSessions(), {
+    checked: 1,
+    eligible: 0,
+    bypassed: 1,
+    bypassedByReason: {remote_libvirt: 1},
     stopped: 0,
     failed: 0,
   });

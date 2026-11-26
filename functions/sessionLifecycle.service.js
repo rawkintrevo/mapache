@@ -17,6 +17,7 @@ const {
 } = require("./backendUtils.helpers");
 const {isChromeSession} = require("./chromeReservation.helpers");
 const {isAutomationRuntime} = require("./runtimePaths.helpers");
+const {isRemoteLibvirtRuntime} = require("./runtimeProvider.helpers");
 const {resolveAutomationAssignment} = require("./automationAssignment.service");
 const {assertNoActiveResize} = require("./sessionResize.service");
 const {sessionSourceMetadata} = require("./github.service");
@@ -489,6 +490,8 @@ async function deleteSessionForWorkspace(sessionRef, session, options = {}, depe
   const deletion = await dependencies.deleteSessionService(sessionRef, session, {
     reason: options.reason || "deleted",
     returnDetails: true,
+    destroy: true,
+    deleteWorkspace: true,
     recoveryWarning: options.recoveryWarning,
   });
   const details = deletion && typeof deletion === "object" ? deletion : {serviceAbsent: deletion === true};
@@ -571,6 +574,9 @@ async function reapIdleSessions(dependencies = {}) {
   const now = dependencies.now ? new Date(dependencies.now()).getTime() : Date.now();
   const results = await Promise.allSettled(snap.docs.map(async (doc) => {
     const session = doc.data();
+    if (isRemoteLibvirtRuntime(session)) {
+      return {bypassed: true, bypassReason: "remote_libvirt"};
+    }
     if (isAutomationRuntime(session)) {
       const assignment = await resolveAutomationAssignment({
         db: dependencies.db,

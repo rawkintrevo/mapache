@@ -1,9 +1,11 @@
 # Remote-host VM workspaces
 
-This page defines the contract for the remote-libvirt workspace provider planned
-under #630. It is a design boundary for the implementation tickets; it does not
-make the provider available and does not change the existing Cloud Run,
-Compute Engine, or retained SSH providers.
+This page defines the contract for the remote-libvirt workspace provider under
+#630. Host registration, the lifecycle adapter, and the host helper are now
+implemented behind explicit provider dispatch. The gateway, connection
+materialization, workspace-creation UI, and real-host rollout remain separate
+children. Existing Cloud Run, Compute Engine, and retained SSH providers are
+unchanged.
 
 The host registry portion is implemented by `functions/remoteHost.service.js`
 and the authenticated API route composition in `functions/apiRouteManifest.js`,
@@ -101,7 +103,8 @@ public key and setup metadata only. A host-key fingerprint can be pinned only
 with an explicit confirmation flag; a connection test with no pin reports the
 observed fingerprint for owner verification and does not trust it implicitly.
 The private key is stored in the backend-only Firestore private subtree and is
-deleted on removal. The host registry never starts or deletes a guest.
+deleted on removal. The host registry never starts or deletes a guest; lifecycle
+operations use the separate `remoteVmLifecycle.service.js` adapter.
 
 V1 lifecycle states are `provisioning`, `starting`, `running`, `stopping`,
 `stopped`, `unreachable`, `error`, and `deleting`. `unreachable` means the host
@@ -116,6 +119,31 @@ for the operation. It checks CPU, memory and real free storage with headroom;
 the 40 GiB virtual limit is not a promise that 40 GiB of host storage is free.
 Thin-disk exhaustion is surfaced as an error. Reservations are released only
 after the operation reaches a terminal state or verified cleanup.
+
+### Lifecycle implementation (child #639)
+
+`functions/remoteVmLifecycle.service.js` owns the remote guest state machine.
+Each request creates a deterministic operation ID from owner, workspace, kind,
+and idempotency key in `remoteVmOperations/{operationId}`. A transaction checks
+the owner, host readiness, workspace tombstone, fixed guest identity, and host
+capacity before reserving one 2-vCPU/8-GiB/40-GiB entry. Reservations are stored
+per workspace so stop and verified delete can release exactly the owning entry;
+the transaction never performs a read after its callback returns.
+
+Workers claim an operation lease and use only the managed `mapache-vm` helper
+actions (`inspect`, `create`, `start`, `stop`, `destroy`). A lost SSH response is
+resolved by inspecting the deterministic guest and disk before any side effect
+is retried. Host errors produce `unreachable` and retain the workspace and
+guest; the Firestore trigger retries the same operation after reconnect. Delete
+sets a tombstone before remote cleanup and marks the workspace deleted only
+after a final `inspect` proves the guest is absent. A stale create/start worker
+cannot pass the descriptor generation or tombstone fence.
+
+Remote guests use explicit `autostart=disabled` state. Browser closure and the
+legacy idle/scheduled reconcilers do not stop a remote guest; manual stop/start
+and workspace deletion are the only v1 power transitions. The lifecycle adapter
+dispatches only for `runtimeProvider.backend=remote-libvirt`; provider errors
+never fall back to Cloud Run, Compute Engine, or SSH.
 
 ## Host trust and bootstrap
 

@@ -34,6 +34,23 @@ The generated account has no interactive shell. Its key can run only the
 Mapache helper protocol and local forwarding to the `192.168.250.0/24` guest
 network. The helper rejects arbitrary shell commands, paths and guest IDs.
 
+## Install the guest image
+
+Build the pinned `ubuntu-24.04-v1` image using the instructions in
+[`scripts/remote-vm-guest/README.md`](../../scripts/remote-vm-guest/README.md),
+then copy it to the managed image directory and give the managed account read
+access:
+
+```bash
+sudo install -o mapache-vm -g mapache-vm -m 0640 \
+  ubuntu-24.04-v1.qcow2 /var/lib/mapache-vm/images/ubuntu-24.04-v1.qcow2
+```
+
+The lifecycle helper creates one 40 GiB thin QCOW2 overlay per workspace under
+`/var/lib/mapache-vm/disks/`. It defines 2 vCPUs, 8192 MiB, the private
+`mapache-vm` network, and disables libvirt autostart. Do not rename the image,
+copy owner credentials into it, or edit a workspace disk while Mapache owns it.
+
 ## Verify readiness
 
 The check is read-only and emits machine-readable status:
@@ -50,6 +67,8 @@ fields are safe to copy into the Mapache setup form; no private key is printed.
 Re-running the install command is supported. The managed public key is added
 only once, retained guest disks and unrelated libvirt resources are preserved,
 and a changed unmanaged file causes a visible refusal instead of an overwrite.
+Host removal is rejected while a workspace or cleanup operation still
+references this host.
 
 ## Revoke access
 
@@ -57,6 +76,6 @@ Remove the generated public-key line from the managed account's
 `/etc/mapache-vm/authorized_keys`, then remove or disable the host in Mapache.
 The app revokes its private key reference and will not create new tunnels. Do
 not delete the host's libvirt network or guest disks while workspaces still
-reference them; workspace deletion owns guest cleanup in a later lifecycle
-child issue.
+reference them; workspace deletion queues verified helper cleanup and keeps an
+offline deletion pending for retry.
 

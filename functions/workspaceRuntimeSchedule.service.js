@@ -5,6 +5,7 @@ const logger = require("firebase-functions/logger");
 const {admin: defaultAdmin, db: defaultDb} = require("./backendContext");
 const {httpError, toClientDoc} = require("./backendUtils.helpers");
 const {isMarkedRuntimeSession} = require("./runtimeReservation.helpers");
+const {isRemoteLibvirtRuntime} = require("./runtimeProvider.helpers");
 const {isAutomationRuntime} = require("./runtimePaths.helpers");
 const {
   getNextRuntimeScheduleStart,
@@ -49,6 +50,7 @@ async function getWorkspaceRuntimePolicy(uid, workspaceId, dependencies = {}) {
   if (!snap.exists) throw httpError(404, "workspace_not_found");
   const workspace = snap.data() || {};
   assertWorkspaceOwnerAndAvailable(workspace, uid);
+  if (isRemoteLibvirtRuntime(workspace)) throw httpError(409, "remote_libvirt_manual_lifecycle");
   const session = await canonicalMainSession(workspaceId, workspace, dependencies);
   return {
     runtimePolicy: resolveStoredPolicy(workspace, session),
@@ -69,6 +71,7 @@ async function updateWorkspaceRuntimePolicy(uid, workspaceId, payload, dependenc
     if (!workspaceSnap.exists) throw httpError(404, "workspace_not_found");
     const workspace = workspaceSnap.data() || {};
     assertWorkspaceOwnerAndAvailable(workspace, uid);
+    if (isRemoteLibvirtRuntime(workspace)) throw httpError(409, "remote_libvirt_manual_lifecycle");
     const current = resolveStoredPolicy(workspace);
     policy = normalizeRuntimePolicy(payload, current);
     const revision = Number.isSafeInteger(workspace.runtimePolicyRevision) ? workspace.runtimePolicyRevision + 1 : 1;
@@ -108,6 +111,7 @@ async function setSessionLongRunning(uid, workspaceId, sessionId, payload, depen
   const session = sessionSnap.data() || {};
   if (isAutomationRuntime(session)) throw httpError(409, "automation_session_controlled");
   if (!isMarkedRuntimeSession(session)) throw httpError(409, "long_running_unavailable");
+  if (isRemoteLibvirtRuntime(session) || isRemoteLibvirtRuntime(workspace)) throw httpError(409, "remote_libvirt_manual_lifecycle");
   if (!payload || typeof payload.enabled !== "boolean") throw httpError(400, "invalid_long_running");
   await updateWorkspaceRuntimePolicy(uid, workspaceId, {mode: payload.enabled ? "keep-running" : "idle"}, dependencies);
   await sessionRef.update({
@@ -210,6 +214,7 @@ async function reconcileWorkspaceRuntimeSchedule(workspaceId, nowValue, dependen
   const now = nowValue ? asDate(nowValue) : dependencies.now ? asDate(dependencies.now()) : new Date();
   const claim = await claimWorkspace(workspaceId, now, dependencies);
   if (!claim) return {workspaceId, skipped: true, reason: "not_scheduled_or_unavailable"};
+  if (claim.remoteLibvirt) return {workspaceId, skipped: true, reason: "remote_libvirt_manual_lifecycle"};
   if (claim.busy) return {workspaceId, skipped: true, reason: "reconciliation_in_progress"};
   const workspaceRef = claim.workspaceRef;
   let result = {workspaceId, action: "none", failed: false};
@@ -315,6 +320,10 @@ async function claimWorkspace(workspaceId, now, dependencies = {}) {
     if (!snap.exists) return;
     const workspace = snap.data() || {};
     if (workspace.runtimePolicy?.mode !== "scheduled" || !workspace.runtimePolicy.schedule || isWorkspaceUnavailable(workspace)) return;
+    if (isRemoteLibvirtRuntime(workspace)) {
+      claim = {remoteLibvirt: true, workspaceId, workspaceRef};
+      return;
+    }
     const lease = workspace.runtimeScheduleLease || {};
     if (Number(lease.expiresAt || 0) > now.getTime()) {
       claim = {busy: true, workspaceId, workspaceRef};

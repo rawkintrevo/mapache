@@ -16,7 +16,7 @@ const HOST_STATUS = Object.freeze({
   REVOKED: "revoked",
 });
 const ACTIVE_OPERATION_STATES = new Set([
-  "provisioning", "starting", "running", "stopping", "deleting", "queued", "retrying",
+  "provisioning", "starting", "running", "stopping", "deleting", "queued", "retrying", "unreachable", "error",
 ]);
 
 function createRemoteHostService(dependencies = {}) {
@@ -184,7 +184,7 @@ async function removeRemoteHost(uid, hostId, dependencies = {}) {
     ]);
     const workspaceReferenced = (workspaceSnapshot.docs || []).some((doc) => {
       const data = doc.data() || {};
-      return data.hostId === normalizedId && !data.deletionTombstone && !data.deletedAt;
+      return (data.hostId === normalizedId || data.runtimeProvider?.hostId === normalizedId) && !data.deletedAt;
     });
     const operationActive = (operationSnapshot.docs || []).some((doc) => {
       const data = doc.data() || {};

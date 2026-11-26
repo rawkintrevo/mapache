@@ -46,6 +46,28 @@ class HostToolTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             installer.validate_public_key("ssh-rsa AAAA not-ed25519")
 
+    def test_lifecycle_actions_are_fixed_to_the_owned_guest_contract(self):
+        xml = helper.guest_xml("mapache-ws-abc123")
+        self.assertIn("<name>mapache-ws-abc123</name>", xml)
+        self.assertIn("/var/lib/mapache-vm/disks/mapache-ws-abc123.qcow2", xml)
+        self.assertIn("<vcpu placement=\"static\">2</vcpu>", xml)
+        with self.assertRaises(ValueError):
+            helper.handle(["capacity", "mapache-ws-abc123"])
+
+        class Result:
+            returncode = 0
+            stdout = "State: running\nAutostart: disable\n"
+
+        def runner(command, **kwargs):
+            if "domifaddr" in command:
+                return Result()
+            return Result()
+
+        observed = helper.handle(["inspect", "mapache-ws-abc123"], runner=runner)
+        self.assertTrue(observed["exists"])
+        self.assertEqual(observed["state"], "running")
+        self.assertFalse(observed["autostart"])
+
     def test_readiness_reports_missing_host_capabilities_without_mutation(self):
         class Result:
             returncode = 1
