@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {createComputeEngineService} = require("./computeEngine.service");
+const {normalizeComputeEngineLabelValue} = require("./computeEngineLabels.helpers");
 const {createRuntimeDescriptor, COMPUTE_ENGINE_BACKEND} = require("./runtimeProvider.helpers");
 
 function descriptor(overrides = {}) {
@@ -63,4 +64,41 @@ test("ownership labels prevent cleanup of another workspace", async () => {
     },
   });
   await assert.rejects(service.pause(descriptor()), /ownership/);
+});
+
+test("mixed-case Firebase workspace IDs produce valid Compute Engine labels", async () => {
+  const calls = [];
+  let disk;
+  let instance;
+  const service = createComputeEngineService({
+    request: async (request) => {
+      calls.push(request);
+      if (request.method === "GET" && request.url.includes("/disks/")) {
+        if (!disk) throw Object.assign(new Error("missing"), {response: {status: 404}});
+        return {data: disk};
+      }
+      if (request.method === "GET" && request.url.includes("/instances/")) {
+        if (!instance) throw Object.assign(new Error("missing"), {response: {status: 404}});
+        return {data: instance};
+      }
+      if (request.method === "POST" && request.url.endsWith("/disks")) {
+        disk = {name: request.data.name, status: "READY", sizeGb: request.data.sizeGb, labels: request.data.labels};
+        return {data: {status: "DONE"}};
+      }
+      if (request.method === "POST" && request.url.endsWith("/instances")) {
+        instance = {name: request.data.name, status: "RUNNING", labels: request.data.labels};
+        return {data: {status: "DONE"}};
+      }
+      return {data: {status: "DONE"}};
+    },
+  });
+  await service.start(descriptor({workspaceId: "CWgOpYpwJTY4Cd5mwPEo"}), {
+    runnerImage: "us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:abc",
+  });
+  const diskRequest = calls.find((call) => call.method === "POST" && call.url.endsWith("/disks"));
+  const instanceRequest = calls.find((call) => call.method === "POST" && call.url.endsWith("/instances"));
+  for (const request of [diskRequest, instanceRequest]) {
+    assert.equal(request.data.labels["mapache-workspace-id"], normalizeComputeEngineLabelValue("CWgOpYpwJTY4Cd5mwPEo"));
+    assert.match(request.data.labels["mapache-workspace-id"], /^[a-z][a-z0-9_-]*$/);
+  }
 });
