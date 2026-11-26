@@ -3,9 +3,29 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const http = require("node:http");
+const crypto = require("node:crypto");
 const {once} = require("node:events");
 const {WebSocketServer, WebSocket} = require("ws");
-const {createGateway, authorizationInput, sameAuthority, validateTarget} = require("./proxy");
+const {createGateway, authorizationInput, sameAuthority, validateTarget, pinnedKnownHosts} = require("./proxy");
+
+test("known_hosts contains only the confirmed Ed25519 key regardless of scan ordering", async () => {
+  function key() {
+    const publicKey = crypto.generateKeyPairSync("ed25519").publicKey.export({type: "spki", format: "der"}).subarray(-32);
+    const blob = Buffer.concat([Buffer.from("0000000b7373682d6564323535313900000020", "hex"), publicKey]);
+    return {encoded: blob.toString("base64"), fingerprint: `SHA256/${crypto.createHash("sha256").update(blob).digest("base64").replace(/=+$/, "")}`};
+  }
+  const pinned = key();
+  const other = key();
+  const target = {sshAddress: "home.example.com", sshPort: 2222, hostKeyFingerprint: pinned.fingerprint};
+  const dependencies = {execFileAsync: async (program, args) => {
+    assert.equal(program, "ssh-keyscan");
+    assert.equal(args[args.indexOf("-t") + 1], "ed25519");
+    return {stdout: `home.example.com ssh-ed25519 ${other.encoded}\nignored-host ssh-ed25519 ${pinned.encoded}\n`};
+  }};
+  assert.equal(await pinnedKnownHosts(target, dependencies), `[home.example.com]:2222 ssh-ed25519 ${pinned.encoded}\n`);
+  await assert.rejects(pinnedKnownHosts({...target, hostKeyFingerprint: "SHA256/wrong"}, dependencies), /key_mismatch/);
+  await assert.rejects(pinnedKnownHosts(target, {execFileAsync: async () => ({stdout: "host ssh-ed25519 AAAA\n"})}), /key_mismatch/);
+});
 
 async function fixture(t, resolveOverride) {
   let requests = 0;
@@ -131,4 +151,5 @@ test("target validation rejects arbitrary forwarding and auth parsing removes th
   assert.equal(input.token, "other");
   assert.equal(input.forwardPath, "/agent/?x=1");
   assert.equal(sameAuthority(valid, {...valid, privateKey: "different"}), true);
+  assert.equal(sameAuthority(valid, {...valid, hostKeyFingerprint: "SHA256/changed-key"}), false);
 });

@@ -197,6 +197,14 @@ authority to the gateway, never to the browser. The private host key is used
 only inside the server-to-server resolver/relay path and is never logged or
 forwarded to the guest.
 
+The resolver converts existing PKCS8 Ed25519 keys to OpenSSH format in memory
+for the gateway's SSH process and resolves the host to a validated public IP
+on each authorization. The gateway scans only Ed25519 keys and writes only
+the exact fingerprint-matching key to `known_hosts`; unrelated scan results
+are never trusted. A changed host-key pin closes an existing relay at its next
+authorization check. Deploy both `vmGatewayResolve_v2` and the gateway image
+when changing this transport contract; session runner revisions are unchanged.
+
 The relay opens a pinned `ssh -W` stdio connection to the managed host, strips
 browser credentials and forwarding headers, and injects the short-lived access
 cookie on the private guest request. HTTP bodies and WebSocket frames stream
