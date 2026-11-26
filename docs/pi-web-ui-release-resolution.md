@@ -168,6 +168,26 @@ but automation/request execution still references the removed service and that
 full port does not typecheck. This component alone does not establish working
 control-socket discovery or request execution and must remain inactive.
 
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-run-bridge.patch`
+adds a ninth inactive component. `CoreEngine.openManagedRun` uses the real client
+runtime/session registry to create a persistent user conversation without
+activating it. The handle subscribes before submitting through the existing
+`TurnRunner`, rejects duplicate submissions, and cancels the selected session
+while retaining its conversation. It waits for project credential/model restore
+before applying an explicit model. Missing models/events fail before execution;
+model authentication validation remains the controller's responsibility.
+
+Pending managed setup joins the core drain's attachment barrier. Admission
+generations invalidate setup and unsubmitted handles across a drain/reopen cycle.
+Subscriptions release explicitly or with their opened session, including session
+transfer. Forty core connection/registry/plugin tests and full upstream
+typecheck pass. The tests exercise active-chat isolation, event ownership,
+single submission, prepared-run cancellation, invalid models, and setup/drain
+races with synthetic SDK sessions. They do not prove durable transcript output,
+full unattended interaction cancellation, or live control requests. Execution
+controllers, their completion reducer wiring, restart metadata, and release
+validation remain required before activating the integration.
+
 The remaining migration must preserve these contracts at their current owners:
 
 | Contract | v0.123 owner / required work |
