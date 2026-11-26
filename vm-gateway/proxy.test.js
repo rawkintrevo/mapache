@@ -11,6 +11,24 @@ async function fixture(t, resolveOverride) {
   let requests = 0;
   const upstream = http.createServer((req, res) => {
     requests++;
+    if (req.url === "/agent/assets/preload.js") {
+      res.writeHead(200, {"content-type": "application/javascript"});
+      return res.end('function preload(e){return`/agent/`+e} const home="~/.pi/agent/mcp.json";');
+    }
+    if (req.url === "/agent/assets/math.css") {
+      res.writeHead(200, {"content-type": "text/css"});
+      return res.end('src:url(/agent/assets/math.woff2);background:url("/agent/assets/a.png")');
+    }
+    if (req.url === "/agent/index.html") {
+      const html = '<html><head><script src="/agent/assets/app.js"></script><link href="/agent/assets/app.css"></head></html>';
+      res.writeHead(200, {"content-type": "text/html; charset=utf-8", "content-length": Buffer.byteLength(html),
+        "set-cookie": "mapache_access=upstream; Path=/agent", etag: "original"});
+      return res.end(html);
+    }
+    if (req.url === "/agent/redirect") {
+      res.writeHead(302, {location: "/agent/"});
+      return res.end();
+    }
     if (req.url.startsWith("/agent/stream")) {
       res.writeHead(200);
       res.write("started");
@@ -105,6 +123,47 @@ test("denied and guessed hosts never connect to the guest", async (t) => {
   const f = await fixture(t);
   assert.equal((await request(f, "/agent/", {token: "wrong"})).status, 404);
   assert.equal((await request(f, "/agent/", {headers: {host: "foreign.example.com"}})).status, 404);
+  assert.equal(f.count(), 0);
+});
+
+test("namespaced bootstrap, HTML, redirects, assets and WebSocket preserve the workspace path", async (t) => {
+  const seen = [];
+  const f = await fixture(t, (input, target) => { seen.push(input.path); return target; });
+  const prefix = "/workspaces/workspace-1";
+  const bootstrap = await request(f, `${prefix}/agent/?mapache_access=valid&x=1`);
+  assert.equal(bootstrap.headers.location, `${prefix}/agent/?x=1`);
+  assert.match(bootstrap.headers["set-cookie"][0], /Path=\/workspaces\/workspace-1\/agent;/);
+  const entry = await request(f, `${prefix}/agent/index.html`);
+  assert.equal(entry.status, 200);
+  assert.match(entry.body.toString(), /<base href="\/workspaces\/workspace-1\/agent\/">/);
+  assert.match(entry.body.toString(), /src="\/workspaces\/workspace-1\/agent\/assets\/app.js"/);
+  assert.match(entry.body.toString(), /href="\/workspaces\/workspace-1\/agent\/assets\/app.css"/);
+  assert.equal(entry.headers["set-cookie"], undefined);
+  assert.equal(entry.headers.etag, undefined);
+  const module = await request(f, `${prefix}/agent/assets/preload.js`);
+  assert.equal(module.body.toString(), 'function preload(e){return `/workspaces/workspace-1/agent/`+e} const home="~/.pi/agent/mcp.json";');
+  const style = await request(f, `${prefix}/agent/assets/math.css`);
+  assert.equal(style.body.toString(), 'src:url(/workspaces/workspace-1/agent/assets/math.woff2);background:url("/workspaces/workspace-1/agent/assets/a.png")');
+  assert.equal((await request(f, `${prefix}/agent/redirect`)).headers.location, `${prefix}/agent/`);
+  const asset = await request(f, `${prefix}/agent/assets/main.js?version=1`);
+  assert.equal(JSON.parse(asset.body).url, "/agent/assets/main.js?version=1");
+  const socket = new WebSocket(`ws://127.0.0.1:${f.port}${prefix}/agent/ws`, {
+    headers: {host: "gateway.example.com", cookie: "mapache_access=valid"},
+  });
+  t.after(() => socket.terminate());
+  await once(socket, "open");
+  socket.send("namespaced");
+  assert.equal((await once(socket, "message"))[0].toString(), "namespaced");
+  assert.ok(seen.every((path) => path.startsWith(`${prefix}/agent/`)));
+});
+
+test("malformed namespaces never open a transport or establish cookies", async (t) => {
+  const f = await fixture(t);
+  for (const path of ["/workspaces//agent/", "/workspaces/a/runner/health", "/workspaces/a%2Fb/agent/"]) {
+    const result = await request(f, `${path}?mapache_access=valid`);
+    assert.equal(result.status, 404);
+    assert.equal(result.headers["set-cookie"], undefined);
+  }
   assert.equal(f.count(), 0);
 });
 

@@ -30,7 +30,14 @@ function createVmGatewayResolveService({db, now = Date.now, allowedGatewayHosts,
 
     const host = normalizeGatewayHost(body.host);
     if (!gatewayHostAllowed(host, allowedGatewayHosts)) throw httpError(404, "not_found");
-    const requestPath = normalizeRequestPath(body.path);
+    let requestPath = normalizeRequestPath(body.path);
+    let pathWorkspaceId = "";
+    if (requestPath.startsWith("/workspaces/")) {
+      const match = requestPath.match(/^\/workspaces\/([A-Za-z0-9_-]{1,128})(\/agent(?:\/[^?]*)?)(\?.*)?$/);
+      if (!match) throw httpError(404, "not_found");
+      pathWorkspaceId = match[1];
+      requestPath = match[2] + (match[3] || "");
+    }
     const origin = normalizeOptionalOrigin(body.origin);
     if (origin && origin !== `https://${host}`) throw httpError(404, "not_found");
 
@@ -38,6 +45,7 @@ function createVmGatewayResolveService({db, now = Date.now, allowedGatewayHosts,
     if (!Number.isSafeInteger(time)) throw httpError(503, "gateway_unavailable");
 
     const payload = parseTokenPayload(body.token);
+    if (pathWorkspaceId && payload?.wid !== pathWorkspaceId) throw httpError(404, "not_found");
     // Workspace-scoped tokens select remote-libvirt before consulting the
     // hostname-scoped Compute Engine route. Both providers share this gateway
     // hostname; an existing Compute route must not shadow remote workspaces.

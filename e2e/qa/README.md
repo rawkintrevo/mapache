@@ -79,6 +79,7 @@ Checked-in `e2e/qa/` manifests are intended for Chrome DevTools-assisted executi
 - `cases/remote-vm-workspace-option.json`: Remote VM workspace creation option, fixed guest summary, and ready-host submission gate; does not create a guest.
 - `cases/remote-vm-security-boundary.json`: Authenticated forged-host admission rejection with no workspace or guest side effect.
 - `cases/remote-vm-rollout-canary.json`: Release-gate live host canary for remote workspace/session, native terminal, persistence, reconnect, failure recovery, and confirmed cleanup; requires a deliberately prepared host and operator-supplied `remoteHostId`.
+- `cases/remote-vm-gateway-isolation.json`: Two-tab browser cookie, HTTP and WebSocket isolation against loopback synthetic guests; real guest and Firebase owner validation remain separate release checks.
 - `cases/ssh-gateways-management.json`: Configured SSH gateway workspace assignment persistence and explicit restart semantics; requires a disposable QA gateway configuration.
 - `cases/ssh-gateways-forged-assignment.json`: Authenticated forged gateway assignment rejection.
 - `cases/runtime-schedule-policy.json`: Saves a weekday/timezone runtime schedule while leaving the workspace in Idle timeout mode; does not start a runner.

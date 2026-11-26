@@ -2,6 +2,8 @@
 
 const http = require("node:http");
 const {createSshTransportPool} = require("./sshTransport");
+const {workspacePath, entryHtml, rewriteEntryHtml, assetModule, rewriteAssetModule,
+  assetStyle, rewriteAssetStyle, publicLocation} = require("./workspacePaths");
 
 const HOP_HEADERS = new Set(["connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade"]);
 const ACCESS_QUERY = "mapache_access";
@@ -27,13 +29,14 @@ function createGateway({resolve, request = http.request, transportFactory = crea
     const input = authorizationInput(req);
     const target = await resolve(input);
     validateTarget(target);
+    if (input.prefix && target.transport !== "ssh") throw new Error("not_found");
     if (downstream.destroyed) return;
     // The gateway consumes the URL token before forwarding. Establish browser
     // authority here so subsequent assets and WebSockets carry it as a cookie.
     if (!websocket && req.method === "GET" && target.transport === "ssh" && input.bootstrap) {
       downstream.writeHead(303, {
-        location: input.forwardPath,
-        "set-cookie": `mapache_access=${encodeURIComponent(input.token)}; Path=/agent; HttpOnly; Secure; SameSite=None`,
+        location: input.publicPath,
+        "set-cookie": `mapache_access=${encodeURIComponent(input.token)}; Path=${input.prefix}/agent; HttpOnly; Secure; SameSite=None`,
         "cache-control": "no-store",
         "referrer-policy": "no-referrer",
       });
@@ -96,6 +99,11 @@ function createGateway({resolve, request = http.request, transportFactory = crea
     } : await transportFactory(target);
     if (stopped) return transport.close?.();
     const headers = forwardedHeaders(req, input.token, target, websocket, input.shutdownToken, input.path);
+    if (entryHtml(input) || assetModule(input) || assetStyle(input)) {
+      headers["accept-encoding"] = "identity";
+      delete headers["if-none-match"];
+      delete headers["if-modified-since"];
+    }
     const options = {
       hostname: transport.hostname || "127.0.0.1",
       port: transport.port,
@@ -115,8 +123,33 @@ function createGateway({resolve, request = http.request, transportFactory = crea
         deny(downstream);
         return;
       }
-      downstream.writeHead(response.statusCode || 502, {...cleanHeaders(response.headers), "cache-control": "no-store"});
+      const responseHeaders = {...cleanHeaders(response.headers), "cache-control": "no-store"};
+      if (responseHeaders.location) responseHeaders.location = publicLocation(responseHeaders.location, input.prefix);
+      if (input.prefix) delete responseHeaders["set-cookie"];
       response.on("error", close);
+      const rewriteHtml = entryHtml(input) && /^text\/html\b/i.test(responseHeaders["content-type"] || "");
+      const rewriteModule = assetModule(input) && /^(?:text|application)\/(?:javascript|ecmascript)\b/i.test(responseHeaders["content-type"] || "");
+      const rewriteStyle = assetStyle(input) && /^text\/css\b/i.test(responseHeaders["content-type"] || "");
+      if (response.statusCode === 200 && (rewriteHtml || rewriteModule || rewriteStyle)) {
+        if (responseHeaders["content-encoding"] && responseHeaders["content-encoding"] !== "identity") return close();
+        const chunks = [];
+        let bytes = 0;
+        response.on("data", (chunk) => {
+          bytes += chunk.length;
+          if (bytes > (rewriteHtml ? 1 : 8) * 1024 * 1024) return close();
+          chunks.push(chunk);
+        });
+        response.on("end", () => {
+          if (stopped) return;
+          delete responseHeaders["content-length"];
+          delete responseHeaders.etag;
+          downstream.writeHead(200, responseHeaders);
+          const rewrite = rewriteHtml ? rewriteEntryHtml : rewriteModule ? rewriteAssetModule : rewriteAssetStyle;
+          downstream.end(rewrite(Buffer.concat(chunks).toString("utf8"), input.prefix));
+        });
+        return;
+      }
+      downstream.writeHead(response.statusCode || 502, responseHeaders);
       response.pipe(downstream);
     });
     upstream.on("upgrade", (response, socket, upstreamHead) => {
@@ -149,10 +182,14 @@ function authorizationInput(req) {
   const token = parsed.searchParams.get(ACCESS_QUERY) || readCookie(req.headers?.cookie);
   if (!token || Buffer.byteLength(token) > MAX_TOKEN_BYTES) throw new Error("not_found");
   parsed.searchParams.delete(ACCESS_QUERY);
+  const {prefix, privatePath} = workspacePath(parsed.pathname);
   return {
     host,
     path: parsed.pathname,
-    forwardPath: `${parsed.pathname}${parsed.search}`,
+    prefix,
+    privatePath,
+    publicPath: `${parsed.pathname}${parsed.search}`,
+    forwardPath: `${privatePath}${parsed.search}`,
     bootstrap: new URL(req.url || "/", `https://${host}`).searchParams.has(ACCESS_QUERY),
     origin: String(req.headers?.origin || ""),
     token,
