@@ -170,7 +170,7 @@ function createComputeEngineService(dependencies = {}) {
     const response = await requestImpl({
       url: `${zoneUrl(descriptor)}/disks`,
       method: "POST",
-      params: {requestId: operationId(options.operationId || descriptor.workspaceId)},
+      params: {requestId: computeRequestId(options.operationId || descriptor.workspaceId, "disk")},
       data: {
         name: descriptor.dataDiskName,
         sizeGb,
@@ -207,7 +207,7 @@ function createComputeEngineService(dependencies = {}) {
     const response = await requestImpl({
       url: `${zoneUrl(descriptor)}/instances`,
       method: "POST",
-      params: {requestId: operationId(options.operationId || descriptor.workspaceId)},
+      params: {requestId: computeRequestId(options.operationId || descriptor.workspaceId, "instance")},
       data: instanceBody(descriptor, disk, {...options, allowNewDisk: disk._mapacheCreated === true}),
     });
     await waitForOperation(response.data, descriptor, options);
@@ -235,7 +235,7 @@ function createComputeEngineService(dependencies = {}) {
   }
 
   async function deleteResource(url, options = {}, descriptor = null) {
-    const response = await requestImpl({url, method: "DELETE", params: {requestId: operationId(options.operationId || "delete")}});
+    const response = await requestImpl({url, method: "DELETE", params: {requestId: computeRequestId(options.operationId || "delete", "delete")}});
     await waitForOperation(response.data, descriptor, options);
   }
 
@@ -366,6 +366,13 @@ function createComputeEngineService(dependencies = {}) {
 
   function operationId(value) {
     return String(value || "operation").replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 64) || "operation";
+  }
+
+  function computeRequestId(value, phase) {
+    const suffix = String(phase || "request").replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 16) || "request";
+    const base = operationId(value);
+    const available = Math.max(1, 64 - suffix.length - 1);
+    return `${base.slice(0, available)}-${suffix}`;
   }
 
   function shellQuote(value) {
