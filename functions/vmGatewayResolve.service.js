@@ -2,6 +2,8 @@
 
 const {createHmac, timingSafeEqual} = require("node:crypto");
 const {httpError} = require("./backendUtils.helpers");
+const {sshPrivateKey} = require("./remoteHost.connection");
+const {normalizeHostAddress, resolveAllowedAddresses} = require("./remoteHost.service");
 const {isRemoteLibvirtRuntime, normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
 
 const DEFAULT_AGENT_PORT = 8787;
@@ -18,7 +20,7 @@ const PATH_PATTERN = /^\/(?:agent(?:\/|$)|runner\/health(?:\/)?$)/;
  * response, URL, Firestore route record, or log.  The gateway uses it only to
  * open an SSH stdio relay to the guest's fixed pi-web-ui port.
  */
-function createVmGatewayResolveService({db, now = Date.now, allowedGatewayHosts} = {}) {
+function createVmGatewayResolveService({db, now = Date.now, allowedGatewayHosts, resolveHost} = {}) {
   if (!db || typeof db.collection !== "function") throw new Error("vm_gateway_resolver_db_required");
 
   return async function resolve(req = {}) {
@@ -83,7 +85,7 @@ function createVmGatewayResolveService({db, now = Date.now, allowedGatewayHosts}
         sshPort: normalizePort(remoteHost.port || 22),
         sshUsername: normalizeUsername(remoteHost.managedUsername),
         hostKeyFingerprint: remoteHost.hostKeyFingerprint,
-        privateKey: privateData.privateKey,
+        privateKey: sshPrivateKey(privateData.privateKey),
         guestAddress,
         guestPort: DEFAULT_AGENT_PORT,
         sessionId: String(session.runnerSessionId || payload.sid),
@@ -92,7 +94,8 @@ function createVmGatewayResolveService({db, now = Date.now, allowedGatewayHosts}
         validUntil: Math.min(time + ROUTE_TTL_MS, payload.exp * 1000),
       };
     });
-    return route;
+    const addresses = await resolveAllowedAddresses(normalizeHostAddress(route.sshAddress), {resolveHost});
+    return {...route, sshAddress: addresses[0]};
   };
 }
 
