@@ -1,0 +1,30 @@
+{
+  "id": "remote-vm.owner-canary",
+  "title": "Explicitly authorized home-host owner canary",
+  "description": "Run only for an owner who has explicitly authorized a disposable VM canary on their prepared host. Authenticate that owner in an isolated browser before this case; do not change the QA account or transfer host records/keys between owners.",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/remote-vm.owner-canary",
+  "parameters": {
+    "ownerUid": "",
+    "remoteHostId": "",
+    "workspaceName": "qa-remote-vm-owner-{{timestamp}}",
+    "sessionName": "qa-remote-vm-owner-session-{{timestamp}}"
+  },
+  "requires": {
+    "chromeDevtools": true,
+    "ownerAuthorization": "Explicit authorization for a disposable canary under the supplied ownerUid and ready hostId; authenticate through Firebase in a fresh isolated browser, keeping all tokens in memory and out of artifacts",
+    "preparedHost": "Matching helper/image installed, pinned host fingerprint, managed SSH readiness passed",
+    "cleanup": "Stop the session and permanently delete only the newly created canary workspace through the application; verify guest/disk absence afterward"
+  },
+  "steps": [
+    {"assert": "manual", "expected": "The isolated browser Firebase user UID matches ownerUid, and the supplied ready remoteHostId belongs to that owner. Record initial host capacity and managed resource inventory."},
+    {"useScript": "scripts/create-remote-vm-canary.json", "parameters": {"remoteHostId": "{{remoteHostId}}", "workspaceName": "{{workspaceName}}", "sessionName": "{{sessionName}}"}},
+    {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "{{workspaceName}}"}},
+    {"assert": "network-status", "requestUrlIncludes": "/access-url", "method": "POST", "expectedStatus": 200},
+    {"assert": "manual", "expected": "The embedded pi-web-ui native terminal opens; write a sentinel and install a harmless user-scoped tool. Verify both after browser reconnect and after a stop/start cycle."},
+    {"capture": "screenshot", "fileName": "remote-vm-owner-running.png"},
+    {"assert": "manual", "expected": "Exercise duplicate mutation, lost response, SSH/gateway interruption and offline deletion recovery only on the canary; record operation IDs and safe status without logging credentials."},
+    {"useScript": "scripts/delete-selected-workspace.json"},
+    {"assert": "manual", "expected": "Confirm the canary domain, disk and seed are absent, capacity is released, and unrelated resources match the initial inventory. Sign out and remove the owned browser profile."}
+  ]
+}

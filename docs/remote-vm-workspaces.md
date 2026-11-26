@@ -491,6 +491,14 @@ revision:
   must be unchanged. Retain only sanitized screenshots, network status and
   operation IDs.
 
+For the separately authorized home-machine owner canary, use
+`e2e/qa/cases/remote-vm-owner-canary.json`. It requires an isolated browser
+authenticated as the host owner before execution, rather than the QA custom
+login. Verify that UID before creating anything. Do not transfer a host or its
+private key to the QA account, change the QA login configuration, or modify the
+owner's profile. Keep authentication tokens in memory, capture only sanitized
+evidence, and sign out/remove the isolated browser profile after cleanup.
+
 The current admission behavior is intentionally fail-closed: workspace
 creation requires an owner-scoped host with `ready` status. If a canary cannot
 be completed, leave admission disabled and record the blocker rather than
