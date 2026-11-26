@@ -36,6 +36,19 @@ Managed storage directories use mode 0711 so libvirt's QEMU user can traverse
 them without directory listing access; disk file permissions govern content
 access. The credential-free base image is root-owned and readable by QEMU.
 
+`functions/remoteHost.connection.js` implements the registry connection test
+using the bundled `ssh2` client (no system SSH binary required). It connects to
+an already validated IP. An unconfirmed host returns only its Ed25519
+fingerprint and is disconnected before authentication; a changed key is
+rejected before authentication. After confirmation, the helper must report an
+active managed network, KVM, a readable base image, and valid capacity. Old
+helpers without the readiness field require reinstalling the matching helper.
+Existing PKCS8 Ed25519 private keys are converted in memory to OpenSSH format
+without changing their public keys or persisting temporary key files. The
+connection has a bounded deadline and helper output limit; command stderr and
+private key material never reach the client. Deploy the API Functions revision
+for this change; no Cloud Run runner image revision is needed.
+
 The authenticated `/app` host surface is implemented in
 `src/components/remoteHosts/RemoteHostsPage.jsx` and
 `src/controllers/remoteHostsController.js`. It is intentionally limited to

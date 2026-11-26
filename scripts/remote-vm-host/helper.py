@@ -178,7 +178,11 @@ def handle(arguments, *, runner=subprocess.run):
         if guest_id:
             return inspect_guest(guest_id, runner=runner)
         result = virsh("list", "--all", runner=runner)
+        network = virsh_optional("net-info", NETWORK, runner=runner)
+        network_ready = network.returncode == 0 and bool(re.search(
+            r"^Active:\s+yes\s*$", network.stdout or "", re.MULTILINE))
         return {"version": VERSION, "network": NETWORK, "guestId": None,
+                "ready": bool(network_ready and Path("/dev/kvm").exists() and os.access(IMAGE_PATH, os.R_OK)),
                 "virsh": result.stdout[-12000:]}
     if action == "inspect":
         if not guest_id:

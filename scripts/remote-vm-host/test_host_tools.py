@@ -36,6 +36,13 @@ class HostToolTests(unittest.TestCase):
             result = subprocess.run(["virt-xml-validate", str(path), "domain"], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_status_checks_network_and_base_image_before_admitting_host(self):
+        for active, readable, expected in [(False, True, False), (True, False, False), (True, True, True)]:
+            def runner(command, **kwargs):
+                return SimpleNamespace(returncode=0, stdout=f"Active: {'yes' if active else 'no'}\n")
+            with patch.object(helper.os, "access", return_value=readable), patch.object(helper.Path, "exists", return_value=True):
+                self.assertEqual(helper.handle(["status"], runner=runner)["ready"], expected)
+
     def test_install_creates_readable_public_key_and_restricted_account(self):
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
             root = Path(directory)
