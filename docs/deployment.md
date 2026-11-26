@@ -75,6 +75,36 @@ firebase deploy --only functions --project pi-agents-cloud
 gcloud builds submit session-runner --project pi-agents-cloud --tag us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:latest
 ```
 
+## Remote VM release gate (#643)
+
+Remote VM workspace admission is a separately verified rollout. Deploy the
+Functions revision before running the live canary, and always provide the
+project explicitly:
+
+```bash
+firebase deploy --only functions --project pi-agents-cloud
+```
+
+The deployment must retain `mapache-api@pi-agents-cloud.iam.gserviceaccount.com`
+for API/worker Functions and `mapache-runner@pi-agents-cloud.iam.gserviceaccount.com`
+for per-session Cloud Run services. Confirm the deployed `api`,
+`provisionQueuedSession`, remote lifecycle, and gateway Functions are healthy
+before enabling new admission. The rollout case then runs against one
+owner-scoped ready host and records the immutable source commit, guest image
+manifest, helper version, Functions revision, gateway revision and sanitized
+QA artifacts. Never put host addresses, fingerprints, private keys, or browser
+tokens in the release record.
+
+For the #642 integration revision, the explicit command above completed
+successfully on 2026-11-26 for source `7b304c2` (the merged PR commit); the
+real-host canary remains the #643 gate. A host that fails
+`python3 scripts/remote-vm-host/install.py --check-only --json` must remain
+outside the rollout. Do not disable or delete provider dispatch during a
+rollback: stop/start, authenticated gateway access and pending deletion for
+already-created remote workspaces must remain available. Roll back the
+Functions revision and admission setting together, then reconcile pending
+operations and inventory the host's managed disks before closing the release.
+
 The GitHub production workflow provisions Temurin Java 21 before running the
 canonical Firestore Emulator checks and invokes the repository-pinned Firebase
 CLI from the root lockfile. Keep those CI versions aligned with local

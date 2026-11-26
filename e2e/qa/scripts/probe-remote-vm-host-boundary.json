@@ -1,0 +1,20 @@
+{
+  "id": "script.probeRemoteVmHostBoundary",
+  "title": "Reject a forged remote host workspace request",
+  "actions": [
+    {
+      "type": "apiRequest",
+      "method": "POST",
+      "path": "/api/workspaces",
+      "body": {
+        "name": "qa-remote-vm-forged-host-{{timestamp}}",
+        "source": {"type": "remote-libvirt", "hostId": "forged-host-id"}
+      }
+    },
+    {"type": "waitForNetwork", "requestUrlIncludes": "/api/workspaces", "method": "POST", "expectedStatus": 404, "timeoutMs": 10000}
+  ],
+  "successSignals": [
+    "A remote host not owned by the signed-in user cannot create a workspace",
+    "No guest or disk is provisioned for the rejected request"
+  ]
+}
