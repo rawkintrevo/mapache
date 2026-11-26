@@ -2,6 +2,7 @@
 Description=Mapache remote VM workspace runtime
 Wants=network-online.target
 After=network-online.target
+StartLimitIntervalSec=0
 ConditionPathExists=/opt/mapache/payload/session-runner/server.js
 ConditionPathExists=/opt/mapache/payload/runtime/bin/node
 
@@ -27,7 +28,7 @@ Environment=PREVIEW_ENABLED=false
 EnvironmentFile=-/etc/mapache-vm/guest.env
 ExecStart=/usr/local/libexec/mapache-guest-bootstrap
 Restart=on-failure
-RestartSec=2
+RestartSec=5
 TimeoutStopSec=15
 KillMode=mixed
 NoNewPrivileges=true

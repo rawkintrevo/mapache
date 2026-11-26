@@ -251,6 +251,12 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
             "--run-command", "ln -sfn /opt/mapache/payload/runtime/pi /usr/local/bin/pi",
             "--run-command", "mkdir -p /etc/systemd/system/multi-user.target.wants",
             "--run-command", "ln -sfn /etc/systemd/system/mapache-guest.service /etc/systemd/system/multi-user.target.wants/mapache-guest.service",
+            # No Snap workload is part of v1. Its network seeding must not
+            # block cloud-final and the private runtime configuration.
+            "--run-command", "systemctl mask snapd.service snapd.socket snapd.seeded.service snapd.autoimport.service",
+            # virt-resize renumbers the pinned image's GPT partitions. Rebuild
+            # the BIOS core image and menu so GRUB does not use the old prefix.
+            "--run-command", "grub-install --target=i386-pc /dev/sda && update-grub",
         ], check=True)
         image_info = qemu_info(output, runner)
         result = {

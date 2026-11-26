@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const {resolveAllowedAddresses} = require("./remoteHost.service");
 const {runRemoteHostCommand} = require("./remoteHost.connection");
+const {guestConfiguration, guestConfigurationId} = require("./remoteVmGuestConfig.helpers");
 const {httpError} = require("./backendUtils.helpers");
 const {
   REMOTE_GUEST_DISK_GIB,
@@ -91,6 +92,8 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       serviceUrl: descriptor.gateway?.baseUrl || remoteVmGatewayBaseUrl(),
       remoteCredentialBrokerUrl: typeof dependencies.remoteVmCredentialsUrl === "function" ?
         dependencies.remoteVmCredentialsUrl() : null,
+      agentRuntimeBootInstanceId: result.bootId,
+      agentRuntimeGeneration: descriptor.generation,
       lastError: null,
       runtimeProvider: {...descriptor, state: "running", guestIp: result.guestIp || descriptor.guestIp},
       ...(dependencies.admin?.firestore?.Timestamp ? {updatedAt: dependencies.admin.firestore.Timestamp.now()} : {}),
@@ -122,7 +125,8 @@ function createRemoteVmLifecycleService(dependencies = {}) {
   async function runLifecycle(kind, suppliedWorkspace, sessionRef, session = {}, options = {}) {
     const context = await resolveContext(suppliedWorkspace, sessionRef, session, options);
     const {workspace, descriptor} = context;
-    const operation = await queueOperation(kind, workspace, descriptor, session, options);
+    const operation = await queueOperation(kind, workspace, descriptor,
+      {...session, id: sessionRef?.id || session.id || session.runnerSessionId}, options);
     if (operation.state === "completed") return applyResult(kind, operation, session);
     try {
       const completed = await executeOperation(operation.id);
@@ -220,6 +224,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       const operationData = {
         ownerUid: descriptor.ownerUid,
         workspaceId: descriptor.workspaceId,
+        sessionId: session.id || null,
         hostId: descriptor.hostId,
         kind,
         idempotencyKey,
@@ -265,19 +270,23 @@ function createRemoteVmLifecycleService(dependencies = {}) {
     if (context.stale) return finishOperation(ref, operation, context, {exists: false});
     try {
       let observed;
-      if (operation.kind === "create") {
-        observed = await performHostOperation(context, "create");
-        observed = normalizeObserved(observed, context.descriptor);
-        if (!observed.exists) throw lifecycleError("remote_vm_create_unverified");
-        if (observed.state !== "running") {
-          observed = normalizeObserved(await performHostOperation(context, "start"), context.descriptor);
-        }
-      } else if (operation.kind === "start") {
+      if (operation.kind === "create" || operation.kind === "start") {
+        await prepareGuestConfiguration(context);
         observed = normalizeObserved(await performHostOperation(context, "inspect"), context.descriptor);
         if (!observed.exists) {
           observed = normalizeObserved(await performHostOperation(context, "create"), context.descriptor);
         }
+        if (!observed.exists) throw lifecycleError("remote_vm_create_unverified");
+        if (observed.configurationId !== context.configurationId) {
+          if (observed.state === "running") {
+            observed = normalizeObserved(await performHostOperation(context, "stop"), context.descriptor);
+          }
+          if (observed.state !== "stopped") throw lifecycleError("remote_vm_stop_unverified");
+          observed = normalizeObserved(await performHostOperation(context, "configure"), context.descriptor);
+          if (observed.configurationId !== context.configurationId) throw lifecycleError("remote_vm_configuration_unverified");
+        }
         if (observed.state !== "running") observed = normalizeObserved(await performHostOperation(context, "start"), context.descriptor);
+        if (observed.state !== "running" || !observed.guestIp) throw lifecycleError("remote_vm_start_unverified");
       } else if (operation.kind === "stop") {
         observed = normalizeObserved(await performHostOperation(context, "stop"), context.descriptor);
         if (observed.state !== "stopped") observed = normalizeObserved(await performHostOperation(context, "inspect"), context.descriptor);
@@ -286,8 +295,10 @@ function createRemoteVmLifecycleService(dependencies = {}) {
         observed = normalizeObserved(await performHostOperation(context, "inspect"), context.descriptor);
         if (observed.exists) {
           if (observed.state === "running") await performHostOperation(context, "stop");
-          await performHostOperation(context, "destroy");
         }
+        // A lost response after undefine can leave disks or the seed behind.
+        // The helper's destroy action also removes these when the VM is absent.
+        await performHostOperation(context, "destroy");
         observed = normalizeObserved(await performHostOperation(context, "inspect"), context.descriptor);
         if (observed.exists) throw lifecycleError("remote_vm_delete_unverified");
       } else {
@@ -332,7 +343,25 @@ function createRemoteVmLifecycleService(dependencies = {}) {
         .doc("remoteHosts").collection("entries").doc(operation.hostId).get();
     const privateKey = privateSnap.exists ? privateSnap.data()?.privateKey : "";
     if (!privateKey) throw lifecycleError("remote_host_key_revoked");
-    return {workspace, descriptor, host: hostSnap.data() || {}, privateKey, operation};
+    const context = {workspace, descriptor, host: hostSnap.data() || {}, privateKey, operation};
+    return context;
+  }
+
+  async function prepareGuestConfiguration(context) {
+    const {operation, descriptor} = context;
+    if (!operation.sessionId) throw lifecycleError("remote_vm_session_required");
+    const sessionRef = db.collection("workspaces").doc(operation.workspaceId).collection("sessions").doc(operation.sessionId);
+    const sessionSnap = await sessionRef.get();
+    const session = sessionSnap.data() || {};
+    if (!sessionSnap.exists || session.ownerUid !== operation.ownerUid || session.deletedAt ||
+        session.workspaceId && session.workspaceId !== operation.workspaceId) {
+      throw lifecycleError("remote_vm_session_invalid");
+    }
+    context.bootId = operation.id;
+    context.configuration = guestConfiguration({session, sessionId: operation.sessionId, descriptor,
+      bootId: context.bootId, ...(dependencies.remoteVmCredentialsUrl ? {brokerUrl: dependencies.remoteVmCredentialsUrl()} : {})});
+    context.configurationId = guestConfigurationId(context.configuration);
+    await sessionRef.update({agentRuntimeBootInstanceId: context.bootId, agentRuntimeGeneration: descriptor.generation});
   }
 
   async function performHostOperation(context, action) {
@@ -340,6 +369,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       action,
       host: redactHost(context.host),
       privateKey: context.privateKey,
+      ...(action === "configure" ? {configuration: context.configuration} : {}),
       guest: {
         guestName: context.descriptor.guestName,
         diskName: context.descriptor.dataDiskName,
@@ -355,7 +385,8 @@ function createRemoteVmLifecycleService(dependencies = {}) {
     try {
       const observed = normalizeObserved(await performHostOperation(context, "inspect"), context.descriptor);
       if (operation.kind === "create" || operation.kind === "start") {
-        return observed.exists && observed.state === "running" ? observed : null;
+        return observed.exists && observed.state === "running" && observed.guestIp &&
+          observed.configurationId === context.configurationId ? observed : null;
       }
       if (operation.kind === "stop") return observed.exists && observed.state === "stopped" ? observed : null;
       if (operation.kind === "delete") return !observed.exists ? observed : null;
@@ -366,6 +397,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
   }
 
   async function finishOperation(ref, operation, context, observed) {
+    if (context.bootId) observed = {...observed, bootId: context.bootId};
     const timestamp = now();
     let finished;
     await db.runTransaction(async (transaction) => {
@@ -668,6 +700,7 @@ function normalizeObserved(value, descriptor) {
     state: ["running", "stopped", "starting", "stopping", "unknown"].includes(state) ? state : "unknown",
     guestIp: value.guestIp && /^192\.168\.250\.(?:[2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])$/.test(value.guestIp) ? value.guestIp : null,
     autostart: value.autostart === true ? true : false,
+    configurationId: /^[a-f0-9]{64}$/.test(value.configurationId || "") ? value.configurationId : null,
     observedAt: value.observedAt || new Date().toISOString(),
   };
 }
@@ -695,12 +728,12 @@ function isLostResponse(error) {
   return String(error?.code || "") === "remote_vm_response_lost" || error?.responseLost === true;
 }
 
-async function defaultHostOperation({action, host, privateKey, guest}) {
+async function defaultHostOperation({action, host, privateKey, guest, configuration}) {
   if (!privateKey) throw lifecycleError("remote_host_key_revoked");
   if (!host?.address || !host?.hostKeyFingerprint) throw lifecycleError("remote_host_trust_incomplete");
   try {
     const addresses = await resolveAllowedAddresses(host.address);
-    return await runRemoteHostCommand({host, addresses, privateKey, action, guestName: guest?.guestName});
+    return await runRemoteHostCommand({host, addresses, privateKey, action, guestName: guest?.guestName, configuration});
   } catch (error) {
     throw lifecycleError(error?.publicMessage || "remote_vm_transport_unavailable");
   }
