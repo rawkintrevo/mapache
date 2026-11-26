@@ -7,6 +7,17 @@ const path = require("node:path");
 const test = require("node:test");
 const {createPiModelScopeService, normalizeScopedModels, parsePiModelList} = require("./piModelScope.service");
 
+test("remote model choices persist on the retained disk without cloud access", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "remote-model-scope-"));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const config = {remoteGuestMode: true, piAgentDir: root, workspaceId: "w1", sessionId: "s1", harnessId: "pi"};
+  const db = new Proxy({}, {get: () => assert.fail("remote model scope touched Firestore")});
+  const service = createPiModelScopeService({config, db});
+  await service.save(["openai/gpt-5"]);
+  await service.restore();
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "settings.json"), "utf8")).enabledModels, ["openai/gpt-5"]);
+});
+
 function createHarness(t, session = {}, settings = {}, configOverrides = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mapache-pi-scope-"));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));

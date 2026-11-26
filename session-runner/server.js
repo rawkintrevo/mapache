@@ -59,6 +59,7 @@ const {createAutomationExecutionService} = require("./lib/automationExecution.se
 const {createAutomationAgentApiService} = require("./lib/automationAgentApi.service");
 const {createAgentCheckpointRestoreService} = require("./lib/agentCheckpointRestore.service");
 const {createWorkspaceAuthority} = require("./lib/workspaceAuthority");
+const {createRemoteWorkspaceAuthority} = require("./lib/remoteWorkspaceAuthority");
 const {createQaFaultHarness} = require("./lib/qaFaultHarness");
 const {isAutomationRuntime} = require("./lib/runtimePaths");
 
@@ -91,13 +92,14 @@ const vncBridge = createVncBridge({host: config.chromeVncHost, port: config.chro
 const preview = createPreviewService(config, {browserQa});
 let piWebUi = null;
 let automationExecution = null;
-const workspaceAuthority = createWorkspaceAuthority({
+const remoteCredentials = createRemoteCredentialsService(config);
+const workspaceAuthority = (config.remoteGuestMode === true ? createRemoteWorkspaceAuthority : createWorkspaceAuthority)({
   admin,
   config,
   db,
+  remoteCredentials,
   onLost: () => piWebUi?.stop?.(),
 });
-const remoteCredentials = createRemoteCredentialsService(config);
 const activity = createActivityService({
   admin,
   db,

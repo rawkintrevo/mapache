@@ -59,6 +59,7 @@ function createRemoteCredentialsService(config = {}, dependencies = {}) {
         headers: {authorization: `Bearer ${token}`, "content-type": "application/json"},
         body: "{}",
         redirect: "manual",
+        signal: AbortSignal.timeout(10000),
       });
     } catch (error) {
       throw serviceError("remote_credentials_unavailable", 503, error);

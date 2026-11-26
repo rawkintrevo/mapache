@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
 
-test("server bootstrap wires activity authority before consumers and reaches lifecycle startup", () => {
+for (const remoteGuestMode of [false, true]) test(`server bootstrap wires authority before consumers (remote=${remoteGuestMode})`, () => {
   const noop = () => {};
   const service = new Proxy({}, {get: () => noop});
   const activity = {};
@@ -19,8 +19,16 @@ test("server bootstrap wires activity authority before consumers and reaches lif
     http: {createServer: () => service},
     express,
     ws: {WebSocketServer: function() { return service; }},
+    "./lib/config": {createConfig: () => ({remoteGuestMode})},
     "./lib/workspaceAuthority": {
-      createWorkspaceAuthority: () => ({...service, isCurrentWriter}),
+      createWorkspaceAuthority: () => { assert.equal(remoteGuestMode, false); return {...service, isCurrentWriter}; },
+    },
+    "./lib/remoteWorkspaceAuthority": {
+      createRemoteWorkspaceAuthority: (options) => {
+        assert.equal(remoteGuestMode, true);
+        assert.ok(options.remoteCredentials);
+        return {...service, isCurrentWriter};
+      },
     },
     "./lib/activity": {
       createActivityService: (options) => {

@@ -459,6 +459,34 @@ must use `--project pi-agents-cloud` and the mandated service accounts.
 
 ### Release-gate runbook (#643)
 
+Remote guest startup initializes `.mapache-vm-disk.json` before starting the
+runner. `session-runner/lib/remoteGuestDisk.js` binds the host-created disk to
+the root-owned seed's workspace/owner identity, accepts only the image's known
+directory layout for first initialization, and refuses an existing foreign
+marker. Generic retained-disk mount validation still rejects unmarked nonempty
+volumes. The bootstrap never replaces an established disk identity.
+
+Home guests have no Firebase service-account credentials. The server selects
+`remoteWorkspaceAuthority.js` instead of the Cloud Run Firestore authority.
+It validates the lifecycle-issued boot/session/generation through the existing
+credential broker every five seconds, caps local admission at fifteen seconds,
+and stops pi-web-ui on denial, transport failure or expiry. A released boot
+cannot be readmitted by a late response. Broker requests have a ten-second
+deadline. The host enforces the one-VM-per-workspace invariant; the broker fences
+superseded boot identities. Lifecycle state remains control-plane-owned.
+Guest activity helpers do not write Firestore, broker-filtered credentials do
+not re-read account selection directly, and native model choices remain on the
+retained disk. Cloud Run authority and telemetry are unchanged.
+
+These fixes require an updated guest payload, bootstrap and systemd unit.
+Quote the entire `RUNNER_CAPABILITIES` assignment in the unit so systemd retains
+the JSON quotes, and use the retained home for user-installed executables.
+Existing guests need an explicitly stopped, backed-up offline update; never
+overwrite a base image while any retained QCOW2 overlay still references it.
+Updating only Cloud Functions cannot repair an already-created guest disk.
+Standard Cloud Run services do not need a new revision for the remote-only
+branches, and these guest changes do not require a Functions deployment.
+
 The session provisioning worker and operation reconciler can observe the same
 start concurrently. A queued/running operation whose lease is held by another
 worker returns `remote_vm_provisioning_pending`. The provisioning trigger retries

@@ -25,6 +25,7 @@ function createActivityService({admin, db, config, getRuntimeIdentity, isCurrent
   }
 
   async function appendHistory(stream, data) {
+    if (config.remoteGuestMode === true) return;
     if (!workspaceId || !sessionId) return;
     const body = String(data || "");
     if (!body) return;
@@ -42,6 +43,7 @@ function createActivityService({admin, db, config, getRuntimeIdentity, isCurrent
   }
 
   async function updateSessionActivity(updates) {
+    if (config.remoteGuestMode === true) return;
     if (!workspaceId || !sessionId) return;
     if (typeof isCurrentRuntime === "function" && !isCurrentRuntime()) return;
     await sessionRef()
@@ -50,6 +52,7 @@ function createActivityService({admin, db, config, getRuntimeIdentity, isCurrent
   }
 
   function markMeaningfulActivity() {
+    if (config.remoteGuestMode === true) return;
     if (activityTimer) clearTimeout(activityTimer);
     pendingActivity = true;
     activityTimer = setTimeout(() => {
@@ -62,6 +65,7 @@ function createActivityService({admin, db, config, getRuntimeIdentity, isCurrent
   }
 
   async function markRuntimeStartupFailure(error, {allowUnadmitted = false} = {}) {
+    if (config.remoteGuestMode === true) return;
     if (!workspaceId || !sessionId) return;
     const runtimeError = compactErrorMessage(error && error.message ? error.message : error);
     const ref = sessionRef();
@@ -125,6 +129,7 @@ function createActivityService({admin, db, config, getRuntimeIdentity, isCurrent
   }
 
   async function updateWorkspaceSourceState(updates) {
+    if (config.remoteGuestMode === true) return;
     if (!workspaceId) return;
     const workspaceUpdates = Object.entries(updates || {}).reduce((acc, [key, value]) => {
       acc[`source.${key}`] = value;
@@ -139,6 +144,7 @@ function createActivityService({admin, db, config, getRuntimeIdentity, isCurrent
   }
 
   async function updatePiSessionBinding(updates) {
+    if (config.remoteGuestMode === true) return;
     if (!workspaceId || !sessionId) return;
     await db.collection("workspaces")
         .doc(workspaceId)

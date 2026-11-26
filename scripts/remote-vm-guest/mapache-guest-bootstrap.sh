@@ -77,4 +77,5 @@ export WORKSPACE_DIR HOME MAPACHE_HOME_DIR RUNNER_BIND_HOST PORT
 export OWNER_UID WORKSPACE_ID SESSION_ID MAPACHE_AGENT_RUNTIME_GENERATION MAPACHE_AGENT_RUNTIME_BOOT_INSTANCE_ID
 export SESSION_BROWSER_TOKEN_SECRET SESSION_SHUTDOWN_TOKEN MAPACHE_REMOTE_CREDENTIAL_BROKER_URL
 export PATH="${PAYLOAD_ROOT}/runtime/bin:${PAYLOAD_ROOT}/runtime/lib-node-modules/.bin:${PATH}"
+"${node_bin}" -e 'require("/opt/mapache/payload/session-runner/lib/remoteGuestDisk").initializeRemoteGuestDisk({root: process.env.MAPACHE_RETAINED_DISK_ROOT, ownerUid: process.env.OWNER_UID, workspaceId: process.env.WORKSPACE_ID, generation: process.env.MAPACHE_AGENT_RUNTIME_GENERATION, operationId: process.env.SESSION_ID}).catch(error => { console.error(error.message); process.exitCode = 1; })'
 exec "${node_bin}" "${runner_entry}"

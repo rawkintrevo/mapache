@@ -15,6 +15,14 @@ const {
   secretFileInventory,
 } = require("./workspaceAuth.service");
 
+test("remote auth selection is supplied by the broker without a Firestore read", async () => {
+  const service = createWorkspaceAuthService({
+    config: {remoteGuestMode: true, harnessId: "pi", workspaceId: "w1", sessionId: "s1"},
+    db: new Proxy({}, {get: () => assert.fail("remote auth selection touched Firestore")}),
+  });
+  assert.equal(await service.readSessionAuthSelection(), null);
+});
+
 test("mergeRemoteAuthData normalizes canonical agent auth", () => {
   assert.deepStrictEqual(mergeRemoteAuthData({
     providers: {openai: {type: "api_key", key: "new"}},
