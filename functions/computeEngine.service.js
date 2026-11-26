@@ -2,6 +2,7 @@
 
 const {GoogleAuth} = require("google-auth-library");
 const {COMPUTE_ENGINE_BACKEND, normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
+const {normalizeComputeEngineLabelValue} = require("./computeEngineLabels.helpers");
 
 const COMPUTE_API = "https://compute.googleapis.com/compute/v1";
 const DEFAULT_MACHINE_TYPE = "e2-standard-2";
@@ -347,16 +348,18 @@ function createComputeEngineService(dependencies = {}) {
 
   function ownershipLabels(descriptor, options = {}) {
     return {
-      "mapache-owner-uid": descriptor.ownerUid,
-      "mapache-workspace-id": descriptor.workspaceId,
-      "mapache-operation-id": String(options.operationId || descriptor.generation),
+      "mapache-owner-uid": normalizeComputeEngineLabelValue(descriptor.ownerUid),
+      "mapache-workspace-id": normalizeComputeEngineLabelValue(descriptor.workspaceId),
+      "mapache-operation-id": normalizeComputeEngineLabelValue(options.operationId || descriptor.generation),
       "mapache-runtime-provider": COMPUTE_ENGINE_BACKEND,
     };
   }
 
   function assertOwnership(resource, descriptor) {
     const labels = resource?.labels || {};
-    if (labels["mapache-owner-uid"] !== descriptor.ownerUid || labels["mapache-workspace-id"] !== descriptor.workspaceId || labels["mapache-runtime-provider"] !== COMPUTE_ENGINE_BACKEND) {
+    if (labels["mapache-owner-uid"] !== normalizeComputeEngineLabelValue(descriptor.ownerUid) ||
+        labels["mapache-workspace-id"] !== normalizeComputeEngineLabelValue(descriptor.workspaceId) ||
+        labels["mapache-runtime-provider"] !== COMPUTE_ENGINE_BACKEND) {
       throw computeError("runtime_resource_ownership_mismatch", "Compute resource ownership labels do not match the admitted workspace");
     }
   }

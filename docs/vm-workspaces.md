@@ -106,7 +106,12 @@ owns provisioning and requires `roles/iam.serviceAccountUser` on the runner
 identity. The runner cannot create/delete arbitrary Compute Engine resources or
 read another workspace's disk. Every instance and disk carries immutable
 `mapache-owner-uid`, `mapache-workspace-id`, `mapache-operation-id`, and
-`mapache-runtime-provider` labels; cleanup refuses foreign labels.
+`mapache-runtime-provider` labels; cleanup refuses foreign labels. Compute
+Engine label values are deterministic lowercase-safe projections of the full
+owner/workspace/operation identifiers (with a bounded hash suffix when needed);
+the full identifiers remain authoritative in Firestore, the disk marker and
+instance metadata. This keeps Firebase's mixed-case workspace IDs valid for
+Compute Engine without weakening ownership checks.
 
 The canonical health contract remains `/runner/health`, with a functional
 agent/readiness check in addition to HTTP readiness. No alternate health path
