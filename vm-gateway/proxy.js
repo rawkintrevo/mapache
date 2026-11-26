@@ -1,20 +1,14 @@
 "use strict";
 
-const fs = require("node:fs/promises");
-const crypto = require("node:crypto");
 const http = require("node:http");
-const net = require("node:net");
-const os = require("node:os");
-const {promisify} = require("node:util");
-const {execFile, spawn} = require("node:child_process");
+const {createSshTransportPool} = require("./sshTransport");
 
-const execFileAsync = promisify(execFile);
 const HOP_HEADERS = new Set(["connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade"]);
 const ACCESS_QUERY = "mapache_access";
 const MAX_TOKEN_BYTES = 8192;
 const MAX_LIFETIME_MS = 55 * 60 * 1000;
 
-function createGateway({resolve, request = http.request, transportFactory = createSshTransport} = {}) {
+function createGateway({resolve, request = http.request, transportFactory = createSshTransportPool()} = {}) {
   if (typeof resolve !== "function") throw new Error("gateway_resolver_required");
   const server = http.createServer((req, res) => {
     forward(req, res).catch(() => deny(res));
@@ -34,6 +28,18 @@ function createGateway({resolve, request = http.request, transportFactory = crea
     const target = await resolve(input);
     validateTarget(target);
     if (downstream.destroyed) return;
+    // The gateway consumes the URL token before forwarding. Establish browser
+    // authority here so subsequent assets and WebSockets carry it as a cookie.
+    if (!websocket && req.method === "GET" && target.transport === "ssh" && input.bootstrap) {
+      downstream.writeHead(303, {
+        location: input.forwardPath,
+        "set-cookie": `mapache_access=${encodeURIComponent(input.token)}; Path=/agent; HttpOnly; Secure; SameSite=None`,
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+      });
+      downstream.end();
+      return;
+    }
 
     let stopped = false;
     let renewTimer;
@@ -142,6 +148,7 @@ function authorizationInput(req) {
     host,
     path: parsed.pathname,
     forwardPath: `${parsed.pathname}${parsed.search}`,
+    bootstrap: new URL(req.url || "/", `https://${host}`).searchParams.has(ACCESS_QUERY),
     origin: String(req.headers?.origin || ""),
     token,
     shutdownToken: String(req.headers?.["x-shutdown-token"] || ""),
@@ -168,79 +175,6 @@ function forwardedHeaders(req, token, target, websocket = false, shutdownToken =
     headers.upgrade = "websocket";
   }
   return headers;
-}
-
-async function createSshTransport(target, dependencies = {}) {
-  const directory = await fs.mkdtemp(`${os.tmpdir()}/mapache-vm-gateway-`);
-  const keyPath = `${directory}/id_ed25519`;
-  const knownHostsPath = `${directory}/known_hosts`;
-  try {
-    await fs.writeFile(keyPath, target.privateKey, {mode: 0o600});
-    const knownHosts = await pinnedKnownHosts(target, dependencies);
-    await fs.writeFile(knownHostsPath, knownHosts, {mode: 0o600});
-    const sshSpawn = dependencies.spawn || spawn;
-    const server = net.createServer((socket) => {
-      const child = sshSpawn("ssh", [
-        "-i", keyPath,
-        "-p", String(target.sshPort),
-        "-o", "BatchMode=yes",
-        "-o", "IdentitiesOnly=yes",
-        "-o", "StrictHostKeyChecking=yes",
-        "-o", `UserKnownHostsFile=${knownHostsPath}`,
-        "-o", "ConnectTimeout=10",
-        "-W", `${target.guestAddress}:${target.guestPort}`,
-        `${target.sshUsername}@${target.sshAddress}`,
-      ], {stdio: ["pipe", "pipe", "pipe"]});
-      child.stderr?.resume?.();
-      child.stdout?.pipe(socket);
-      socket.pipe(child.stdin);
-      const finish = () => {
-        socket.destroy();
-        child.kill?.("SIGTERM");
-      };
-      socket.once("close", finish);
-      child.once("close", () => socket.destroy());
-      child.once("error", finish);
-    });
-    await new Promise((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(0, "127.0.0.1", resolve);
-    });
-    const address = server.address();
-    return {
-      hostname: "127.0.0.1",
-      port: address.port,
-      close: () => {
-        server.close();
-        void fs.rm(directory, {recursive: true, force: true});
-      },
-    };
-  } catch (error) {
-    await fs.rm(directory, {recursive: true, force: true});
-    throw error;
-  }
-}
-
-async function pinnedKnownHosts(target, dependencies = {}) {
-  const exec = dependencies.execFileAsync || execFileAsync;
-  const {stdout} = await exec("ssh-keyscan", ["-T", "10", "-t", "ed25519", "-p", String(target.sshPort), target.sshAddress], {
-    timeout: 15_000,
-    maxBuffer: 256 * 1024,
-  });
-  const lines = String(stdout).split(/\r?\n/).filter((line) => line && !line.startsWith("#"));
-  if (!lines.length) throw new Error("remote_host_unreachable");
-  for (const line of lines) {
-    const [, type, encoded] = line.trim().split(/\s+/);
-    if (type !== "ssh-ed25519" || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded || "")) continue;
-    const blob = Buffer.from(encoded, "base64");
-    if (blob.length !== 51 || blob.readUInt32BE(0) !== 11 ||
-        blob.subarray(4, 15).toString() !== "ssh-ed25519" || blob.readUInt32BE(15) !== 32) continue;
-    const fingerprint = `SHA256/${crypto.createHash("sha256").update(blob).digest("base64").replace(/=+$/, "")}`;
-    if (fingerprint !== target.hostKeyFingerprint) continue;
-    const host = Number(target.sshPort) === 22 ? target.sshAddress : `[${target.sshAddress}]:${target.sshPort}`;
-    return `${host} ssh-ed25519 ${blob.toString("base64")}\n`;
-  }
-  throw new Error("remote_host_key_mismatch");
 }
 
 function validateTarget(target) {
@@ -311,8 +245,6 @@ function deny(response) {
 module.exports = {
   authorizationInput,
   createGateway,
-  createSshTransport,
-  pinnedKnownHosts,
   sameAuthority,
   validateTarget,
 };

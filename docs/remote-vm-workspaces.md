@@ -214,6 +214,18 @@ when the host, guest, owner, session, generation, or deletion state changes;
 gateway/SSH loss closes the route without stopping the guest, and the client
 must request a fresh access URL. The legacy Compute Engine route remains an
 explicit direct-target branch; remote-libvirt errors never fall back to it.
+For an authorized remote guest GET containing `mapache_access`, the gateway
+sets a Secure, HttpOnly, SameSite=None cookie scoped to `/agent` and redirects
+to the same URL without the token. This permits the following asset and
+WebSocket requests to authenticate. Invalid tokens never set a cookie; every
+subsequent request still checks current session authority and token expiry.
+This behavior requires deploying a new gateway image revision.
+The gateway pools authenticated SSH connections by host, username, pinned key
+fingerprint and transport public-key digest (independent of private-key
+serialization). Each authorized HTTP/WebSocket request
+gets its own forwarding channel and retains its own expiry/revocation checks.
+Idle connections close after 30 seconds. Asset bursts therefore share a
+handshake instead of exhausting the host's unauthenticated SSH connection limit.
 
 Deploy the resolver with `firebase deploy --only functions:vmGatewayResolve_v2
 --project pi-agents-cloud`. Build and deploy `vm-gateway/Dockerfile` to the
@@ -221,7 +233,7 @@ existing `mapache-vm-gateway-v2` service with
 `VM_GATEWAY_RESOLVER_URL=https://us-central1-pi-agents-cloud.cloudfunctions.net/vmGatewayResolve_v2`,
 the `mapache-vm-gateway-v2@pi-agents-cloud.iam.gserviceaccount.com` identity,
 and public ingress for the signed browser origin. The relay image includes
-only the OpenSSH client and Google ID-token client; it has no Firestore or
+only the SSH transport and Google ID-token client; it has no Firestore or
 secret-store authority. Keep the gateway host in the
 `VM_WORKSPACE_GATEWAY_HOSTS` Functions environment variable.
 
