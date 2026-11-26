@@ -4,6 +4,18 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {createActivityService} = require("./activity");
 
+test("remote guest telemetry never attempts direct Firestore access", async () => {
+  const unavailable = new Proxy({}, {get: () => assert.fail("remote guest touched cloud SDK")});
+  const service = createActivityService({admin: unavailable, db: unavailable,
+    config: {workspaceId: "w1", sessionId: "s1", remoteGuestMode: true}});
+  await service.appendHistory("stdout", "hello");
+  await service.updateSessionActivity({});
+  await service.markRuntimeStartupFailure(new Error("test"));
+  await service.updateWorkspaceSourceState({});
+  await service.updatePiSessionBinding({});
+  service.markMeaningfulActivity();
+});
+
 function createHarness(session) {
   const updates = [];
   const ref = {

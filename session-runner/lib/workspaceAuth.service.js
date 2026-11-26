@@ -62,6 +62,8 @@ function createWorkspaceAuthService({admin, config, db, remoteCredentialProvider
   }
 
   async function readSessionAuthSelection() {
+    // The broker has already applied the owned session's credential selection.
+    if (config.remoteGuestMode === true) return null;
     if (!config.workspaceId || !config.sessionId) return null;
     try {
       const snap = await db.collection("workspaces").doc(config.workspaceId).collection("sessions").doc(config.sessionId).get();

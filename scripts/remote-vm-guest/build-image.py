@@ -247,6 +247,7 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
             "--run-command", "chown -R mapache:mapache /var/lib/mapache",
             "--run-command", "chmod 0755 /usr/local/libexec/mapache-guest-bootstrap",
             "--run-command", "ln -sfn /opt/mapache/payload/session-runner /app",
+            "--run-command", "ln -s /var/lib/mapache/workspace/workspace /workspace",
             "--run-command", "ln -sfn /opt/mapache/payload/runtime/lib-node-modules /usr/local/lib/node_modules",
             "--run-command", "ln -sfn /opt/mapache/payload/runtime/pi /usr/local/bin/pi",
             "--run-command", "mkdir -p /etc/systemd/system/multi-user.target.wants",

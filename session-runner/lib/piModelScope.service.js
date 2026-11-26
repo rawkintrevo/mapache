@@ -17,6 +17,7 @@ function createPiModelScopeService({admin, config, db}) {
   }
 
   async function restore() {
+    if (config.remoteGuestMode === true) return {ok: true, skipped: true, reason: "retained_disk_authoritative"};
     if (!enabled()) return {ok: true, skipped: true};
     const ref = sessionRef();
     const snap = await ref.get();
@@ -39,6 +40,7 @@ function createPiModelScopeService({admin, config, db}) {
   }
 
   async function persist() {
+    if (config.remoteGuestMode === true) return {ok: true, skipped: true, reason: "retained_disk_authoritative"};
     if (!enabled()) return {ok: true, skipped: true};
     const settings = await readSettings(settingsPath);
     const scopedModels = normalizeScopedModels(settings.enabledModels);

@@ -470,6 +470,8 @@ payload's relocated module directory and excludes ssh2's test fixtures.
 The builder uses `virt-resize` to expand the pinned image's root partition
 and filesystem before installing the payload, and creates all durable
 directories before systemd enters the runtime working directory.
+The guest also exposes `/workspace` as a symlink to the retained workspace
+directory, matching the managed pi-web-ui project root without duplicating data.
 It reinstalls BIOS GRUB and regenerates the menu after resizing: GPT partition
 renumbering otherwise leaves an obsolete GRUB prefix and stops at rescue mode.
 The v1 image masks unused Snap services so network-dependent Snap seeding cannot
@@ -501,6 +503,42 @@ preservation of unrelated host VMs. Existing Cloud Functions deploy commands
 must use `--project pi-agents-cloud` and the mandated service accounts.
 
 ### Release-gate runbook (#643)
+
+Remote guest startup initializes `.mapache-vm-disk.json` before starting the
+runner. `session-runner/lib/remoteGuestDisk.js` binds the host-created disk to
+the root-owned seed's workspace/owner identity, accepts only the image's known
+directory layout for first initialization, and refuses an existing foreign
+marker. Generic retained-disk mount validation still rejects unmarked nonempty
+volumes. The bootstrap never replaces an established disk identity.
+
+Home guests have no Firebase service-account credentials. The server selects
+`remoteWorkspaceAuthority.js` instead of the Cloud Run Firestore authority.
+It validates the lifecycle-issued boot/session/generation through the existing
+credential broker every five seconds, caps local admission at fifteen seconds,
+and stops pi-web-ui on denial, transport failure or expiry. The remote-only
+`remoteAuthorityLoss.js` handler then exits the runner with status 1, including
+when agent shutdown fails or exceeds five seconds. Systemd's existing
+`Restart=on-failure`/`RestartSec=5` policy retries the full bootstrap; every retry
+must obtain current broker admission before starting pi-web-ui. Continued
+revocation stays unavailable, while a transient outage can recover without a
+manual VM restart. It issues no agent-task resume command and does not change boot identity.
+The guest unit cleans up remaining processes before starting its replacement.
+A released boot
+cannot be readmitted by a late response. Broker requests have a ten-second
+deadline. The host enforces the one-VM-per-workspace invariant; the broker fences
+superseded boot identities. Lifecycle state remains control-plane-owned.
+Guest activity helpers do not write Firestore, broker-filtered credentials do
+not re-read account selection directly, and native model choices remain on the
+retained disk. Cloud Run authority and telemetry are unchanged.
+
+These fixes require an updated guest payload, bootstrap and systemd unit.
+Quote the entire `RUNNER_CAPABILITIES` assignment in the unit so systemd retains
+the JSON quotes, and use the retained home for user-installed executables.
+Existing guests need an explicitly stopped, backed-up offline update; never
+overwrite a base image while any retained QCOW2 overlay still references it.
+Updating only Cloud Functions cannot repair an already-created guest disk.
+Standard Cloud Run services do not need a new revision for the remote-only
+branches, and these guest changes do not require a Functions deployment.
 
 Operation completion must read workspace/session/host reservation records before
 any transaction writes. Stop/delete/cancellation release capacity inside that
