@@ -52,11 +52,12 @@ class Db {
   constructor() { this.values = new Map(); this.lock = Promise.resolve(); }
   collection(name) { return new Collection(this, name); }
   runTransaction(callback) {
+    let wrote = false;
     const next = this.lock.then(() => callback({
-      get: (ref) => ref.get(),
-      set: (ref, value, options) => ref.set(value, options),
-      update: (ref, value) => ref.update(value),
-      delete: (ref) => ref.delete(),
+      get: (ref) => { assert.equal(wrote, false, "Firestore reads must precede writes"); return ref.get(); },
+      set: (ref, value, options) => { wrote = true; return ref.set(value, options); },
+      update: (ref, value) => { wrote = true; return ref.update(value); },
+      delete: (ref) => { wrote = true; return ref.delete(); },
     }));
     this.lock = next.catch(() => undefined);
     return next;
@@ -201,6 +202,12 @@ test("stop releases capacity and resume starts the same guest and disk", async (
   const service = createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: host.operation});
   await service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "start-1"});
   const stopped = await service.stop({id: "session-1"}, fixtureValue.session, {idempotencyKey: "stop-1"});
+  const stoppedSession = (await fixtureValue.db.collection("workspaces").doc("workspace-1")
+      .collection("sessions").doc("session-1").get()).data();
+  assert.equal(stoppedSession.status, "stopped");
+  assert.equal(stoppedSession.runtimeProvider.state, "stopped");
+  assert.equal(stoppedSession.serviceUrl, null);
+  assert.equal((await fixtureValue.db.collection("remoteHosts").doc("host-1").get()).data().remoteVmReservations.entries.length, 0);
   const resumed = await service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "start-2"});
   assert.equal(stopped.state, "completed");
   assert.equal(resumed.state, "completed");
@@ -209,6 +216,20 @@ test("stop releases capacity and resume starts the same guest and disk", async (
   const savedHost = (await fixtureValue.db.collection("remoteHosts").doc("host-1").get()).data();
   assert.equal(savedHost.remoteVmReservations.entries.length, 1);
   assert.equal(host.guests.size, 1);
+});
+
+test("cancelling a start for a deleted workspace releases capacity before transaction writes", async () => {
+  const value = fixture();
+  await seed(value);
+  const host = fakeHost();
+  const service = createRemoteVmLifecycleService({db: value.db, hostOperation: async (request) => {
+    const result = await host.operation(request);
+    if (request.action === "start") await value.db.collection("workspaces").doc("workspace-1").update({deleted: true});
+    return result;
+  }});
+  const result = await service.start(value.workspace, {id: "session-1"}, value.session);
+  assert.equal(result.state, "cancelled");
+  assert.equal((await value.db.collection("remoteHosts").doc("host-1").get()).data().remoteVmReservations.entries.length, 0);
 });
 
 test("capacity admission is serialized across workspaces", async () => {
