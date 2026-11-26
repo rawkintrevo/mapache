@@ -1,0 +1,741 @@
+diff --git a/packages/keel/src/adapters/wire/dispatch-surface.ts b/packages/keel/src/adapters/wire/dispatch-surface.ts
+index 5d26703..49e0c7b 100644
+--- a/packages/keel/src/adapters/wire/dispatch-surface.ts
++++ b/packages/keel/src/adapters/wire/dispatch-surface.ts
+@@ -128,6 +128,7 @@ export const DISPATCH_SURFACE = [
+ 	"saveCommands",
+ 	"setGoal",
+ 	"clearGoal",
++	"resumeGoal",
+ 	"startGoalWizard",
+ 	"setGoalPrefs",
+ 	"pageCall",
+@@ -241,6 +242,7 @@ export const DISPATCH_OPTIONAL_MEMBERS = [
+ 	"testModelConnection",
+ 	"getUserTerminalManager",
+ 	"findTerminalManager",
++	"resumeGoal",
+ 	"pageCall",
+ 	"readQuickAskConversation",
+ 	"listDshPatches",
+diff --git a/packages/keel/src/app/client-assembly.ts b/packages/keel/src/app/client-assembly.ts
+index efec883..81091ea 100644
+--- a/packages/keel/src/app/client-assembly.ts
++++ b/packages/keel/src/app/client-assembly.ts
+@@ -176,16 +176,23 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 
+ 	const getGoalPort = (hooks?: GoalRunHooks): GoalRunPort | undefined => {
+ 		if (hooks) goalHooks = hooks;
+-		return goalPort ??= options.goalRun?.(createGoalRunSinks({
+-			runtime, sessions,
+-			resolveModel: (provider, id) => faces.resolveModel(provider, id),
+-			emit: deliver,
+-			isDisposed: () => ctx.runtimes.get(runtime.clientId) !== runtime,
+-			getLang: () => ctx.langOf(runtime.clientId),
+-			setPlan: (id, steps) => goalHooks?.setPlan?.(id, steps),
+-		}));
++		return (goalPort ??= options.goalRun?.(
++			createGoalRunSinks({
++				runtime,
++				sessions,
++				resolveModel: (provider, id) => faces.resolveModel(provider, id),
++				emit: deliver,
++				isDisposed: () => ctx.runtimes.get(runtime.clientId) !== runtime,
++				getLang: () => ctx.langOf(runtime.clientId),
++				setPlan: (id, steps) => goalHooks?.setPlan?.(id, steps),
++			}),
++		));
+ 	};
+ 	runtime = new ClientRuntime({
++		unquiesceWriters: () => {
++			if (goalPort && !goalPort.unquiesce) throw new Error("goal_unquiesce_unsupported");
++			goalPort?.unquiesce?.();
++		},
+ 		restoreGoalDisplay: (id) => {
+ 			if (ctx.runtimes.get(runtime.clientId) !== runtime || !sessions.has(id)) return false;
+ 			const port = getGoalPort();
+@@ -204,7 +211,7 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 					},
+ 					async () => {
+ 						if (faces.background && !faces.background.quiesce) throw new Error("background_drain_unavailable");
+-						if (faces.background && !await faces.background.quiesce!()) throw new Error("background_drain_failed");
++						if (faces.background && !(await faces.background.quiesce!())) throw new Error("background_drain_failed");
+ 					},
+ 					() => bashKills.requestStopAll(),
+ 					() => terminalHost.requestStopAll(),
+@@ -216,11 +223,17 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 						await session?.abort?.();
+ 					}),
+ 				],
+-				isIdle: () => bashKills.activeCount() === 0 && terminalHost.activeCount() === 0 &&
++				isIdle: () =>
++					bashKills.activeCount() === 0 &&
++					terminalHost.activeCount() === 0 &&
+ 					runtime.registry.list().every((conv) => {
+ 						const session = sessions.get(conv.id)?.session;
+-						return !runtime.turns.isStreaming(conv.id) && !session?.isStreaming &&
+-							session?.isIdle !== false && conv.queues.total() === 0;
++						return (
++							!runtime.turns.isStreaming(conv.id) &&
++							!session?.isStreaming &&
++							session?.isIdle !== false &&
++							conv.queues.total() === 0
++						);
+ 					}),
+ 			});
+ 			runtime.publisher.flush({ forceFull: true });
+diff --git a/packages/keel/src/app/client-runtime.ts b/packages/keel/src/app/client-runtime.ts
+index 0787e67..4736099 100644
+--- a/packages/keel/src/app/client-runtime.ts
++++ b/packages/keel/src/app/client-runtime.ts
+@@ -54,6 +54,7 @@ export interface ClientFrames {
+ 
+ export interface ClientRuntimeOptions extends GoalHostPorts {
+ 	restoreGoalDisplay?(conversationId: string): boolean;
++	unquiesceWriters?(): void;
+ 	drainWriters?(timeoutMs: number): Promise<boolean>;
+ 	clientId: ClientId;
+ 	cwd: string;
+@@ -185,9 +186,12 @@ export interface ClientRuntimeOptions extends GoalHostPorts {
+  * 这里是「状态与生命周期」，两者分开才守得住「门面里不写业务」。跨域能力只在这里装配，域之间互不认识。
+  */
+ export class ClientRuntime {
++	unquiesce(): void {
++		this.options.unquiesceWriters?.();
++	}
+ 	restoreGoalDisplay(): boolean {
+ 		const id = this.activeConversationId();
+-		return id ? this.options.restoreGoalDisplay?.(id) ?? false : false;
++		return id ? (this.options.restoreGoalDisplay?.(id) ?? false) : false;
+ 	}
+ 	quiesce(timeoutMs: number): Promise<boolean> {
+ 		return this.options.drainWriters?.(timeoutMs) ?? Promise.resolve(false);
+diff --git a/packages/keel/src/app/connection-init.ts b/packages/keel/src/app/connection-init.ts
+index edba99e..b4b0c1a 100644
+--- a/packages/keel/src/app/connection-init.ts
++++ b/packages/keel/src/app/connection-init.ts
+@@ -81,24 +81,38 @@ function applyQuiesceGate(session: DispatchSession, gate: QuiesceGate): void {
+ 		await retryLast();
+ 	};
+ 	const setGoal = session.setGoal.bind(session);
+-	session.setGoal = async (...args) => { if (!reject()) await setGoal(...args); };
++	if (session.resumeGoal) {
++		const resume = session.resumeGoal.bind(session);
++		session.resumeGoal = async () => {
++			if (!reject()) await resume();
++		};
++	}
++	session.setGoal = async (...args) => {
++		if (!reject()) await setGoal(...args);
++	};
+ 	const startGoalWizard = session.startGoalWizard.bind(session);
+-	session.startGoalWizard = async (...args) => { if (!reject()) await startGoalWizard(...args); };
++	session.startGoalWizard = async (...args) => {
++		if (!reject()) await startGoalWizard(...args);
++	};
+ 	if (session.startBgScript) {
+ 		const start = session.startBgScript.bind(session);
+-		session.startBgScript = (...args) => { if (!reject()) start(...args); };
++		session.startBgScript = (...args) => {
++			if (!reject()) start(...args);
++		};
+ 	}
+ 	if (session.restartBgJob) {
+ 		const restart = session.restartBgJob.bind(session);
+-		session.restartBgJob = (...args) => { if (!reject()) restart(...args); };
++		session.restartBgJob = (...args) => {
++			if (!reject()) restart(...args);
++		};
+ 	}
+ 	if (session.newCliChat) {
+ 		const start = session.newCliChat.bind(session);
+-		session.newCliChat = async (...args) => reject() ? false : start(...args);
++		session.newCliChat = async (...args) => (reject() ? false : start(...args));
+ 	}
+ 	if (session.openBotChat) {
+ 		const start = session.openBotChat.bind(session);
+-		session.openBotChat = async (...args) => reject() ? false : start(...args);
++		session.openBotChat = async (...args) => (reject() ? false : start(...args));
+ 	}
+ }
+ 
+diff --git a/packages/keel/src/app/core-engine.ts b/packages/keel/src/app/core-engine.ts
+index 8a19c33..cdf3c63 100644
+--- a/packages/keel/src/app/core-engine.ts
++++ b/packages/keel/src/app/core-engine.ts
+@@ -392,6 +392,7 @@ export class CoreEngine implements EngineService {
+ 	unquiesce(): void {
+ 		if (this.drainFlight) throw new Error("quiesce_in_progress");
+ 		if (this.drainFailed) throw new Error("quiesce_failed_restart_required");
++		for (const runtime of this.runtimes.values()) runtime.unquiesce();
+ 		this.quiescedSince = undefined;
+ 	}
+ 	quiesceInfo(): { quiesced: boolean; quiescedSince?: number } {
+diff --git a/packages/keel/src/contracts/goals.ts b/packages/keel/src/contracts/goals.ts
+index e79773e..ad0454b 100644
+--- a/packages/keel/src/contracts/goals.ts
++++ b/packages/keel/src/contracts/goals.ts
+@@ -11,7 +11,10 @@ export type GoalPrefs = NonNullable<ClientState["goalPrefs"]>;
+ /** 协议即契约：`set_goal` / `start_goal_wizard` / `set_goal_prefs` 的可选参数直接取协议形状，不另抄一份。 */
+ type Wire<T extends ClientMessage["type"]> = Omit<Extract<ClientMessage, { type: T }>, "type">;
+ 
+-export type GoalStartOptions = Omit<Wire<"set_goal">, "goal">;
++export type GoalStartOptions = Omit<Wire<"set_goal">, "goal" | "reviewModel" | "execModel"> & {
++	reviewModel?: string | null;
++	execModel?: string | null;
++};
+ export type GoalWizardOptions = Omit<Wire<"start_goal_wizard">, "text">;
+ export type GoalPrefsPatch = Wire<"set_goal_prefs">;
+ 
+@@ -28,6 +31,8 @@ export interface GoalRunPort {
+ 	restoreGoal?(conversationId: string): void;
+ 	/** Pause and preserve goal state before draining; absent means unsafe to acknowledge drain. */
+ 	quiesce?(): Promise<void>;
++	unquiesce?(): void;
++	resumeGoal?(): Promise<void>;
+ 	setGoal(goal: string, opts?: GoalStartOptions): Promise<void>;
+ 	clearGoal(conversationId?: string): Promise<void>;
+ 	startGoalWizard(text: string, opts?: GoalWizardOptions): Promise<void>;
+diff --git a/packages/keel/src/domains/goals/handlers.ts b/packages/keel/src/domains/goals/handlers.ts
+index 676b8bb..c70c40f 100644
+--- a/packages/keel/src/domains/goals/handlers.ts
++++ b/packages/keel/src/domains/goals/handlers.ts
+@@ -72,6 +72,7 @@ export interface GoalHandlersOptions {
+ 
+ /** 目标 / 计划 / 委派的 11 个 handler：签名与 `DispatchSession` 的同名成员一致。 */
+ export interface GoalHandlers {
++	resumeGoal(): Promise<void>;
+ 	setGoal(goal: string, opts?: GoalStartOptions): Promise<void>;
+ 	clearGoal(conversationId?: string): Promise<void>;
+ 	startGoalWizard(text: string, opts?: GoalWizardOptions): Promise<void>;
+@@ -176,6 +177,11 @@ export function createGoalHandlers(options: GoalHandlersOptions): GoalHandlers {
+ 	};
+ 
+ 	return {
++		resumeGoal: () => {
++			const port = enableRun("goals.resumeGoal");
++			if (!port.resumeGoal) throw new CoreEngineNotReadyError("goals.resumeGoal");
++			return port.resumeGoal();
++		},
+ 		// 目标运行归宿主：端口不在就同步抛（`async` 会变成 rejected promise，调用方看不到「未接」）。
+ 		setGoal: (goal: string, opts?: GoalStartOptions) => enableRun("goals.setGoal").setGoal(goal, opts),
+ 		clearGoal: (conversationId?: string) => enableRun("goals.clearGoal").clearGoal(conversationId),
+diff --git a/packages/keel/src/engine-service.ts b/packages/keel/src/engine-service.ts
+index a0064cd..70ec4db 100644
+--- a/packages/keel/src/engine-service.ts
++++ b/packages/keel/src/engine-service.ts
+@@ -242,6 +242,7 @@ export interface DispatchSession {
+ 		},
+ 	): Promise<void>;
+ 	clearGoal(): Promise<void>;
++	resumeGoal?(): Promise<void>;
+ 	startGoalWizard(
+ 		text: string,
+ 		opts?: {
+diff --git a/packages/keel/src/protocol.ts b/packages/keel/src/protocol.ts
+index 7886a90..715e1c1 100644
+--- a/packages/keel/src/protocol.ts
++++ b/packages/keel/src/protocol.ts
+@@ -1621,6 +1621,7 @@ export type ClientMessage =
+ 			materialBlobs?: MaterialBlob[];
+ 	  }
+ 	| { type: "clear_goal" }
++	| { type: "resume_goal" }
+ 	| {
+ 			type: "start_goal_wizard";
+ 			text: string;
+diff --git a/server/core-goal-run-adapter.ts b/server/core-goal-run-adapter.ts
+index fc26c1a..c448ebe 100644
+--- a/server/core-goal-run-adapter.ts
++++ b/server/core-goal-run-adapter.ts
+@@ -1,5 +1,6 @@
+ import { CoreEngineNotReadyError } from "../packages/keel/src/contracts/core-engine-errors.js";
+ import { createManagedGoalState, type GoalDisplayStore } from "./managed-core-goal-state.js";
++import { managedGoalLifecycle } from "./managed-core-goal-lifecycle.js";
+ import type {
+ 	GoalPrefs,
+ 	GoalRunPort,
+@@ -86,6 +87,7 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 	const runs = new Map<string, GoalRun>();
+ 	const children = new Map<string, GoalChild>();
+ 	let quiescing = false;
++	let admissionGeneration = 0;
+ 	const { persist, forget, restore } = createManagedGoalState(sinks, deps.stateStore);
+ 	const reportMaterials = createGoalMaterialReporter((msg) => sinks.emit(msg));
+ 	const lang = (): ServerLang => resolveServerLang(sinks.getLang());
+@@ -97,7 +99,8 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 	};
+ 
+ 	/** 这条运行还活着吗：连接没断、没被停、注册表里还是它（不是被替换掉的旧一代）。 */
+-	const alive = (run: GoalRun): boolean => !quiescing && !sinks.isDisposed() && !run.stopped && runs.get(run.parentId) === run;
++	const alive = (run: GoalRun): boolean =>
++		!quiescing && !sinks.isDisposed() && !run.stopped && runs.get(run.parentId) === run;
+ 
+ 	/** 目标帧：在跑就发运行态，没在跑就只发偏好（老实现 `emitGoalStatus()` / `makeGoalStatus()` 两条）。 */
+ 	const publish = (run?: GoalRun): void => {
+@@ -411,8 +414,10 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 		autoStart = true,
+ 	): Promise<void> {
+ 		if (quiescing) return;
++		const admission = admissionGeneration;
+ 		const previous = runs.get(parentId);
+ 		if (previous) await stopRun(previous);
++		if (admission !== admissionGeneration || sinks.isDisposed()) return;
+ 		const base = prefs();
+ 		const merged: GoalPrefs = {
+ 			reviewModel: opts?.reviewModel === undefined ? base.reviewModel : opts.reviewModel || null,
+@@ -422,7 +427,7 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 		};
+ 		deps.stateStore.saveGoalPrefs(sinks.clientId, merged);
+ 		const blobs = await applyGoalMaterialBlobs(opts?.materials, opts?.materialBlobs);
+-		if (quiescing || sinks.isDisposed()) return;
++		if (quiescing || admission !== admissionGeneration || sinks.isDisposed()) return;
+ 		if (blobs.dropped.length > 0) {
+ 			const overflow = goalMaterialOverflowText(blobs.dropped);
+ 			notice("warning", overflow.text, overflow.textEn);
+@@ -459,11 +464,13 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 	/** 调研：开子对话 → 问卷 prompt（标准 `ask_user_question` 工具）→ 收尾即提交目标。 */
+ 	async function startWizard(parentId: string, draft: string, opts?: GoalWizardOptions): Promise<void> {
+ 		if (quiescing) return;
++		const admission = admissionGeneration;
+ 		const previous = runs.get(parentId);
+ 		if (previous) await stopRun(previous);
++		if (admission !== admissionGeneration || sinks.isDisposed()) return;
+ 		const base = prefs();
+ 		const blobs = await applyGoalMaterialBlobs(opts?.materials, opts?.materialBlobs);
+-		if (quiescing || sinks.isDisposed()) return;
++		if (quiescing || admission !== admissionGeneration || sinks.isDisposed()) return;
+ 		const run = createGoalRun({
+ 			parentId,
+ 			cwd: conversationCwd(parentId),
+@@ -497,31 +504,21 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 	};
+ 
+ 	const port: GoalRunPort = {
+-		restoreGoal(parentId: string): void {
+-			const current = runs.get(parentId);
+-			if (current) { publish(current); return; }
+-			const run = restore(parentId);
+-			if (!run) { publish(); return; }
+-			runs.set(parentId, run);
+-			publish(run);
+-		},
+-		async quiesce(): Promise<void> {
+-			quiescing = true;
+-			const active = [...runs.values()];
+-			// Persist and invalidate every generation before awaiting any abort.
+-			for (const run of active) {
+-				persist(run);
+-				run.paused = true; run.stopped = true; run.generation += 1;
+-			}
+-			await Promise.all(active.flatMap((run) => [run.execId, run.reviewId, run.wizardId]
+-				.filter((id): id is string => !!id).map((id) => sinks.abortTurn(id))));
+-			for (const run of active) {
+-				closeAll(run);
+-				if (run.phase === "wizard") { runs.delete(run.parentId); continue; }
+-				run.phase = "idle";
+-				publish(run);
+-			}
+-		},
++		...managedGoalLifecycle({
++			sinks,
++			runs,
++			persist,
++			restore,
++			publish,
++			closeAll,
++			commitGoal,
++			quiescing: () => quiescing,
++			setQuiescing: (value) => {
++				if (value) admissionGeneration += 1;
++				quiescing = value;
++			},
++			goalModeOn,
++		}),
+ 		setGoal(goal: string, opts?: GoalStartOptions): Promise<void> {
+ 			if (quiescing || sinks.isDisposed()) return Promise.resolve();
+ 			const text = (goal ?? "").trim();
+diff --git a/server/dispatch-domain-handlers.ts b/server/dispatch-domain-handlers.ts
+index 2c28542..d0075ca 100644
+--- a/server/dispatch-domain-handlers.ts
++++ b/server/dispatch-domain-handlers.ts
+@@ -818,6 +818,12 @@ export function handlePlanAndGoalMessage(msg: ClientMessage, cs: DispatchSession
+ 		case "clear_goal":
+ 			void cs.clearGoal();
+ 			return true;
++		case "resume_goal":
++			if (!cs.resumeGoal) throw new Error("goal_resume_unsupported");
++			void cs
++				.resumeGoal()
++				.catch(() => cs.emitNotice("error", "目标恢复失败，请重试。", "Goal resume failed. Please retry."));
++			return true;
+ 		case "start_goal_wizard":
+ 			void cs.startGoalWizard(msg.text, {
+ 				wizardModel: msg.wizardModel,
+diff --git a/server/managed-core-goal-lifecycle.ts b/server/managed-core-goal-lifecycle.ts
+new file mode 100644
+index 0000000..2e42fd8
+--- /dev/null
++++ b/server/managed-core-goal-lifecycle.ts
+@@ -0,0 +1,81 @@
++import type { GoalRunPort, GoalStartOptions } from "../packages/keel/src/contracts/goals.js";
++import type { GoalRunSinks } from "../packages/keel/src/domains/goals/index.js";
++import type { GoalRun } from "./goal-run-state.js";
++
++/** Display restore never starts work; only explicit resume may replace a paused run. */
++export function managedGoalLifecycle(input: {
++	sinks: GoalRunSinks;
++	runs: Map<string, GoalRun>;
++	persist(run: GoalRun): void;
++	restore(parentId: string): GoalRun | undefined;
++	publish(run?: GoalRun): void;
++	closeAll(run: GoalRun): void;
++	quiescing(): boolean;
++	setQuiescing(value: boolean): void;
++	goalModeOn(): boolean;
++	commitGoal(parentId: string, text: string, opts?: GoalStartOptions): Promise<void>;
++}): Pick<GoalRunPort, "restoreGoal" | "resumeGoal" | "quiesce" | "unquiesce"> {
++	let drained = false;
++	return {
++		restoreGoal(parentId) {
++			const run = input.runs.get(parentId) ?? input.restore(parentId);
++			if (run) input.runs.set(parentId, run);
++			input.publish(run);
++		},
++		async resumeGoal() {
++			if (input.quiescing() || input.sinks.isDisposed() || !input.goalModeOn()) return;
++			const parentId = input.sinks.activeConversationId();
++			const run = parentId ? input.runs.get(parentId) : undefined;
++			if (!run?.paused || !run.goal.trim()) return;
++			// Claim synchronously so repeated clicks cannot start duplicate execution.
++			run.paused = false;
++			try {
++				await input.commitGoal(run.parentId, run.goal, {
++					reviewModel: run.reviewModel,
++					execModel: run.execModel,
++					maxRounds: run.maxRounds,
++					locked: run.locked,
++					materials: [...(run.materials ?? [])],
++				});
++			} catch (error) {
++				if (input.runs.get(run.parentId) === run) {
++					run.paused = true;
++					input.publish(run);
++				}
++				throw error;
++			}
++		},
++		async quiesce() {
++			input.setQuiescing(true);
++			drained = false;
++			const active = [...input.runs.values()];
++			for (const run of active) {
++				input.persist(run);
++				run.paused = true;
++				run.stopped = true;
++				run.generation += 1;
++			}
++			await Promise.all(
++				active.flatMap((run) =>
++					[run.execId, run.reviewId, run.wizardId]
++						.filter((id): id is string => !!id)
++						.map((id) => input.sinks.abortTurn(id)),
++				),
++			);
++			for (const run of active) {
++				input.closeAll(run);
++				if (run.phase === "wizard") {
++					input.runs.delete(run.parentId);
++					continue;
++				}
++				run.phase = "idle";
++				input.publish(run);
++			}
++			drained = true;
++		},
++		unquiesce() {
++			if (input.quiescing() && !drained) throw new Error("goal_drain_not_complete");
++			input.setQuiescing(false);
++		},
++	};
++}
+diff --git a/tests/unit/core-engine-connect.test.ts b/tests/unit/core-engine-connect.test.ts
+index 35f0998..97a3af3 100644
+--- a/tests/unit/core-engine-connect.test.ts
++++ b/tests/unit/core-engine-connect.test.ts
+@@ -56,7 +56,9 @@ beforeEach(() => {
+ 		eventListeners.push(listeners);
+ 		const session = {
+ 			sessionId: `s${opened}`,
+-			get isStreaming() { return sdkStreaming; },
++			get isStreaming() {
++				return sdkStreaming;
++			},
+ 			abort: () => abortSession(),
+ 			sessionFile: undefined,
+ 			messages: [] as unknown[],
+@@ -64,7 +66,9 @@ beforeEach(() => {
+ 			sendUserMessage,
+ 			subscribe: (listener: (event: unknown) => void) => {
+ 				listeners.add(listener);
+-				return () => { listeners.delete(listener); };
++				return () => {
++					listeners.delete(listener);
++				};
+ 			},
+ 			dispose: () => {},
+ 		};
+@@ -101,7 +105,9 @@ describe("managed runtime accounting", () => {
+ 		const open = openTurnSession.getMockImplementation()!;
+ 		let release!: () => void;
+ 		openTurnSession.mockImplementation(async (...args) => {
+-			await new Promise<void>((resolve) => { release = resolve; });
++			await new Promise<void>((resolve) => {
++				release = resolve;
++			});
+ 			return open(...args);
+ 		});
+ 		const engine = engineWith();
+@@ -132,7 +138,12 @@ describe("managed runtime accounting", () => {
+ 		sdkStreaming = true;
+ 		for (const listener of eventListeners[0]!) listener({ type: "tool_execution_start", toolCallId: "writer" });
+ 		let finish!: () => void;
+-		abortSession.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve; }));
++		abortSession.mockImplementation(
++			() =>
++				new Promise<void>((resolve) => {
++					finish = resolve;
++				}),
++		);
+ 		const drain = engine.quiesce(200);
+ 		expect(engine.quiesce()).toBe(drain);
+ 		expect(() => engine.unquiesce()).toThrow("quiesce_in_progress");
+@@ -189,14 +200,51 @@ describe("managed runtime accounting", () => {
+ });
+ 
+ describe("core/app · 连接期首条对话（A）", () => {
++	it("keeps native goals paused across core unquiesce until explicit resume", async () => {
++		const store = new ClientStateStore(join(root, "resume-state.json"));
++		store.saveConversationGoal("session:s1", {
++			goal: "resume through core",
++			reviewModel: null,
++			maxRounds: 3,
++			locked: true,
++			round: 2,
++			verdict: "pending",
++			status: "saved",
++			savedAt: 1,
++		});
++		const engine = engineWith({
++			stateStore: store,
++			goalRun: (sinks: GoalRunSinks) => createCoreGoalRunPort({ sinks, stateStore: store }),
++		});
++		const { sent } = collector();
++		const session = await engine.attach("resume-browser", (message) => sent.push(message));
++		expect(await engine.quiesce()).toEqual({ ok: true });
++		await session.resumeGoal!();
++		expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(0);
++		engine.unquiesce();
++		expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(0);
++		await Promise.all([session.resumeGoal!(), session.resumeGoal!()]);
++		await vi.waitFor(() => expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(1));
++		expect(sent.filter((m) => m.type === "goal_status").at(-1)?.status.paused).toBe(false);
++	});
+ 	it("restores the real native goal port on connect/reconnect and changes display with the active conversation", async () => {
+ 		const store = new ClientStateStore(join(root, "client-state.json"));
+ 		store.saveConversationGoal("session:s1", {
+-			goal: "persisted goal", reviewModel: null, maxRounds: 3, locked: true,
+-			round: 2, verdict: "pending", status: "saved", savedAt: 1,
++			goal: "persisted goal",
++			reviewModel: null,
++			maxRounds: 3,
++			locked: true,
++			round: 2,
++			verdict: "pending",
++			status: "saved",
++			savedAt: 1,
+ 		});
+ 		const factory = vi.fn((sinks: GoalRunSinks) => createCoreGoalRunPort({ sinks, stateStore: store }));
+-		const engine = engineWith({ stateStore: store, goalRun: factory, retainEvidence: () => ({ hasPendingWake: true }) });
++		const engine = engineWith({
++			stateStore: store,
++			goalRun: factory,
++			retainEvidence: () => ({ hasPendingWake: true }),
++		});
+ 		const { sent } = collector();
+ 		const session = await engine.attach("fresh-browser", (message) => sent.push(message));
+ 		const lastGoal = () => sent.filter((message) => message.type === "goal_status").at(-1)?.status;
+@@ -205,8 +253,10 @@ describe("core/app · 连接期首条对话（A）", () => {
+ 		expect(feeds.every((feed) => feed.mock.calls.length === 0)).toBe(true);
+ 		const reconnect = collector();
+ 		await engine.attach("fresh-browser", (message) => reconnect.sent.push(message));
+-		expect(reconnect.sent.filter((message) => message.type === "goal_status").at(-1)?.status)
+-			.toMatchObject({ goal: "persisted goal", paused: true });
++		expect(reconnect.sent.filter((message) => message.type === "goal_status").at(-1)?.status).toMatchObject({
++			goal: "persisted goal",
++			paused: true,
++		});
+ 		expect(factory).toHaveBeenCalledTimes(1);
+ 		await session.newChat(undefined, true);
+ 		await vi.waitFor(() => expect(lastGoal()?.goal).toBeNull());
+diff --git a/tests/unit/goal-run-adapter.test.ts b/tests/unit/goal-run-adapter.test.ts
+index e17dcfa..3a49ff4 100644
+--- a/tests/unit/goal-run-adapter.test.ts
++++ b/tests/unit/goal-run-adapter.test.ts
+@@ -1,4 +1,4 @@
+-import { describe, expect, it } from "vitest";
++import { describe, expect, it, vi } from "vitest";
+ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import { join } from "node:path";
+@@ -109,6 +109,78 @@ function makeHarness(opts?: {
+ const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+ 
+ describe("目标运行宿主适配器（GoalRunPort 的真实现）", () => {
++	it("does not revive a goal command admitted before a drain-and-reopen cycle", async () => {
++		const h = makeHarness();
++		await h.port.setGoal("original");
++		let release!: () => void;
++		let aborts = 0;
++		h.sinks.abortTurn = async () => {
++			if (++aborts === 1)
++				await new Promise<void>((resolve) => {
++					release = resolve;
++				});
++		};
++		const pending = h.port.setGoal("must not start after drain");
++		await h.port.quiesce!();
++		h.port.unquiesce!();
++		release();
++		await pending;
++		expect(h.turns).toHaveLength(1);
++		expect(h.opened).toHaveLength(2);
++		expect(h.statuses().at(-1)).toMatchObject({ goal: "original", paused: true });
++	});
++	it("requires explicit resume after successful drain and accepts one resume at a time", async () => {
++		const h = makeHarness();
++		await h.port.setGoal("resume only explicitly", { maxRounds: 7, locked: true, materials: ["notes.md"] });
++		await h.port.quiesce!();
++		await h.port.resumeGoal!();
++		expect(h.turns).toHaveLength(1);
++		h.port.unquiesce!();
++		expect(h.turns).toHaveLength(1);
++		expect(h.statuses().at(-1)?.paused).toBe(true);
++		await Promise.all([h.port.resumeGoal!(), h.port.resumeGoal!()]);
++		expect(h.turns).toHaveLength(2);
++		expect(h.opened).toHaveLength(4);
++		expect(h.statuses().at(-1)).toMatchObject({ paused: false, maxRounds: 7, locked: true });
++		await h.port.resumeGoal!();
++		expect(h.turns).toHaveLength(2);
++	});
++
++	it("resumes saved settings and materials without inheriting changed model defaults", async () => {
++		const save = vi.fn();
++		const h = makeHarness({
++			identity: "session:saved",
++			stateStore: {
++				saveConversationGoal: save,
++				getGoalPrefs: () => ({ reviewModel: "provider/new", execModel: "provider/new", maxRounds: 1, locked: false }),
++				saveGoalPrefs: () => {},
++				getConversationGoal: () => ({
++					goal: "saved goal",
++					materials: ["notes.md"],
++					reviewModel: null,
++					execModel: null,
++					maxRounds: 9,
++					locked: true,
++					round: 3,
++					verdict: "pending",
++					status: "saved",
++					savedAt: 1,
++				}),
++			},
++		});
++		h.port.restoreGoal!("parent");
++		await Promise.all([h.port.resumeGoal!(), h.port.resumeGoal!()]);
++		expect(h.turns).toHaveLength(1);
++		expect(h.statuses().at(-1)).toMatchObject({
++			goal: "saved goal",
++			reviewModel: null,
++			execModel: null,
++			maxRounds: 9,
++			locked: true,
++			paused: false,
++		});
++		expect(save.mock.calls.at(-1)?.[1].materials).toEqual(["notes.md"]);
++	});
+ 	it("persists display state to disk and restores paused under a fresh browser identity without opening children", async () => {
+ 		const directory = mkdtempSync(join(tmpdir(), "keel-goal-restore-"));
+ 		try {
+@@ -121,11 +193,17 @@ describe("目标运行宿主适配器（GoalRunPort 的真实现）", () => {
+ 			expect(first.closed).toHaveLength(2);
+ 			const persisted = JSON.parse(readFileSync(file, "utf8")).__settings__.conversationGoals["session:stable"];
+ 			expect(persisted).toMatchObject({ goal: "retain this goal", maxRounds: 4 });
+-			for (const key of ["execId", "reviewId", "wizardId", "phase", "generation", "counters", "queues"]) expect(persisted).not.toHaveProperty(key);
++			for (const key of ["execId", "reviewId", "wizardId", "phase", "generation", "counters", "queues"])
++				expect(persisted).not.toHaveProperty(key);
+ 			const restoredStore = new ClientStateStore(file);
+ 			const restored = makeHarness({ stateStore: restoredStore, identity: "session:stable", clientId: "new-browser" });
+ 			restored.port.restoreGoal!("parent");
+-			expect(restored.statuses().at(-1)).toMatchObject({ goal: "retain this goal", paused: true, reviewing: false, wizard: { active: false } });
++			expect(restored.statuses().at(-1)).toMatchObject({
++				goal: "retain this goal",
++				paused: true,
++				reviewing: false,
++				wizard: { active: false },
++			});
+ 			expect(restored.opened).toEqual([]);
+ 			expect(restored.turns).toEqual([]);
+ 			restored.port.onTurnSettled!(first.childOf("exec"), "done");
+@@ -136,15 +214,21 @@ describe("目标运行宿主适配器（GoalRunPort 的真实现）", () => {
+ 			expect(unrelated.statuses().at(-1)?.goal).toBeNull();
+ 			await restored.port.clearGoal("parent");
+ 			expect(new ClientStateStore(file).getConversationGoal("session:stable")).toBeUndefined();
+-		} finally { rmSync(directory, { recursive: true, force: true }); }
++		} finally {
++			rmSync(directory, { recursive: true, force: true });
++		}
+ 	});
+ 
+ 	it("invalidates late goal callbacks before awaiting abort and fails when abort fails", async () => {
+ 		const h = makeHarness();
+ 		await h.port.setGoal("stop safely");
+ 		const turnsBefore = h.turns.length;
+-		h.sinks.abortTurn = async () => { throw new Error("abort failed"); };
++		h.sinks.abortTurn = async () => {
++			throw new Error("abort failed");
++		};
+ 		await expect(h.port.quiesce!()).rejects.toThrow("abort failed");
++		expect(() => h.port.unquiesce!()).toThrow("goal_drain_not_complete");
++		await h.port.resumeGoal!();
+ 		h.port.onTurnSettled!(h.childOf("exec"), "done");
+ 		await flush();
+ 		expect(h.turns).toHaveLength(turnsBefore);
+diff --git a/tests/unit/managed-goal-resume-wire.test.ts b/tests/unit/managed-goal-resume-wire.test.ts
+new file mode 100644
+index 0000000..3d5a04b
+--- /dev/null
++++ b/tests/unit/managed-goal-resume-wire.test.ts
+@@ -0,0 +1,22 @@
++import { describe, expect, it, vi } from "vitest";
++import { handlePlanAndGoalMessage } from "../../server/dispatch-domain-handlers.js";
++import type { DispatchSession } from "../../server/engine-service.js";
++
++describe("managed goal resume wire", () => {
++	it("dispatches explicit resume and reports asynchronous failure", async () => {
++		const resumeGoal = vi.fn(async () => {
++			throw new Error("private internal detail");
++		});
++		const emitNotice = vi.fn();
++		const session = { resumeGoal, emitNotice } as unknown as DispatchSession;
++		expect(handlePlanAndGoalMessage({ type: "resume_goal" }, session)).toBe(true);
++		await vi.waitFor(() => expect(emitNotice).toHaveBeenCalledOnce());
++		expect(resumeGoal).toHaveBeenCalledOnce();
++		expect(JSON.stringify(emitNotice.mock.calls)).not.toContain("private internal detail");
++	});
++	it("rejects unsupported runtime resume instead of silently accepting it", () => {
++		expect(() => handlePlanAndGoalMessage({ type: "resume_goal" }, {} as DispatchSession)).toThrow(
++			"goal_resume_unsupported",
++		);
++	});
++});

@@ -108,8 +108,8 @@ This component passes 38 native adapter/domain/sink/handler tests and full
 upstream typecheck. A real `ClientStateStore` round-trip verifies restoration
 under a new browser client id, session isolation, absence of execution fields,
 and explicit clearing. This adapter evidence does **not** prove live browser
-restore. The following component wires the runtime hooks; explicit Resume and
-re-admission after successful drain still need integration. Keep the manifest
+restore. The following components wire runtime restore, Resume, and
+re-admission after successful drain. Keep the manifest
 unchanged until those paths and the full release gates pass.
 
 `session-runner/upstream/pi-web-ui/patches/managed-v0123-goal-restore.patch`
@@ -126,8 +126,27 @@ test uses the actual core engine, native Goal adapter, and disk state store to
 check initial restore, a new reconnect sink, blank conversation selection, and
 switching back, with zero SDK turns throughout. History-domain tests remain
 regression evidence rather than a live persisted-history browser canary.
-Explicit Resume, re-admission after drain, and browser/image release validation
-remain outstanding. This sixth component is also inactive.
+The next component adds explicit Resume and re-admission; browser/image release
+validation remains outstanding. This sixth component is also inactive.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-goal-resume.patch`
+adds explicit `resume_goal` dispatch through the core Goal domain to the native
+adapter. `managed-core-goal-lifecycle.ts` owns display restore, pause, and resume
+orchestration. Resume synchronously claims the paused record to prevent duplicate
+clicks from starting duplicate execution. It starts a fresh execution/review
+cycle using saved preferences and material references, including explicit null
+model selections rather than newer client defaults. Reopening admission after
+a successful drain does not resume a goal. A failed drain remains closed.
+
+Goal commands capture an admission generation before asynchronous setup; drain
+invalidates it so an older pending command cannot revive after unquiesce.
+The seventh inactive component passes 61 focused native Goal/core/domain/wire
+tests, full upstream typecheck, and the generated dispatch-surface check.
+Tests cover duplicate resume, saved settings/materials, failed drain rejection,
+the pending-command race, and actual core unquiesce followed by explicit resume.
+The wire catches asynchronous resume failures and emits a generic error notice.
+The existing managed Resume button still requires validation against the complete
+new runtime; this is not browser or image release evidence.
 
 The remaining migration must preserve these contracts at their current owners:
 
@@ -137,7 +156,7 @@ The remaining migration must preserve these contracts at their current owners:
 | Persisted state | `packages/keel/src/projects-schema.ts` owns types; `server/client-state.ts` owns storage. Preserve paused goals, model timestamps, and interrupted workspace-request metadata. |
 | Automation and workspace requests | Replace old daemon hooks with current core runtime/host integration; preserve status, cancellation, readiness, model validation, and restart recovery. |
 | Quiesce and counters | Counter, bounded core drain, and background-host components are tested but inactive; native Goal shutdown, process-group escalation validation, and complete admission coverage remain required. |
-| Native Pi Goals | Native adapter persistence, drain, and connection/selection restore hooks are implemented in inactive components; explicit Resume, re-admission, and live history/browser validation remain. Old `goal-service.ts` tests do not establish these new runtime paths. |
+| Native Pi Goals | Native adapter persistence, drain, connection/selection restore, explicit Resume, and re-admission are implemented in inactive components; live history/browser validation remains. Old `goal-service.ts` tests do not establish these new runtime paths. |
 | SDK setup | `packages/keel/src/adapters/sdk/session-opener.ts` and host ports must preserve credentials, transcript placement, prompt references, and the single MCP integration. Do not import server modules into the core package. |
 | Embedding and browser surfaces | Revalidate authenticated `/agent/`, native terminal, model selection, Goals, and proxy paths against the actual new engine. |
 
