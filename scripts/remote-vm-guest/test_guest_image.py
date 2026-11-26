@@ -66,6 +66,18 @@ class GuestImageTests(unittest.TestCase):
             with self.assertRaisesRegex(builder.BuildError, "SHA-256 mismatch"):
                 builder.verify_base_image(image, self.manifest, runner=lambda *args, **kwargs: self.fail("qemu must not run"))
 
+    def test_credential_filenames_distinguish_code_from_saved_secrets(self):
+        for name in ["call-credentials.js.map", "credentials.ts", "service-account.js"]:
+            self.assertIsNone(builder.SECRET_NAME_RE.search(name), name)
+        for name in ["credentials.json", "service-account.json", ".env", ".env.local", "id_ed25519", "authorized_keys"]:
+            self.assertIsNotNone(builder.SECRET_NAME_RE.search(name), name)
+
+    def test_private_key_scan_requires_material_and_covers_pkcs8(self):
+        self.assertIsNone(builder.PRIVATE_KEY_RE.search("-----BEGIN RSA PRIVATE KEY-----\nXXXXXXXXXXX..."))
+        for kind in ["", "RSA ", "OPENSSH ", "ENCRYPTED "]:
+            self.assertIsNotNone(builder.PRIVATE_KEY_RE.search(
+                f"-----BEGIN {kind}PRIVATE KEY-----\n" + "A" * 128 + "\n"))
+
     def test_dry_run_contains_persistence_and_upgrade_contract(self):
         result = builder.plan(None, None, Path("guest.qcow2"), self.manifest)
         self.assertEqual(result["resources"]["diskGiB"], 40)

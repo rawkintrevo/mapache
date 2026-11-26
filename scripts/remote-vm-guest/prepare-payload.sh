@@ -29,9 +29,26 @@ mkdir -p "${output}/runtime" "${output}/session-runner" "${output}/pi-web-ui"
 docker cp "${container}:/usr/local/bin/node" "${output}/runtime/bin-node"
 docker cp "${container}:/usr/local/bin/pi" "${output}/runtime/pi"
 docker cp "${container}:/usr/local/lib/node_modules" "${output}/runtime/lib-node-modules"
+if [[ -L "${output}/runtime/pi" ]]; then
+  pi_target="$(readlink "${output}/runtime/pi")"
+  case "${pi_target}" in
+    ../lib/node_modules/*)
+      ln -sfn "lib-node-modules/${pi_target#../lib/node_modules/}" "${output}/runtime/pi"
+      ;;
+    *)
+      echo "unsupported pi launcher symlink: ${pi_target}" >&2
+      exit 65
+      ;;
+  esac
+fi
+[[ -f "${output}/runtime/pi" ]] || { echo "pi launcher target is missing" >&2; exit 65; }
 docker cp "${container}:/root/.pi/agent/npm/node_modules/pi-mcp-adapter" "${output}/pi-mcp-adapter"
 docker cp "${container}:/app/." "${output}/session-runner/"
 docker cp "${container}:/opt/mapache/pi-web-ui/." "${output}/pi-web-ui/"
+# ssh2 ships private-key fixtures for its own test suite, not runtime use.
+if [[ -d "${output}/pi-web-ui/node_modules/ssh2/test" ]]; then
+  find "${output}/pi-web-ui/node_modules/ssh2/test" -depth -delete
+fi
 mkdir -p "${output}/runtime/bin"
 mv "${output}/runtime/bin-node" "${output}/runtime/bin/node"
 chmod 0755 "${output}/runtime/bin/node" "${output}/runtime/pi"

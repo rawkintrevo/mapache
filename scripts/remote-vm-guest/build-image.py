@@ -26,10 +26,15 @@ MANIFEST_PATH = ROOT / "manifest.json"
 IMAGE_VERSION_RE = re.compile(r"^ubuntu-24\.04-v[0-9]+$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 SECRET_NAME_RE = re.compile(
-    r"(^|[-_.])(id_rsa|id_ed25519|authorized_keys|credentials?|service[-_]?account|\.env)([-_.]|$)",
+    r"(^|[-_.])(id_rsa|id_ed25519|authorized_keys)([-_.]|$)"
+    r"|^\.env(?:\..*)?$"
+    r"|(?:^|[-_.])(?:credentials?|service[-_]?account)(?:\.(?:json|yaml|yml|pem|key|txt))?$",
     re.IGNORECASE,
 )
-PRIVATE_KEY_RE = re.compile(r"-----BEGIN (?:OPENSSH|RSA|EC|DSA) PRIVATE KEY-----")
+PRIVATE_KEY_RE = re.compile(
+    r"-----BEGIN (?:OPENSSH |RSA |EC |DSA |ENCRYPTED )?PRIVATE KEY-----"
+    r"\s+(?:(?:Proc-Type|DEK-Info):[^\n]+\n\s*)*[A-Za-z0-9+/=\s]{64,}"
+)
 SERVICE_ACCOUNT_RE = re.compile(r'"private_key"\s*:\s*"-----BEGIN', re.IGNORECASE)
 
 
@@ -163,11 +168,13 @@ def validate_payload(payload: Path, manifest: dict) -> dict:
         if SECRET_NAME_RE.search(path.name):
             raise BuildError(f"guest payload contains a credential-looking file: {path.name}")
         try:
-            sample = path.read_bytes()[:2 * 1024 * 1024]
+            with path.open("rb") as stream:
+                sample = stream.read(2 * 1024 * 1024)
         except OSError as error:
             raise BuildError(f"unable to inspect guest payload file: {path}") from error
-        if PRIVATE_KEY_RE.search(sample.decode("utf-8", errors="ignore")) or SERVICE_ACCOUNT_RE.search(
-            sample.decode("utf-8", errors="ignore")
+        decoded = sample.decode("utf-8", errors="ignore").replace("\\n", "\n").replace("\\r", "\r")
+        if PRIVATE_KEY_RE.search(decoded) or SERVICE_ACCOUNT_RE.search(
+            decoded
         ):
             raise BuildError(f"guest payload contains private-key material: {path.name}")
     if scanned_files == 0:
