@@ -1,0 +1,16 @@
+{
+  "name": "mapache-vm-gateway-v2",
+  "private": true,
+  "version": "0.2.0",
+  "engines": {"node": "24"},
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test *.test.js"
+  },
+  "dependencies": {
+    "google-auth-library": "^10.7.0"
+  },
+  "devDependencies": {
+    "ws": "^8.18.0"
+  }
+}

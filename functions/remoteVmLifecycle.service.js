@@ -90,7 +90,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       runtimeInstanceName: descriptor.guestName,
       runtimeDataDiskName: descriptor.dataDiskName,
       runtimeDataDiskGeneration: descriptor.generation,
-      serviceUrl: descriptor.gateway?.baseUrl || null,
+      serviceUrl: descriptor.gateway?.baseUrl || remoteVmGatewayBaseUrl(),
       lastError: null,
       runtimeProvider: {...descriptor, state: "running", guestIp: result.guestIp || descriptor.guestIp},
       ...(dependencies.admin?.firestore?.Timestamp ? {updatedAt: dependencies.admin.firestore.Timestamp.now()} : {}),
@@ -617,6 +617,21 @@ function createRemoteVmLifecycleService(dependencies = {}) {
         updatedAt: now(),
       });
     }
+  }
+}
+
+function remoteVmGatewayBaseUrl() {
+  const configured = process.env.VM_REMOTE_VM_GATEWAY_BASE_URL || process.env.VM_RUNTIME_GATEWAY_BASE_URL ||
+    String(process.env.VM_WORKSPACE_GATEWAY_HOSTS || "").split(",")
+        .map((value) => value.trim())
+        .find((value) => value && !value.startsWith("backup-recovery---"));
+  if (!configured) return null;
+  try {
+    const url = new URL(String(configured).startsWith("http") ? configured : `https://${configured}`);
+    if (url.protocol !== "https:" || url.username || url.password || (url.pathname !== "/" && url.pathname !== "")) return null;
+    return url.origin;
+  } catch {
+    return null;
   }
 }
 
