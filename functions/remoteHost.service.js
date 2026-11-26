@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const dns = require("node:dns").promises;
 const net = require("node:net");
 const {cleanName, httpError, serialize} = require("./backendUtils.helpers");
+const {connectRemoteHost} = require("./remoteHost.connection");
 
 const DEFAULT_SSH_PORT = 22;
 const MAX_HOSTS_PER_OWNER = 1;
@@ -348,8 +349,7 @@ function isDisallowedIp(value) {
 }
 
 async function connectToHost({host, addresses, privateKey, dependencies}) {
-  const connector = dependencies.hostConnector || dependencies.testConnection;
-  if (typeof connector !== "function") throw httpError(503, "remote_host_connection_unavailable");
+  const connector = dependencies.hostConnector || dependencies.testConnection || connectRemoteHost;
   return connector({
     host: {
       id: host.id,
