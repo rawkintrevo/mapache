@@ -152,6 +152,19 @@ test("authorization renewal closes a stream when the resolver hangs", async (t) 
   assert.equal(calls, 2);
 });
 
+test("a changed boot closes an existing WebSocket without changing disk generation", {timeout: 1500}, async (t) => {
+  const f = await fixture(t);
+  const socket = new WebSocket(`ws://127.0.0.1:${f.port}/agent/ws`, {
+    headers: {host: "gateway.example.com", cookie: "mapache_access=valid"},
+  });
+  t.after(() => socket.terminate());
+  await once(socket, "open");
+  const closed = once(socket, "close");
+  f.target.bootId = "next-boot";
+  await closed;
+  assert.equal(f.target.generation, 1);
+});
+
 test("target validation rejects arbitrary forwarding and auth parsing removes the token", () => {
   const valid = {transport: "ssh", sshAddress: "home.example.com", sshPort: 22, sshUsername: "mapache",
     hostKeyFingerprint: "SHA256/abcdefghijklmno", privateKey: "x".repeat(128), guestAddress: "192.168.250.12",
