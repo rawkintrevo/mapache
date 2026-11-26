@@ -3,6 +3,7 @@
 const assert = require("assert");
 const {
   createWorkspaceService,
+  normalizeWorkspaceSourcePayload,
   normalizePublicGitHubRepoUrl,
   normalizeWorkspaceHomePolicy,
   normalizeWorkspaceSyncPolicy,
@@ -10,6 +11,7 @@ const {
   renameWorkspace,
   ensureCanonicalSession,
 } = require("./workspace.service");
+const {REMOTE_LIBVIRT_BACKEND} = require("./runtimeProvider.helpers");
 
 assert.strictEqual(normalizePublicGitHubRepoUrl(123), "123");
 assert.throws(() => normalizePublicGitHubRepoUrl({}), /missing_github_repo_url/);
@@ -133,6 +135,64 @@ async function testCreateWorkspaceUsesManagedDefaults() {
   );
 }
 
+async function testCreateRemoteWorkspaceUsesOwnerReadyHostAndFixedRuntime() {
+  let stored = null;
+  const updates = [];
+  const workspaceRef = {
+    id: "workspace-remote",
+    async update(patch) {
+      updates.push(patch);
+      stored = {...stored, ...patch};
+    },
+    async get() {
+      return {exists: Boolean(stored), id: this.id, data: () => stored};
+    },
+  };
+  const dependencies = {
+    admin: {firestore: {FieldValue: {serverTimestamp: () => "server-time"}}},
+    db: {
+      collection(name) {
+        assert.strictEqual(name, "workspaces");
+        return {
+          add: async (doc) => {
+            stored = doc;
+            return workspaceRef;
+          },
+        };
+      },
+    },
+    remoteHostService: {
+      getRemoteHost: async (uid, hostId) => {
+        assert.strictEqual(uid, "user-1");
+        assert.strictEqual(hostId, "host-1");
+        return {hostId, ready: true};
+      },
+    },
+    runtimeProviderEnabled: () => true,
+    runtimeGatewayBaseUrl: () => "https://gateway.example",
+  };
+  const service = createWorkspaceService(dependencies);
+  const created = await service.createWorkspace("user-1", {
+    name: "Remote guest",
+    source: {type: "remote-vm", hostId: "host-1"},
+    resources: {cpu: "1", memory: "2Gi"},
+  });
+
+  assert.equal(created.source.type, REMOTE_LIBVIRT_BACKEND);
+  assert.equal(created.source.hostId, "host-1");
+  assert.deepStrictEqual(created.resources, {cpu: "2", memory: "8Gi"});
+  assert.equal(created.runtimeBackend, REMOTE_LIBVIRT_BACKEND);
+  assert.equal(created.runtimeProvider.backend, REMOTE_LIBVIRT_BACKEND);
+  assert.equal(created.runtimeProvider.hostId, "host-1");
+  assert.equal(updates.length, 1);
+  await assert.rejects(
+      normalizeWorkspaceSourcePayload("user-1", {source: {type: "remote-libvirt", hostId: "host-1"}}, {
+        remoteHostService: {getRemoteHost: async () => ({ready: false, status: "unreachable"})},
+      }),
+      /remote_host_not_ready/,
+  );
+}
+
 async function testCanonicalSessionAdoptionPrefersActiveRuntime() {
   let workspace = {ownerUid: "user-1", canonicalSessionId: null};
   const workspaceRef = {
@@ -170,6 +230,7 @@ async function testCanonicalSessionAdoptionPrefersActiveRuntime() {
 Promise.all([
   testRenameWorkspace(),
   testCreateWorkspaceUsesManagedDefaults(),
+  testCreateRemoteWorkspaceUsesOwnerReadyHostAndFixedRuntime(),
   testCanonicalSessionAdoptionPrefersActiveRuntime(),
 ]).then(() => {
   console.log("workspace service tests passed");

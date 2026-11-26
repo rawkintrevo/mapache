@@ -8,6 +8,7 @@ export function WorkspacePanel({
   selectedWorkspace,
   state,
   access,
+  isRemoteWorkspace = false,
   onSelectCanvas,
 }) {
   if (selectedSession) {
@@ -18,6 +19,7 @@ export function WorkspacePanel({
           activeCanvas={activeCanvas}
           access={access}
           session={selectedSession}
+          isRemoteWorkspace={isRemoteWorkspace}
           workspaceId={state.selectedWorkspaceId}
           onSelectCanvas={onSelectCanvas}
         />

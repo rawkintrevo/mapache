@@ -47,7 +47,12 @@ const {
   provisioningSessionId,
   resolveCloudRunServiceId,
 } = require("./provisioning.helpers");
-const {runtimeDescriptorForWorkspace} = require("./runtimeProvider.helpers");
+const {
+  REMOTE_GUEST_MEMORY_MIB,
+  REMOTE_GUEST_VCPUS,
+  isRemoteLibvirtRuntime,
+  runtimeDescriptorForWorkspace,
+} = require("./runtimeProvider.helpers");
 
 function createSessionCreationService(dependencies = {}) {
   return {
@@ -96,7 +101,11 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   const markedAgentWorkspace = isMarkedAgentWorkspace(workspace);
   const now = dependencies.admin.firestore.FieldValue.serverTimestamp();
   const region = cleanName(payload.region || DEFAULT_REGION);
-  const resources = dependencies.normalizeRequestedSessionResources({
+  const remoteWorkspace = isRemoteLibvirtRuntime(workspace);
+  const resources = remoteWorkspace ? {
+    cpu: String(REMOTE_GUEST_VCPUS),
+    memory: `${REMOTE_GUEST_MEMORY_MIB / 1024}Gi`,
+  } : dependencies.normalizeRequestedSessionResources({
     ...payload,
     ...(payload.resources || {}),
   }, {
@@ -188,7 +197,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
     sessionType: "cloud",
     ...(runtimeProvider ? {runtimeProvider} : {}),
     terminalKind: harness?.terminalKind || runnerImage.terminalKind || "shell",
-    capabilities: runnerImage.capabilities,
+    capabilities: remoteWorkspace ? {...runnerImage.capabilities, chrome: false} : runnerImage.capabilities,
     serviceAccount: dependencies.runnerServiceAccountValue() || null,
     serviceId,
     serviceName: cloudRunServiceName(region, serviceId),

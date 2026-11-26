@@ -1,0 +1,65 @@
+import {render, screen} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import {describe, expect, test, vi} from "vitest";
+import {WorkspaceModal} from "./WorkspaceModal.jsx";
+
+function renderModal(remoteHostState = {hosts: [], loading: false}) {
+  const props = {
+    environmentEntries: [],
+    onClose: vi.fn(),
+    onConnectGithub: vi.fn(),
+    onCreateWorkspace: vi.fn(),
+    onLoadConnectedRepos: vi.fn(),
+    onLoadRemoteHosts: vi.fn(),
+    onShowRemoteHosts: vi.fn(),
+    remoteHostState,
+    repoPicker: {repos: [], loading: false, error: ""},
+  };
+  render(<WorkspaceModal {...props} />);
+  return props;
+}
+
+describe("WorkspaceModal remote VM option", () => {
+  test("keeps blank creation unchanged", async () => {
+    const user = userEvent.setup();
+    const props = renderModal();
+    await user.type(screen.getByLabelText("Workspace Name"), "Blank workspace");
+    await user.click(screen.getByRole("button", {name: "Create Workspace"}));
+
+    expect(props.onCreateWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Blank workspace",
+      source: {type: "blank", repoUrl: "", requestedBranch: null},
+      repoUrl: "",
+      branch: null,
+      env: {},
+    }));
+  });
+
+  test("shows fixed resources and submits the ready host identity", async () => {
+    const user = userEvent.setup();
+    const props = renderModal({
+      hosts: [{id: "host-1", displayName: "Home machine", address: "home.example.com", status: "ready", ready: true}],
+      loading: false,
+    });
+    await user.click(screen.getByRole("radio", {name: "VM on remote machine"}));
+    expect(screen.getByText("2 vCPU · 8 GiB RAM · 40 GiB disk")).toBeInTheDocument();
+    expect(screen.getByText("Home machine")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Workspace Name"), "Remote workspace");
+    await user.click(screen.getByRole("button", {name: "Create Workspace"}));
+
+    expect(props.onLoadRemoteHosts).toHaveBeenCalled();
+    expect(props.onCreateWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Remote workspace",
+      source: {type: "remote-libvirt", hostId: "host-1"},
+    }));
+  });
+
+  test("blocks remote creation until the host is ready", async () => {
+    const user = userEvent.setup();
+    const props = renderModal({hosts: [{id: "host-1", status: "unreachable"}], loading: false});
+    await user.click(screen.getByRole("radio", {name: "VM on remote machine"}));
+    expect(screen.getByRole("button", {name: "Create Workspace"})).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent("not ready");
+    expect(props.onCreateWorkspace).not.toHaveBeenCalled();
+  });
+});

@@ -127,6 +127,24 @@ describe("workspaceController", () => {
     expect(fixture.refreshAll).toHaveBeenCalledTimes(1);
   });
 
+  test("normalizes remote VM sources without letting them fall through to blank", () => {
+    expect(normalizeCreateWorkspaceSource({source: {type: "remote-vm", hostId: "host-1"}})).toEqual({
+      type: "remote-libvirt",
+      hostId: "host-1",
+    });
+  });
+
+  test("passes selected environment entries through workspace creation", async () => {
+    const fixture = createFixture();
+    const controller = createWorkspaceController(fixture);
+    await controller.createWorkspace({
+      name: "Remote",
+      source: {type: "remote-libvirt", hostId: "host-1"},
+      environmentEntryIds: ["env-1"],
+    });
+    expect(fixture.state.api.createWorkspace).toHaveBeenCalledWith(expect.objectContaining({environmentEntryIds: ["env-1"]}));
+  });
+
   test("selection resets panels before loading sessions and workspace panels", async () => {
     const fixture = createFixture();
     const controller = createWorkspaceController(fixture);
@@ -159,6 +177,17 @@ describe("workspaceController", () => {
     expect(fixture.state.selectedSessionId).toBeNull();
     expect(fixture.resetWorkspacePanels).toHaveBeenCalledWith({includeMcp: false});
     expect(fixture.refreshAll).toHaveBeenCalledTimes(1);
+  });
+
+  test("uses permanent-delete confirmation for remote VM workspaces", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const fixture = createFixture({
+      workspaces: [{id: "workspace-1", name: "Home VM", source: {type: "remote-libvirt"}}],
+      selectedWorkspaceId: "workspace-1",
+    });
+    await createWorkspaceController(fixture).deleteWorkspace("workspace-1");
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Permanently delete remote workspace Home VM"));
+    expect(fixture.state.api.deleteWorkspace).not.toHaveBeenCalled();
   });
 
   test("renames a workspace and refreshes the workspace list", async () => {

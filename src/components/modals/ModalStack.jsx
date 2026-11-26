@@ -12,7 +12,7 @@ import {hasPendingOperations} from "../../state/pendingOperations.js";
 
 export function ModalStack(props) {
   const {handlers, state} = props;
-  const {app, github, google, modals, pi, workspaces} = handlers;
+  const {app, github, google, modals, pi, remoteHosts, workspaces} = handlers;
   const busy = hasPendingOperations(state.pendingOperations);
 
   return (
@@ -28,10 +28,12 @@ export function ModalStack(props) {
             modals.closeWorkspaceModal();
           }}
           onLoadConnectedRepos={github.loadConnectedRepos}
+          onLoadRemoteHosts={remoteHosts.load}
           onShowRemoteHosts={() => {
             modals.closeWorkspaceModal();
             void app.showRemoteHosts();
           }}
+          remoteHostState={state.remoteHosts}
         />
       ) : null}
       {state.workspaceEditModalOpen && props.selectedWorkspace ? (

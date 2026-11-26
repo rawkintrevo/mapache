@@ -26,6 +26,7 @@ function renderDetail(overrides = {}, options = {}) {
       <SessionDetail
         access={{accessUrls, error: "", refresh: vi.fn(), refreshAfterConnectionFailure: vi.fn()}}
         isGithubWorkspace={false}
+        isRemoteWorkspace={options.isRemoteWorkspace}
         metrics={{sample: null, connectionState: "connecting"}}
         session={currentSession}
         workspaceId="workspace-1"
@@ -100,6 +101,15 @@ describe("SessionDetail Chrome workflow", () => {
       name: "Pi smoke",
       capabilities: {terminal: true, preview: false, chrome: false},
     });
+
+    expect(screen.queryByRole("tab", {name: "Chrome"})).not.toBeInTheDocument();
+  });
+
+  test("does not expose Chrome for a remote VM workspace", () => {
+    renderDetail({
+      agentUiVersion: "pi-web-ui-v1",
+      capabilities: {terminal: true, preview: true, chrome: true},
+    }, {isRemoteWorkspace: true});
 
     expect(screen.queryByRole("tab", {name: "Chrome"})).not.toBeInTheDocument();
   });

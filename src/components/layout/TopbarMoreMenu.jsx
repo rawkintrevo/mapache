@@ -28,6 +28,9 @@ export function TopbarMoreMenu({
   onToggleGateway,
   piAuthDisabled = false,
   selectedWorkspace,
+  showAutomations = true,
+  showGateway = true,
+  showLogs = true,
   showWorkspaceTools = false,
 }) {
   const [open, setOpen] = useState(false);
@@ -88,28 +91,28 @@ export function TopbarMoreMenu({
       {open ? (
         <div aria-label="More workspace actions" className="topbar-more-popover" role="menu">
           <MenuItem firstItemRef={firstItemRef} icon={<Plus aria-hidden="true" />} label="New workspace" onClick={onOpenWorkspaceModal} close={close} />
-          <MenuItem disabled={!selectedWorkspace} icon={<Pencil aria-hidden="true" />} label={`Edit workspace ${workspaceLabel}`} onClick={onOpenWorkspaceEditModal} close={close} />
+          <MenuItem disabled={!selectedWorkspace || !onOpenWorkspaceEditModal} icon={<Pencil aria-hidden="true" />} label={`Edit workspace ${workspaceLabel}`} onClick={onOpenWorkspaceEditModal} close={close} />
           <div className="topbar-more-divider" role="separator" />
           {showWorkspaceTools ? <>
             <MenuItem icon={<Bot aria-hidden="true" />} label="Agent" onClick={() => onSelectCanvas?.("agent")} close={close} />
           </> : null}
-          <MenuItem disabled={!showWorkspaceTools || !onShowLogs} icon={<ScrollText aria-hidden="true" />} label="Logs" onClick={onShowLogs} close={close} />
+          {showLogs ? <MenuItem disabled={!showWorkspaceTools || !onShowLogs} icon={<ScrollText aria-hidden="true" />} label="Logs" onClick={onShowLogs} close={close} /> : null}
           <MenuItem disabled={!selectedWorkspace || !onShowUpload} icon={<Upload aria-hidden="true" />} label="Upload file" onClick={onShowUpload} close={close} />
-          <MenuItem icon={<Clock3 aria-hidden="true" />} label="Automations" onClick={onShowAutomations} close={close} />
+          {showAutomations ? <MenuItem icon={<Clock3 aria-hidden="true" />} label="Automations" onClick={onShowAutomations} close={close} /> : null}
           <div className="topbar-more-divider" role="separator" />
           <MenuItem disabled={piAuthDisabled} icon={<KeyRound aria-hidden="true" />} label={managePiAuthLabel} onClick={onOpenPiAuthManage} close={close} />
           <MenuItem disabled={genericEnvironmentDisabled} icon={<Variable aria-hidden="true" />} label="Manage generic environment keys" onClick={onOpenGenericEnvironment} close={close} />
           <MenuItem disabled={!selectedWorkspace || mcpServersDisabled} icon={<PlugZap aria-hidden="true" />} label="Manage MCP servers" onClick={onOpenMcpServers} close={close} />
           <MenuItem disabled={!selectedWorkspace || googleWorkspaceDisabled} icon={<Blocks aria-hidden="true" />} label="Manage Google Workspace" onClick={onOpenGoogleWorkspace} close={close} />
           <MenuItem disabled={!selectedWorkspace} icon={<Shield aria-hidden="true" />} label="Workspace request access" onClick={onOpenRequestGrants} close={close} />
-          <MenuItem
-            ariaChecked={gatewayEnabled}
-            disabled={!selectedWorkspace || !gatewayAvailable || gatewayLoading || gatewaySaving || !onToggleGateway}
-            icon={<Circle aria-hidden="true" className={`topbar-gateway-indicator${gatewayEnabled ? " topbar-gateway-indicator--enabled" : ""}`} fill="currentColor" />}
-            label={`Gateway: ${gatewayEnabled ? "On" : "Off"}`}
-            onClick={() => onToggleGateway?.(!gatewayEnabled)}
-            close={close}
-          />
+          {showGateway ? <MenuItem
+              ariaChecked={gatewayEnabled}
+              disabled={!selectedWorkspace || !gatewayAvailable || gatewayLoading || gatewaySaving || !onToggleGateway}
+              icon={<Circle aria-hidden="true" className={`topbar-gateway-indicator${gatewayEnabled ? " topbar-gateway-indicator--enabled" : ""}`} fill="currentColor" />}
+              label={`Gateway: ${gatewayEnabled ? "On" : "Off"}`}
+              onClick={() => onToggleGateway?.(!gatewayEnabled)}
+              close={close}
+            /> : null}
           <div className="topbar-more-divider" role="separator" />
           <a className="topbar-more-link" href="/community/blog" role="menuitem" onClick={close}><BookOpen aria-hidden="true" />Blog</a>
           <a className="topbar-more-link" href="/community/docs/intro/" role="menuitem" onClick={close}><BookOpen aria-hidden="true" />Docs</a>

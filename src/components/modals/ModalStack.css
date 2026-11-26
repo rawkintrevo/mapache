@@ -5,7 +5,7 @@
 
 .workspace-source-choice {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -48,6 +48,49 @@
 
 .workspace-remote-host-callout p {
   margin: 4px 0 0;
+}
+
+.workspace-remote-vm-fields {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.workspace-remote-vm-fields p {
+  margin: 4px 0 0;
+}
+
+.workspace-remote-vm-specs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.workspace-remote-vm-specs dt {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.workspace-remote-vm-specs dd {
+  margin: 3px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workspace-remote-host-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 40%, var(--line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--panel));
 }
 
 .repo-picker {

@@ -5,6 +5,13 @@ import {OPERATION_KEYS} from "../utils/operationKeys.js";
 export function normalizeCreateWorkspaceSource(payload = {}) {
   const source = payload.source && typeof payload.source === "object" ? payload.source : {};
   const sourceType = String(source.type || payload.source || "blank").trim().toLowerCase();
+  if (sourceType === "remote-vm" || sourceType === "remote-libvirt") {
+    return {
+      ...source,
+      type: "remote-libvirt",
+      hostId: source.hostId || payload.hostId || "",
+    };
+  }
   if (sourceType !== "github") {
     if (sourceType === "ssh") {
       return {...source, type: "ssh"};
@@ -54,11 +61,15 @@ export function createWorkspaceController({
     await runBusy(async () => {
       let data;
       try {
-        data = await state.api.createWorkspace({
+        const request = {
           name: payload.name,
           source: normalizeCreateWorkspaceSource(payload),
           env: payload.env || {},
-        });
+        };
+        if (Array.isArray(payload.environmentEntryIds) && payload.environmentEntryIds.length) {
+          request.environmentEntryIds = payload.environmentEntryIds;
+        }
+        data = await state.api.createWorkspace(request);
       } catch (error) {
         throw new Error(friendlyWorkspaceError(error));
       }
@@ -75,7 +86,10 @@ export function createWorkspaceController({
   async function deleteWorkspace(workspaceId) {
     const workspace = state.workspaces.find((entry) => entry.id === workspaceId);
     const name = workspace?.name || workspaceId;
-    const ok = window.confirm(`Delete workspace ${name}? Sessions will be stopped and workspace files will be removed.`);
+    const isRemote = workspace?.source?.type === "remote-libvirt" || workspace?.runtimeProvider?.backend === "remote-libvirt";
+    const ok = window.confirm(isRemote ?
+      `Permanently delete remote workspace ${name}? This stops the guest, removes its VM and disk, and cannot be undone.` :
+      `Delete workspace ${name}? Sessions will be stopped and workspace files will be removed.`);
     if (!ok) return;
 
     await runBusy(async () => {

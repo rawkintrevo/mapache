@@ -8,6 +8,7 @@ import {isMarkedRuntimeSession} from "../sessions/sessionPresentation.js";
 import {useResourceMetrics} from "../sessions/useResourceMetrics.js";
 import {useSessionAccessUrls} from "../sessions/useSessionAccessUrls.js";
 import {deriveResourceMetricsSocketUrl} from "../../utils/resourceMetrics.js";
+import {isRemoteVmWorkspace} from "../../utils/workspaceProvider.js";
 
 const AdminPage = lazy(() => import("../admin/AdminPage.jsx").then(({AdminPage: page}) => ({default: page})));
 const ModalStack = lazy(() => import("../modals/ModalStack.jsx").then(({ModalStack: stack}) => ({default: stack})));
@@ -37,6 +38,7 @@ export function AppShell(props) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const selectedSessionIsManaged = isMarkedRuntimeSession(selectedSession);
   const selectedWorkspaceIsSsh = selectedWorkspace?.source?.type === "ssh";
+  const selectedWorkspaceIsRemote = isRemoteVmWorkspace(selectedWorkspace);
   const hasRunnerUrl = Boolean(selectedSession?.serviceUrl);
   const access = useSessionAccessUrls({
     enabled: state.activePage === "workspace" && Boolean(selectedSession && hasRunnerUrl && !selectedWorkspaceIsSsh && ["running", "ready"].includes(selectedSession.status)),
@@ -95,14 +97,14 @@ export function AppShell(props) {
         onOpenMcpServers={modals.openMcpServersModal}
         onOpenRequestGrants={modals.openRequestGrantsModal}
         onOpenPiAuthManage={modals.openPiAuthManageModal}
-        onOpenWorkspaceEditModal={modals.openWorkspaceEditModal}
+        onOpenWorkspaceEditModal={selectedWorkspaceIsRemote ? null : modals.openWorkspaceEditModal}
         onOpenWorkspaceModal={modals.openWorkspaceModal}
         onRefresh={app.refreshAll}
         onRestartWorkspace={() => selectedSession ? sessions.restartSession(selectedSession.id) : undefined}
         onSelectCanvas={setActiveCanvas}
         onSelectWorkspace={workspaces.selectWorkspace}
         onShowAdmin={admin.showAdmin}
-        onShowAutomations={app.showAutomations}
+        onShowAutomations={selectedWorkspaceIsRemote ? null : app.showAutomations}
         onShowInstances={app.showInstances}
         onShowLogs={() => setLogsOpen(true)}
         onShowUpload={() => setUploadOpen(true)}
@@ -111,9 +113,10 @@ export function AppShell(props) {
         onShowSshGateways={app.showSshGateways}
         onSignOut={app.signOut}
         onSetRuntimePolicy={sessions.setRuntimePolicy}
-        onToggleGateway={toggleGateway}
+        onToggleGateway={selectedWorkspaceIsRemote ? null : toggleGateway}
         onToggleWorkspace={workspaces.toggleWorkspace}
         resourceMetrics={state.activePage === "workspace" && selectedSession && !selectedWorkspaceIsSsh && selectedSession.status === "running" ? metrics : null}
+        workspaceIsRemote={selectedWorkspaceIsRemote}
       />
       {uploadOpen && selectedWorkspace ? <Suspense fallback={<LazySurfaceFallback label="Loading upload..." />}>
         <WorkspaceUploadModal key={selectedWorkspace.id} workspace={selectedWorkspace} api={state.api} onClose={() => setUploadOpen(false)} />
@@ -209,6 +212,7 @@ export function AppShell(props) {
             selectedWorkspace={selectedWorkspace}
             state={state}
             access={access}
+            isRemoteWorkspace={selectedWorkspaceIsRemote}
             onSelectCanvas={setActiveCanvas}
           />
         )}
