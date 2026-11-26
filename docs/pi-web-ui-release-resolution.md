@@ -41,6 +41,21 @@ mode rejects external local paths, symlink escapes, and remote workspace URIs;
 standalone behavior remains available. Rejected writes leave persisted state
 unchanged, and stale external roots are filtered during restore.
 
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-run-accounting.patch`
+is a second inactive component. `ManagedRunAccounting` observes SDK events
+through the core session assembly: non-retry `agent_end` events increment an
+engine-lifetime completed count, and tool start/end events maintain a separate
+set for each session. `CoreEngine` exposes both counts to its status consumer.
+Subscriptions follow the opened session through client-registry transfers and
+are released when that session is disposed; reconnecting does not subscribe
+twice. The cumulative completion count survives client disposal. These counts
+are observations, not proof that all writers have drained.
+
+The accounting patch passes 29 tests across `core-engine-connect.test.ts`,
+`core-engine-plugin-hooks.test.ts`, and `core-app-session-registry.test.ts`.
+Coverage uses the actual core engine/registry with synthetic SDK events,
+including retries, reconnects, per-session tool IDs, transfer, and disposal.
+
 The remaining migration must preserve these contracts at their current owners:
 
 | Contract | v0.123 owner / required work |
@@ -48,7 +63,7 @@ The remaining migration must preserve these contracts at their current owners:
 | Protocol and service interfaces | `packages/keel/src/protocol.ts` and `engine-service.ts`; server files are re-export shims. Port managed messages and real implementations together. |
 | Persisted state | `packages/keel/src/projects-schema.ts` owns types; `server/client-state.ts` owns storage. Preserve paused goals, model timestamps, and interrupted workspace-request metadata. |
 | Automation and workspace requests | Replace old daemon hooks with current core runtime/host integration; preserve status, cancellation, readiness, model validation, and restart recovery. |
-| Quiesce and counters | Implement actual turn/tool draining and completed-turn accounting in the new runtime. A timestamp-only quiesce or type cast is insufficient. |
+| Quiesce and counters | Counter component is tested but inactive; actual bounded turn/tool draining is still required. A timestamp-only quiesce or type cast is insufficient. |
 | Native Pi Goals | `server/core-goal-run-adapter.ts`, core goal contracts/handlers, and runtime state own execution. Passing old `goal-service.ts` tests does not establish persistence or paused restore here. |
 | SDK setup | `packages/keel/src/adapters/sdk/session-opener.ts` and host ports must preserve credentials, transcript placement, prompt references, and the single MCP integration. Do not import server modules into the core package. |
 | Embedding and browser surfaces | Revalidate authenticated `/agent/`, native terminal, model selection, Goals, and proxy paths against the actual new engine. |
