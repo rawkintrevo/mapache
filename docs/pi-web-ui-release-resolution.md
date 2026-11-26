@@ -107,11 +107,27 @@ child disposal. Abort failures propagate to the bounded core drain.
 This component passes 38 native adapter/domain/sink/handler tests and full
 upstream typecheck. A real `ClientStateStore` round-trip verifies restoration
 under a new browser client id, session isolation, absence of execution fields,
-and explicit clearing. This does **not** prove live browser restore: connection
-and history-selection hooks still must call the restore capability, and the
-explicit Resume protocol/UI path and re-admission after successful drain still
-need integration. Keep the manifest unchanged until those paths and the full
-release gates pass.
+and explicit clearing. This adapter evidence does **not** prove live browser
+restore. The following component wires the runtime hooks; explicit Resume and
+re-admission after successful drain still need integration. Keep the manifest
+unchanged until those paths and the full release gates pass.
+
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-goal-restore.patch`
+wires that display capability into client connection/reconnection, session
+activation, and new-chat session opening. The client assembly retains one native
+Goal port, with late-bound plan hooks for subsequent wizard commands. Restoring
+a conversation without a saved goal clears the previous conversation's goal
+display; restoring a saved goal never starts a turn. The connection frame no
+longer overwrites restored state with empty preference defaults.
+
+The combined candidate passes 71 focused connection, native Goal, sink,
+handler, and history-domain tests and full upstream typecheck. The integration
+test uses the actual core engine, native Goal adapter, and disk state store to
+check initial restore, a new reconnect sink, blank conversation selection, and
+switching back, with zero SDK turns throughout. History-domain tests remain
+regression evidence rather than a live persisted-history browser canary.
+Explicit Resume, re-admission after drain, and browser/image release validation
+remain outstanding. This sixth component is also inactive.
 
 The remaining migration must preserve these contracts at their current owners:
 
@@ -121,7 +137,7 @@ The remaining migration must preserve these contracts at their current owners:
 | Persisted state | `packages/keel/src/projects-schema.ts` owns types; `server/client-state.ts` owns storage. Preserve paused goals, model timestamps, and interrupted workspace-request metadata. |
 | Automation and workspace requests | Replace old daemon hooks with current core runtime/host integration; preserve status, cancellation, readiness, model validation, and restart recovery. |
 | Quiesce and counters | Counter, bounded core drain, and background-host components are tested but inactive; native Goal shutdown, process-group escalation validation, and complete admission coverage remain required. |
-| Native Pi Goals | Native adapter display persistence and drain are tested; connection/history restore hooks, explicit Resume, and re-admission remain. Old `goal-service.ts` tests do not establish these new runtime paths. |
+| Native Pi Goals | Native adapter persistence, drain, and connection/selection restore hooks are implemented in inactive components; explicit Resume, re-admission, and live history/browser validation remain. Old `goal-service.ts` tests do not establish these new runtime paths. |
 | SDK setup | `packages/keel/src/adapters/sdk/session-opener.ts` and host ports must preserve credentials, transcript placement, prompt references, and the single MCP integration. Do not import server modules into the core package. |
 | Embedding and browser surfaces | Revalidate authenticated `/agent/`, native terminal, model selection, Goals, and proxy paths against the actual new engine. |
 
