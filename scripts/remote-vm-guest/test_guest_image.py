@@ -100,6 +100,7 @@ class GuestImageTests(unittest.TestCase):
                     directories = [command[i + 1] for i, value in enumerate(command) if value == "--mkdir"]
                     self.assertIn("/usr/local/libexec", directories)
                     self.assertTrue(set(self.manifest["durablePaths"]).issubset(directories))
+                    self.assertIn("grub-install --target=i386-pc /dev/sda && update-grub", command)
                     for i, value in enumerate(command):
                         if value == "--upload":
                             self.assertTrue(Path(command[i + 1].split(":", 1)[0]).is_file())

@@ -413,6 +413,12 @@ payload's relocated module directory and excludes ssh2's test fixtures.
 The builder uses `virt-resize` to expand the pinned image's root partition
 and filesystem before installing the payload, and creates all durable
 directories before systemd enters the runtime working directory.
+It reinstalls BIOS GRUB and regenerates the menu after resizing: GPT partition
+renumbering otherwise leaves an obsolete GRUB prefix and stops at rescue mode.
+The v1 image masks unused Snap services so network-dependent Snap seeding cannot
+block cloud-final. The runner retries startup every five seconds without a
+systemd start-rate cutoff, allowing the credential broker and session state to
+become available after guest boot.
 The image validator rejects saved credential filenames and private-key
 material while allowing dependency source filenames and documentation that
 only illustrate key headers. With Snap Docker, extract into a non-hidden
