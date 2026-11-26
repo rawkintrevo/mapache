@@ -105,6 +105,14 @@ is an API deployment with the value set back to `false`; this leaves existing
 remote host management, gateway access, lifecycle operations, and deletion
 available.
 
+The production workflow also writes `VM_WORKSPACE_GATEWAY_HOSTS` from the
+production environment variable of the same name and fails before deployment if
+it is absent. This value is required by `api`, `provisionQueuedSession`, the
+remote-operation reconciler and gateway resolver to publish and resolve access
+URLs for existing remote workspaces. Deploy those Functions together; updating
+only `api` can leave a newly-created guest running while its provisioning worker
+has no gateway URL to publish.
+
 For the #642 integration revision, the explicit command above completed
 successfully on 2026-11-26 for source `7b304c2` (the merged PR commit); the
 real-host canary remains the #643 gate. A host that fails

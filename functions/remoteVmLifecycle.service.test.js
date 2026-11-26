@@ -5,6 +5,7 @@ const test = require("node:test");
 const {createRemoteVmLifecycleService} = require("./remoteVmLifecycle.service");
 const {guestConfigurationId} = require("./remoteVmGuestConfig.helpers");
 const {createRuntimeDescriptor, REMOTE_LIBVIRT_BACKEND} = require("./runtimeProvider.helpers");
+const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
 
 class Snapshot {
   constructor(ref, value) {
@@ -181,6 +182,56 @@ test("concurrent provisioning defers to the active lease and adopts completion w
   assert.equal(host.calls.filter((action) => action === "start").length, 1);
   const savedHost = (await value.db.collection("remoteHosts").doc("host-1").get()).data();
   assert.equal(savedHost.remoteVmReservations.entries.length, 1);
+});
+
+test("provisioning completion publishes the gateway and runtime-ready state", async () => {
+  const value = fixture();
+  value.workspace = {
+    ...value.workspace,
+    agentUiVersion: AGENT_UI_VERSION,
+    agentRuntimeSessionId: "session-1",
+    agentRuntimeGeneration: 1,
+    agentRuntimeState: "starting",
+  };
+  value.session = {
+    ...value.session,
+    agentUiVersion: AGENT_UI_VERSION,
+    agentRuntimeGeneration: 1,
+    provisioningOperationId: "provision-1",
+  };
+  await seed(value);
+  const host = fakeHost();
+  const originalGatewayHosts = process.env.VM_WORKSPACE_GATEWAY_HOSTS;
+  process.env.VM_WORKSPACE_GATEWAY_HOSTS =
+    "backup-recovery---gateway.example,gateway.example";
+  try {
+    const service = createRemoteVmLifecycleService({
+      db: value.db,
+      hostOperation: host.operation,
+      now: () => "2026-11-25T21:00:00.000Z",
+      markChromeWorkspaceSessionRunning: async (sessionRef, session) => {
+        await value.db.collection("workspaces").doc(session.workspaceId).update({
+          agentRuntimeState: "running",
+          markedSessionId: sessionRef.id,
+        });
+      },
+    });
+    const ref = value.db.collection("workspaces").doc("workspace-1")
+        .collection("sessions").doc("session-1");
+    const completed = await service.provisionSessionService(value.workspace, ref, value.session);
+    assert.equal(completed.status, "running");
+    assert.equal(completed.serviceUrl, "https://gateway.example");
+    assert.equal(completed.provisioningState, "completed");
+    assert.equal(completed.agentRuntimeState, "running");
+    const savedSession = (await ref.get()).data();
+    assert.equal(savedSession.serviceUrl, "https://gateway.example");
+    assert.equal(savedSession.provisioningState, "completed");
+    assert.equal(savedSession.agentRuntimeState, "running");
+    assert.equal((await value.db.collection("workspaces").doc("workspace-1").get()).data().agentRuntimeState, "running");
+  } finally {
+    if (originalGatewayHosts === undefined) delete process.env.VM_WORKSPACE_GATEWAY_HOSTS;
+    else process.env.VM_WORKSPACE_GATEWAY_HOSTS = originalGatewayHosts;
+  }
 });
 
 test("wrong-owner session cannot configure a guest", async () => {

@@ -90,7 +90,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       ownerUid: session.ownerUid || workspace?.ownerUid,
     });
     const update = {
-      status: "running",
+      ...runtimeSessionStateUpdate(session, "running"),
       runtimeProviderState: "running",
       runtimeProviderOperationId: result.id || null,
       runtimeInstanceName: descriptor.guestName,
@@ -103,10 +103,22 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       agentRuntimeGeneration: descriptor.generation,
       lastError: null,
       runtimeProvider: {...descriptor, state: "running", guestIp: result.guestIp || descriptor.guestIp},
+      ...(session.provisioningOperationId ? {
+        provisioningState: "completed",
+        provisioningAttemptCompletedAt: now(),
+        provisioningRetryable: false,
+        provisioningLastError: null,
+      } : {}),
       ...(dependencies.admin?.firestore?.Timestamp ? {updatedAt: dependencies.admin.firestore.Timestamp.now()} : {}),
     };
-    if (sessionRef && typeof sessionRef.update === "function") await sessionRef.update(update);
-    return {...session, ...update};
+    const statusUpdate = sessionStatusUpdate(session, "running", update, {
+      reconciliationReason: "remote_vm_ready",
+    });
+    if (sessionRef && typeof sessionRef.update === "function") await sessionRef.update(statusUpdate);
+    if (typeof dependencies.markChromeWorkspaceSessionRunning === "function") {
+      await dependencies.markChromeWorkspaceSessionRunning(sessionRef, {...session, ...update});
+    }
+    return {...session, ...statusUpdate};
   }
 
   async function patchSessionService(sessionRef, session, options = {}) {
