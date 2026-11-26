@@ -4,6 +4,12 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
+import tempfile
+import subprocess
+import os
+from contextlib import ExitStack
 
 
 ROOT = Path(__file__).parent
@@ -21,6 +27,83 @@ installer = load("install")
 
 
 class HostToolTests(unittest.TestCase):
+    def test_install_creates_readable_public_key_and_restricted_account(self):
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+            root = Path(directory)
+            for name, relative in {"CONFIG_DIR": "etc", "STATE_FILE": "etc/install.json",
+                                   "AUTHORIZED_KEYS": "etc/authorized_keys", "SSHD_CONFIG": "ssh/config",
+                                   "HELPER_PATH": "bin/helper", "STORAGE_DIR": "storage",
+                                   "NETWORK_XML": "etc/network.xml"}.items():
+                stack.enter_context(patch.object(installer, name, root / relative))
+            stack.enter_context(patch.object(installer, "require_supported_host"))
+            stack.enter_context(patch.object(installer, "ensure_packages"))
+            stack.enter_context(patch.object(installer, "readiness", return_value={"ready": True}))
+            commands = []
+            def runner(command, **kwargs):
+                commands.append(command)
+                return SimpleNamespace(returncode=1 if command[0] == "id" or "net-info" in command else 0, stdout="")
+            installer.install("ssh-ed25519 AAAA", runner=runner)
+            self.assertEqual(installer.AUTHORIZED_KEYS.stat().st_mode & 0o777, 0o644)
+            self.assertEqual(installer.HELPER_PATH.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(installer.STORAGE_DIR.stat().st_mode & 0o777, 0o711)
+            self.assertIn(["usermod", "--shell", str(installer.HELPER_PATH), "--append", "--groups", "libvirt", "mapache-vm"], commands)
+            self.assertIn(["sshd", "-t"], commands)
+            self.assertLess(commands.index(["sshd", "-t"]), commands.index(["systemctl", "reload", "ssh"]))
+
+    def test_login_shell_dispatch_never_evaluates_shell_commands(self):
+        environment = {**os.environ, "SSH_ORIGINAL_COMMAND": "mapache-vm forward 192.168.250.42:8787"}
+        for command, expected in [("/usr/local/libexec/mapache-vm-helper ssh", 0),
+                                  ("id", 64), ("/usr/local/libexec/mapache-vm-helper ssh; id", 64)]:
+            result = subprocess.run([str(ROOT / "helper.py"), "-c", command],
+                                    env=environment, capture_output=True, text=True)
+            self.assertEqual(result.returncode, expected, result.stderr)
+        environment["SSH_ORIGINAL_COMMAND"] = "mapache-vm ssh"
+        result = subprocess.run([str(ROOT / "helper.py"), "-c", "/usr/local/libexec/mapache-vm-helper ssh"],
+                                env=environment, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 64)
+
+    def test_residual_package_configuration_is_not_installed(self):
+        for status, expected in [("install ok installed", True), ("deinstall ok config-files", False)]:
+            self.assertEqual(installer.package_installed("libvirt-clients", lambda *a, **k:
+                SimpleNamespace(returncode=0, stdout=status)), expected)
+
+    def test_network_initial_install_repair_and_repeat(self):
+        for defined, active, file_exists in [(False, False, False), (False, False, True),
+                                            (True, False, True), (True, True, True)]:
+            with self.subTest(defined=defined, active=active, file_exists=file_exists), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "network.xml"
+                if file_exists:
+                    path.write_text(installer.network_xml())
+                commands = []
+                def runner(command, **kwargs):
+                    commands.append(command)
+                    return SimpleNamespace(returncode=(0 if defined else 1) if "net-info" in command else 1,
+                                           stdout=f"Active: {'yes' if active else 'no'}\n")
+                with patch.object(installer, "NETWORK_XML", path):
+                    installer.ensure_network(runner=runner)
+                actions = [command[3] for command in commands if command[0] == "virsh"]
+                self.assertEqual("net-define" in actions, not defined)
+                self.assertEqual("net-start" in actions, not active)
+                self.assertEqual(commands[1], ["systemctl", "enable", "--now", "libvirtd"])
+                self.assertEqual(actions[-1], "net-autostart")
+
+    def test_unmanaged_network_is_preserved(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(installer, "NETWORK_XML", Path(directory) / "network.xml"):
+            commands = []
+            def runner(command, **kwargs):
+                commands.append(command)
+                return SimpleNamespace(returncode=0, stdout="Active: yes\n")
+            with self.assertRaisesRegex(RuntimeError, "unmanaged"):
+                installer.ensure_network(runner=runner)
+            self.assertFalse(any("net-define" in command or "net-start" in command for command in commands))
+
+    def test_forwarding_destinations_are_explicit_guest_addresses(self):
+        config = installer.sshd_config()
+        destinations = next(line.split()[1:] for line in config.splitlines() if line.strip().startswith("PermitOpen "))
+        self.assertEqual(len(destinations), 253)
+        self.assertTrue(all(helper.valid_forward_target(target.replace(":*", ":8787")) for target in destinations))
+        self.assertNotIn("192.168.250.1:*", destinations)
+
     def test_helper_rejects_shell_paths_and_foreign_guest_ids(self):
         for args in [
             ["bash", "-c", "id"],

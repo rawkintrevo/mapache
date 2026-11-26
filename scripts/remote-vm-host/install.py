@@ -84,6 +84,9 @@ def network_xml():
 
 
 def sshd_config():
+    # OpenSSH PermitOpen does not expand host globs. Enumerate the guest IPs;
+    # exclude both the host bridge and network/broadcast addresses.
+    destinations = " ".join(f"192.168.250.{host}:*" for host in range(2, 255))
     return f'''# Mapache remote VM management account, installer version {INSTALL_VERSION}.
 Match User {APP_USER}
     AuthenticationMethods publickey
@@ -94,7 +97,7 @@ Match User {APP_USER}
     AllowTcpForwarding local
     AllowStreamLocalForwarding no
     PermitListen none
-    PermitOpen 192.168.250.*:*
+    PermitOpen {destinations}
     PermitTTY no
     X11Forwarding no
     AllowAgentForwarding no
@@ -109,7 +112,7 @@ def authorized_key_line(public_key):
     fields = public_key.strip().split()
     if len(fields) < 2 or fields[0] != "ssh-ed25519" or not re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", fields[1]):
         raise ValueError("public key must be one plain Ed25519 authorized_keys entry")
-    # The account has no shell. Restrict the key itself as a second independent
+    # The account has only the helper shell. Restrict the key as an independent
     # boundary; local forwarding remains available for the private guest net.
     return f'restrict,port-forwarding,command="{HELPER_PATH} ssh" {fields[0]} {fields[1]} mapache-remote-host\n'
 
@@ -182,19 +185,39 @@ def ensure_packages(*, runner=run):
 
 
 def package_installed(package, runner=run):
-    return runner(["dpkg-query", "-W", "-f=${Status}", package], check=False, capture=True).returncode == 0
+    result = runner(["dpkg-query", "-W", "-f=${Status}", package], check=False, capture=True)
+    return result.returncode == 0 and result.stdout.strip() == "install ok installed"
 
 
 def ensure_user(*, runner=run):
     lookup = runner(["id", "-u", APP_USER], check=False, capture=True)
     if lookup.returncode != 0:
         runner(["useradd", "--system", "--user-group", "--home-dir", str(STORAGE_DIR),
-                "--shell", "/usr/sbin/nologin", APP_USER])
+                "--shell", str(HELPER_PATH), APP_USER])
     else:
         # Never take ownership of an existing unrelated account.
         marker = CONFIG_DIR / "managed-account"
         if not marker.exists():
             raise RuntimeError(f"refusing to reuse existing account {APP_USER} without Mapache marker")
+    runner(["usermod", "--shell", str(HELPER_PATH), "--append", "--groups", "libvirt", APP_USER])
+
+
+def ensure_network(*, runner=run):
+    if not service_active("libvirtd", runner):
+        runner(["systemctl", "enable", "--now", "libvirtd"])
+    command = ["virsh", "-c", "qemu:///system"]
+    state = runner([*command, "net-info", NETWORK_NAME], check=False, capture=True)
+    if not NETWORK_XML.exists():
+        if state.returncode == 0:
+            raise RuntimeError(f"refusing to take over existing unmanaged libvirt network {NETWORK_NAME}")
+        ensure_file(NETWORK_XML, network_xml(), 0o644)
+    elif NETWORK_XML.read_text() != network_xml():
+        raise RuntimeError(f"refusing to overwrite unmanaged network definition {NETWORK_XML}")
+    if state.returncode != 0:
+        runner([*command, "net-define", str(NETWORK_XML)])
+    if state.returncode != 0 or not re.search(r"^Active:\s+yes\s*$", state.stdout or "", re.MULTILINE):
+        runner([*command, "net-start", NETWORK_NAME])
+    runner([*command, "net-autostart", NETWORK_NAME])
 
 
 def ensure_file(path, content, mode, *, preserve_unrelated=False):
@@ -222,36 +245,21 @@ def install(public_key, *, runner=run, dry_run=False):
                 "storagePath": str(STORAGE_DIR), "sshdConfig": str(SSHD_CONFIG)}
     ensure_packages(runner=runner)
     CONFIG_DIR.mkdir(mode=0o755, exist_ok=True)
+    ensure_managed_file(HELPER_PATH, helper_source(), 0o755, "Forced-command boundary")
     ensure_user(runner=runner)
     marker = CONFIG_DIR / "managed-account"
     marker.write_text(f"mapache-vm installer version {INSTALL_VERSION}\n")
     marker.chmod(0o644)
-    STORAGE_DIR.mkdir(mode=0o750, exist_ok=True)
-    (STORAGE_DIR / "images").mkdir(mode=0o750, exist_ok=True)
-    (STORAGE_DIR / "disks").mkdir(mode=0o750, exist_ok=True)
+    # libvirt runs QEMU as libvirt-qemu, not the SSH management user. Allow
+    # path traversal; individual disk modes still control content access.
+    for directory in (STORAGE_DIR, STORAGE_DIR / "images", STORAGE_DIR / "disks"):
+        directory.mkdir(mode=0o711, exist_ok=True)
+        directory.chmod(0o711)
     run(["chown", f"{APP_USER}:{APP_USER}", str(STORAGE_DIR)], runner=runner)
     run(["chown", f"{APP_USER}:{APP_USER}", str(STORAGE_DIR / "images"), str(STORAGE_DIR / "disks")], runner=runner)
-    ensure_file(AUTHORIZED_KEYS, key_line, 0o600, preserve_unrelated=True)
-    ensure_managed_file(HELPER_PATH, helper_source(), 0o755, "Forced-command boundary")
+    ensure_file(AUTHORIZED_KEYS, key_line, 0o644, preserve_unrelated=True)
     ensure_managed_file(SSHD_CONFIG, sshd_config(), 0o644, "Mapache remote VM management account")
-    existing_network = runner(
-        ["virsh", "-c", "qemu:///system", "net-info", NETWORK_NAME],
-        check=False,
-        capture=True,
-    )
-    if not NETWORK_XML.exists():
-        if existing_network.returncode == 0:
-            raise RuntimeError(f"refusing to take over existing unmanaged libvirt network {NETWORK_NAME}")
-        ensure_file(NETWORK_XML, network_xml(), 0o644)
-        runner(["virsh", "-c", "qemu:///system", "net-define", str(NETWORK_XML)])
-    elif NETWORK_XML.read_text() != network_xml():
-        raise RuntimeError(f"refusing to overwrite unmanaged network definition {NETWORK_XML}")
-    if not service_active("libvirtd", runner) and command_available("systemctl"):
-        runner(["systemctl", "enable", "--now", "libvirtd"])
-    net_state = runner(["virsh", "-c", "qemu:///system", "net-info", NETWORK_NAME], check=False, capture=True)
-    if net_state.returncode != 0:
-        runner(["virsh", "-c", "qemu:///system", "net-start", NETWORK_NAME])
-    runner(["virsh", "-c", "qemu:///system", "net-autostart", NETWORK_NAME])
+    ensure_network(runner=runner)
     runner(["sshd", "-t"])
     runner(["systemctl", "reload", "ssh"])
     STATE_FILE.write_text(json.dumps({"version": INSTALL_VERSION, "network": NETWORK_NAME,
