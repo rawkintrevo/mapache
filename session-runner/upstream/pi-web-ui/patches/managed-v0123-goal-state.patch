@@ -1,0 +1,465 @@
+diff --git a/packages/keel/src/contracts/goals.ts b/packages/keel/src/contracts/goals.ts
+index b8d1621..e79773e 100644
+--- a/packages/keel/src/contracts/goals.ts
++++ b/packages/keel/src/contracts/goals.ts
+@@ -24,6 +24,8 @@ export type GoalPrefsPatch = Wire<"set_goal_prefs">;
+  * 绝不降级成「设了目标但不跑」——那比直接报错更坏。
+  */
+ export interface GoalRunPort {
++	/** Restore display state only; never dispatch execution or review. */
++	restoreGoal?(conversationId: string): void;
+ 	/** Pause and preserve goal state before draining; absent means unsafe to acknowledge drain. */
+ 	quiesce?(): Promise<void>;
+ 	setGoal(goal: string, opts?: GoalStartOptions): Promise<void>;
+diff --git a/packages/keel/src/domains/goals/run-sinks.ts b/packages/keel/src/domains/goals/run-sinks.ts
+index a1c428a..405c415 100644
+--- a/packages/keel/src/domains/goals/run-sinks.ts
++++ b/packages/keel/src/domains/goals/run-sinks.ts
+@@ -19,6 +19,7 @@ export interface GoalRunSessionHost {
+ 
+ /** 轮次执行的窄面（`TurnRunner` 结构上满足）：喂一轮；收尾由端口自己的 `onTurnSettled` 接。 */
+ export interface GoalRunTurnHost {
++	whenIdle?(conversationId: string): Promise<void>;
+ 	start(conversation: Conversation, session: TurnCapableSession, text: string): Promise<unknown>;
+ }
+ 
+@@ -50,6 +51,7 @@ export interface GoalRunConversationHost {
+ }
+ 
+ export interface GoalRunSinks {
++	conversationIdentity?(conversationId: string): string | undefined;
+ 	clientId: string;
+ 	/** 一帧发给本客户端（`goal_status` / `notice`）。 */
+ 	emit(msg: ServerMessage): void;
+@@ -100,6 +102,13 @@ export function createGoalRunSinks(input: GoalRunSinksInput): GoalRunSinks {
+ 	const { clientId, registry, turns, publisher } = input.runtime;
+ 	const { sessions } = input;
+ 	const sinks: GoalRunSinks = {
++		conversationIdentity: (id) => {
++			const opened = sessions.get(id);
++			const sessionId = opened?.session.sessionId?.trim();
++			if (sessionId) return `session:${sessionId}`;
++			const file = opened?.session.sessionFile?.trim() ?? registry.get(id)?.meta.sessionFile;
++			return file ? `file:${file}` : undefined;
++		},
+ 		clientId,
+ 		emit: input.emit,
+ 		flushSnapshot: () => publisher.request(),
+@@ -144,7 +153,13 @@ export function createGoalRunSinks(input: GoalRunSinksInput): GoalRunSinks {
+ 			await turns.start(conversation, opened.session, text);
+ 		},
+ 		abortTurn: async (conversationId) => {
+-			await sessions.get(conversationId)?.session.abort?.();
++			const session = sessions.get(conversationId)?.session;
++			await session?.abort?.();
++			if (registry.get(conversationId)?.phase === "running" && !turns.whenIdle) {
++				throw new Error("goal_turn_drain_unavailable");
++			}
++			await turns.whenIdle?.(conversationId);
++			if (session?.isStreaming || session?.isIdle === false) throw new Error("goal_turn_still_active");
+ 		},
+ 		lastAssistantText: (conversationId) => sessions.get(conversationId)?.session.getLastAssistantText?.() ?? "",
+ 		setModel: async (conversationId, provider, modelId) => {
+diff --git a/packages/keel/src/projects-schema.ts b/packages/keel/src/projects-schema.ts
+index a6649d5..7f67215 100644
+--- a/packages/keel/src/projects-schema.ts
++++ b/packages/keel/src/projects-schema.ts
+@@ -13,7 +13,22 @@ export interface MarkerSettings {
+ /** 出厂默认关闭的内联标记（单源：客户端状态默认值、MarkerService 均取此处）。 */
+ export const DEFAULT_DISABLED_MARKERS: readonly string[] = ["notify", "action", "suggest"];
+ 
++export interface ConversationGoalState {
++	goal: string;
++	materials?: string[];
++	execModel?: string | null;
++	reviewModel: string | null;
++	maxRounds: number;
++	locked: boolean;
++	round: number;
++	verdict: "pending" | "pass" | "fail" | "blocked";
++	status: string;
++	statusEn?: string;
++	feedback?: string;
++	savedAt: number;
++}
+ export interface ClientState {
++	conversationGoals?: Record<string, ConversationGoalState>;
+ 	lastCwd?: string;
+ 	projects: { path: string; lastUsed: number }[];
+ 	goalPrefs?: {
+diff --git a/packages/keel/src/protocol.ts b/packages/keel/src/protocol.ts
+index fa81a9a..7886a90 100644
+--- a/packages/keel/src/protocol.ts
++++ b/packages/keel/src/protocol.ts
+@@ -2446,6 +2446,7 @@ export interface GoalHistoryEntry {
+ }
+ 
+ export interface GoalStatus {
++	paused?: boolean;
+ 	conversationId: string | null;
+ 	goal: string | null;
+ 	reviewModel: string | null;
+diff --git a/server/client-state.ts b/server/client-state.ts
+index df74dcf..89b879e 100644
+--- a/server/client-state.ts
++++ b/server/client-state.ts
+@@ -56,6 +56,7 @@ import {
+ 	normalizePathKey,
+ 	RECENT_PROJECTS_MAX,
+ 	type ClientState,
++	type ConversationGoalState,
+ 	type MarkerSettings,
+ } from "../packages/keel/src/projects-schema.js";
+ 
+@@ -192,6 +193,29 @@ export function normalizeWorkspaceRoots(v: unknown): string[] {
+ 	return out;
+ }
+ 
++function normalizeConversationGoal(value: unknown): ConversationGoalState | undefined {
++	if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
++	const raw = value as Partial<ConversationGoalState>;
++	if (typeof raw.goal !== "string" || !raw.goal.trim()) return undefined;
++	const maxRounds = Math.round(Number(raw.maxRounds));
++	const round = Math.round(Number(raw.round));
++	const verdict = raw.verdict === "pass" || raw.verdict === "fail" || raw.verdict === "blocked" ? raw.verdict : "pending";
++	return {
++		goal: raw.goal.trim().slice(0, 20_000),
++		...(Array.isArray(raw.materials) && raw.materials.length ? { materials: raw.materials.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim()) } : {}),
++		...(typeof raw.execModel === "string" ? { execModel: raw.execModel.trim().slice(0, 300) } : {}),
++		reviewModel:
++			typeof raw.reviewModel === "string" && raw.reviewModel.trim() ? raw.reviewModel.trim().slice(0, 300) : null,
++		maxRounds: Number.isFinite(maxRounds) && maxRounds > 0 ? Math.min(maxRounds, 50) : 0,
++		locked: raw.locked !== false,
++		round: Number.isFinite(round) && round > 0 ? Math.min(round, 100_000) : 0,
++		verdict,
++		status: typeof raw.status === "string" ? raw.status.slice(0, 2_000) : "",
++		...(typeof raw.statusEn === "string" ? { statusEn: raw.statusEn.slice(0, 2_000) } : {}),
++		...(typeof raw.feedback === "string" ? { feedback: raw.feedback.slice(0, 4_000) } : {}),
++		savedAt: typeof raw.savedAt === "number" && Number.isFinite(raw.savedAt) ? raw.savedAt : Date.now(),
++	};
++}
+ export const CLIENT_STATE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+ 
+ export const MAX_TRACKED_CLIENTS = 50;
+@@ -628,6 +652,37 @@ export class ClientStateStore {
+ 		this.save();
+ 	}
+ 
++	/** Read one conversation's native Goal display state. The identity is an
++	 * upstream session id (or the stable session-file fallback supplied by the
++	 * goal service), never the transient browser client id. */
++	getConversationGoal(identity: string): ConversationGoalState | undefined {
++		const key = identity.trim();
++		if (!key) return undefined;
++		const stored = this.load()[ClientStateStore.GLOBAL_SETTINGS_KEY]?.conversationGoals?.[key];
++		return normalizeConversationGoal(stored);
++	}
++
++	/** Persist only serializable native Goal display state. Runtime execution is
++	 * reconstructed as paused and must be resumed explicitly by the user. */
++	saveConversationGoal(identity: string, goal: ConversationGoalState): void {
++		const key = identity.trim();
++		const normalized = normalizeConversationGoal(goal);
++		if (!key || !normalized) return;
++		const all = this.load();
++		const state = (all[ClientStateStore.GLOBAL_SETTINGS_KEY] ??= { projects: [] });
++		(state.conversationGoals ??= {})[key] = normalized;
++		this.save();
++	}
++
++	/** Remove a completed or explicitly cleared native Goal. */
++	deleteConversationGoal(identity: string): void {
++		const key = identity.trim();
++		if (!key) return;
++		const goals = this.load()[ClientStateStore.GLOBAL_SETTINGS_KEY]?.conversationGoals;
++		if (!goals || !(key in goals)) return;
++		delete goals[key];
++		this.save();
++	}
+ 	saveInterrupted(clientId: string, list: { title: string; cwd: string; at: number; sessionFile?: string }[]): void {
+ 		if (list.length === 0) return;
+ 		const all = this.load();
+diff --git a/server/core-goal-run-adapter.ts b/server/core-goal-run-adapter.ts
+index b1b0936..532b6c7 100644
+--- a/server/core-goal-run-adapter.ts
++++ b/server/core-goal-run-adapter.ts
+@@ -1,4 +1,5 @@
+ import { CoreEngineNotReadyError } from "../packages/keel/src/contracts/core-engine-errors.js";
++import { createManagedGoalState, type GoalDisplayStore } from "./managed-core-goal-state.js";
+ import type {
+ 	GoalPrefs,
+ 	GoalRunPort,
+@@ -62,7 +63,7 @@ import {
+  */
+ 
+ /** 目标偏好与目标模式开关的唯一读者（宿主 `ClientStateStore`，即 `client-state.json`）。 */
+-export interface GoalRunPrefsStore {
++export interface GoalRunPrefsStore extends GoalDisplayStore {
+ 	getGoalPrefs(clientId: string): GoalPrefs | null | undefined;
+ 	saveGoalPrefs(clientId: string, prefs: GoalPrefs): void;
+ 	getSettingsSnapshot?(clientId: string): { goalModeEnabled?: boolean };
+@@ -84,6 +85,8 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 	const { sinks } = deps;
+ 	const runs = new Map<string, GoalRun>();
+ 	const children = new Map<string, GoalChild>();
++	let quiescing = false;
++	const { persist, forget, restore } = createManagedGoalState(sinks, deps.stateStore);
+ 	const reportMaterials = createGoalMaterialReporter((msg) => sinks.emit(msg));
+ 	const lang = (): ServerLang => resolveServerLang(sinks.getLang());
+ 	const prefs = (): GoalPrefs => ({ ...DEFAULT_GOAL_PREFS, ...deps.stateStore.getGoalPrefs(sinks.clientId) });
+@@ -94,11 +97,12 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 	};
+ 
+ 	/** 这条运行还活着吗：连接没断、没被停、注册表里还是它（不是被替换掉的旧一代）。 */
+-	const alive = (run: GoalRun): boolean => !sinks.isDisposed() && !run.stopped && runs.get(run.parentId) === run;
++	const alive = (run: GoalRun): boolean => !quiescing && !sinks.isDisposed() && !run.stopped && runs.get(run.parentId) === run;
+ 
+ 	/** 目标帧：在跑就发运行态，没在跑就只发偏好（老实现 `emitGoalStatus()` / `makeGoalStatus()` 两条）。 */
+ 	const publish = (run?: GoalRun): void => {
+ 		if (sinks.isDisposed()) return;
++		if (run) persist(run);
+ 		sinks.emit({ type: "goal_status", status: run ? goalRunStatusOf(run) : goalStatusOfPrefs(prefs()) });
+ 		sinks.flushSnapshot();
+ 	};
+@@ -406,6 +410,7 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 		opts?: GoalStartOptions,
+ 		autoStart = true,
+ 	): Promise<void> {
++		if (quiescing) return;
+ 		const previous = runs.get(parentId);
+ 		if (previous) await stopRun(previous);
+ 		const base = prefs();
+@@ -417,6 +422,7 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 		};
+ 		deps.stateStore.saveGoalPrefs(sinks.clientId, merged);
+ 		const blobs = await applyGoalMaterialBlobs(opts?.materials, opts?.materialBlobs);
++		if (quiescing || sinks.isDisposed()) return;
+ 		if (blobs.dropped.length > 0) {
+ 			const overflow = goalMaterialOverflowText(blobs.dropped);
+ 			notice("warning", overflow.text, overflow.textEn);
+@@ -452,10 +458,12 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 
+ 	/** 调研：开子对话 → 问卷 prompt（标准 `ask_user_question` 工具）→ 收尾即提交目标。 */
+ 	async function startWizard(parentId: string, draft: string, opts?: GoalWizardOptions): Promise<void> {
++		if (quiescing) return;
+ 		const previous = runs.get(parentId);
+ 		if (previous) await stopRun(previous);
+ 		const base = prefs();
+ 		const blobs = await applyGoalMaterialBlobs(opts?.materials, opts?.materialBlobs);
++		if (quiescing || sinks.isDisposed()) return;
+ 		const run = createGoalRun({
+ 			parentId,
+ 			cwd: conversationCwd(parentId),
+@@ -489,8 +497,33 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 	};
+ 
+ 	const port: GoalRunPort = {
++		restoreGoal(parentId: string): void {
++			const current = runs.get(parentId);
++			if (current) { publish(current); return; }
++			const run = restore(parentId);
++			if (!run) return;
++			runs.set(parentId, run);
++			publish(run);
++		},
++		async quiesce(): Promise<void> {
++			quiescing = true;
++			const active = [...runs.values()];
++			// Persist and invalidate every generation before awaiting any abort.
++			for (const run of active) {
++				persist(run);
++				run.paused = true; run.stopped = true; run.generation += 1;
++			}
++			await Promise.all(active.flatMap((run) => [run.execId, run.reviewId, run.wizardId]
++				.filter((id): id is string => !!id).map((id) => sinks.abortTurn(id))));
++			for (const run of active) {
++				closeAll(run);
++				if (run.phase === "wizard") { runs.delete(run.parentId); continue; }
++				run.phase = "idle";
++				publish(run);
++			}
++		},
+ 		setGoal(goal: string, opts?: GoalStartOptions): Promise<void> {
+-			if (sinks.isDisposed()) return Promise.resolve();
++			if (quiescing || sinks.isDisposed()) return Promise.resolve();
+ 			const text = (goal ?? "").trim();
+ 			// 空目标 = 清目标（老实现第一条分支）：没有活动对话时什么都不用做。
+ 			if (!text) {
+@@ -512,6 +545,7 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 		clearGoal(conversationId?: string): Promise<void> {
+ 			const parentId = conversationId ?? sinks.activeConversationId();
+ 			if (!parentId) return Promise.resolve();
++			forget(parentId);
+ 			const run = runs.get(parentId);
+ 			if (!run) {
+ 				publish();
+@@ -522,7 +556,7 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 		},
+ 
+ 		startGoalWizard(text: string, opts?: GoalWizardOptions): Promise<void> {
+-			if (sinks.isDisposed()) return Promise.resolve();
++			if (quiescing || sinks.isDisposed()) return Promise.resolve();
+ 			if (!goalModeOn()) {
+ 				notice(
+ 					"warning",
+diff --git a/server/goal-run-state.ts b/server/goal-run-state.ts
+index 058a4f2..6b292ab 100644
+--- a/server/goal-run-state.ts
++++ b/server/goal-run-state.ts
+@@ -23,6 +23,7 @@ export interface GoalChild {
+ }
+ 
+ export interface GoalRun {
++	paused?: boolean;
+ 	parentId: string;
+ 	cwd: string;
+ 	goal: string;
+@@ -100,6 +101,7 @@ export function createGoalRun(input: {
+ /** 运行态 → `goal_status`（`pass` 时目标字段按老口径清空；`wizard` 段只填问卷面板）。 */
+ export function goalRunStatusOf(run: GoalRun): GoalStatus {
+ 	return {
++		paused: run.paused === true,
+ 		conversationId: run.phase === "pass" ? null : run.parentId,
+ 		goal: run.phase === "pass" ? null : run.goal,
+ 		reviewModel: run.reviewModel,
+diff --git a/server/managed-core-goal-state.ts b/server/managed-core-goal-state.ts
+new file mode 100644
+index 0000000..cd346c3
+--- /dev/null
++++ b/server/managed-core-goal-state.ts
+@@ -0,0 +1,45 @@
++import type { ConversationGoalState } from "../packages/keel/src/projects-schema.js";
++import type { GoalRunSinks } from "../packages/keel/src/domains/goals/index.js";
++import { createGoalRun, type GoalRun } from "./goal-run-state.js";
++
++export interface GoalDisplayStore {
++	getConversationGoal?(identity: string): ConversationGoalState | undefined;
++	saveConversationGoal?(identity: string, goal: ConversationGoalState): void;
++	deleteConversationGoal?(identity: string): void;
++}
++
++/** Persist only display state under the same stable identity as the older managed runtime. */
++export function createManagedGoalState(sinks: GoalRunSinks, store: GoalDisplayStore) {
++	const identity = (parentId: string) => sinks.conversationIdentity?.(parentId);
++	const forget = (parentId: string): void => {
++		const key = identity(parentId);
++		if (key) store.deleteConversationGoal?.(key);
++	};
++	return {
++		forget,
++		persist(run: GoalRun): void {
++			const key = identity(run.parentId);
++			if (!key || run.phase === "wizard" || !run.goal.trim()) return;
++			if (run.phase === "pass") { forget(run.parentId); return; }
++			store.saveConversationGoal?.(key, {
++				goal: run.goal, materials: run.materials, execModel: run.execModel,
++				reviewModel: run.reviewModel, maxRounds: run.maxRounds, locked: run.locked,
++				round: run.round, verdict: run.verdict, status: run.status, statusEn: run.statusEn,
++				feedback: run.feedback, savedAt: Date.now(),
++			});
++		},
++		restore(parentId: string): GoalRun | undefined {
++			const key = identity(parentId);
++			const saved = key ? store.getConversationGoal?.(key) : undefined;
++			if (!saved) return;
++			const run = createGoalRun({
++				parentId, cwd: sinks.conversationCwd(parentId) ?? sinks.cwd(), goal: saved.goal,
++				generation: 1, phase: "idle", prefs: saved, materials: saved.materials,
++				status: saved.status, statusEn: saved.statusEn ?? "",
++			});
++			run.round = saved.round; run.verdict = saved.verdict; run.feedback = saved.feedback ?? "";
++			run.paused = true; run.stopped = true;
++			return run;
++		},
++	};
++}
+diff --git a/tests/unit/goal-run-adapter.test.ts b/tests/unit/goal-run-adapter.test.ts
+index 887acb6..c8bb719 100644
+--- a/tests/unit/goal-run-adapter.test.ts
++++ b/tests/unit/goal-run-adapter.test.ts
+@@ -1,4 +1,8 @@
+ import { describe, expect, it } from "vitest";
++import { mkdtempSync, readFileSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { ClientStateStore } from "../../server/client-state.js";
+ import type { GoalPrefs } from "../../packages/keel/src/contracts/goals.js";
+ import type { GoalRunSinks } from "../../packages/keel/src/domains/goals/index.js";
+ import { createCoreGoalRunPort, type GoalRunPrefsStore } from "../../server/core-goal-run-adapter.js";
+@@ -27,6 +31,9 @@ interface Harness {
+ }
+ 
+ function makeHarness(opts?: {
++	stateStore?: GoalRunPrefsStore;
++	identity?: string;
++	clientId?: string;
+ 	prefs?: GoalPrefs;
+ 	setPlan?: (id: string, steps: unknown[]) => void;
+ 	modelsOk?: boolean;
+@@ -38,13 +45,14 @@ function makeHarness(opts?: {
+ 	const sent: ServerMessage[] = [];
+ 	const texts = new Map<string, string>();
+ 	let seq = 0;
+-	const stateStore: GoalRunPrefsStore = {
++	const stateStore: GoalRunPrefsStore = opts?.stateStore ?? {
+ 		getGoalPrefs: () => opts?.prefs ?? null,
+ 		saveGoalPrefs: () => {},
+ 		getSettingsSnapshot: () => ({ goalModeEnabled: true }),
+ 	};
+ 	const sinks: GoalRunSinks = {
+-		clientId: "c1",
++		clientId: opts?.clientId ?? "c1",
++		conversationIdentity: () => opts?.identity,
+ 		emit: (msg) => void sent.push(msg),
+ 		flushSnapshot: () => {},
+ 		isDisposed: () => false,
+@@ -101,6 +109,49 @@ function makeHarness(opts?: {
+ const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+ 
+ describe("目标运行宿主适配器（GoalRunPort 的真实现）", () => {
++	it("persists display state to disk and restores paused under a fresh browser identity without opening children", async () => {
++		const directory = mkdtempSync(join(tmpdir(), "keel-goal-restore-"));
++		try {
++			const file = join(directory, "client-state.json");
++			const store = new ClientStateStore(file);
++			const first = makeHarness({ stateStore: store, identity: "session:stable", clientId: "old-browser" });
++			await first.port.setGoal("retain this goal", { maxRounds: 4, locked: true });
++			await first.port.quiesce!();
++			expect(first.aborted).toHaveLength(2);
++			expect(first.closed).toHaveLength(2);
++			const persisted = JSON.parse(readFileSync(file, "utf8")).__settings__.conversationGoals["session:stable"];
++			expect(persisted).toMatchObject({ goal: "retain this goal", maxRounds: 4 });
++			for (const key of ["execId", "reviewId", "wizardId", "phase", "generation", "counters", "queues"]) expect(persisted).not.toHaveProperty(key);
++			const restoredStore = new ClientStateStore(file);
++			const restored = makeHarness({ stateStore: restoredStore, identity: "session:stable", clientId: "new-browser" });
++			restored.port.restoreGoal!("parent");
++			expect(restored.statuses().at(-1)).toMatchObject({ goal: "retain this goal", paused: true, reviewing: false, wizard: { active: false } });
++			expect(restored.opened).toEqual([]);
++			expect(restored.turns).toEqual([]);
++			restored.port.onTurnSettled!(first.childOf("exec"), "done");
++			await flush();
++			expect(restored.turns).toEqual([]);
++			const unrelated = makeHarness({ stateStore: restoredStore, identity: "session:other" });
++			unrelated.port.restoreGoal!("parent");
++			expect(unrelated.statuses()).toEqual([]);
++			await restored.port.clearGoal("parent");
++			expect(new ClientStateStore(file).getConversationGoal("session:stable")).toBeUndefined();
++		} finally { rmSync(directory, { recursive: true, force: true }); }
++	});
++
++	it("invalidates late goal callbacks before awaiting abort and fails when abort fails", async () => {
++		const h = makeHarness();
++		await h.port.setGoal("stop safely");
++		const turnsBefore = h.turns.length;
++		h.sinks.abortTurn = async () => { throw new Error("abort failed"); };
++		await expect(h.port.quiesce!()).rejects.toThrow("abort failed");
++		h.port.onTurnSettled!(h.childOf("exec"), "done");
++		await flush();
++		expect(h.turns).toHaveLength(turnsBefore);
++		expect(h.closed).toEqual([]);
++		await h.port.setGoal("must not restart");
++		expect(h.turns).toHaveLength(turnsBefore);
++	});
+ 	it("设目标即建执行 / 审查两条子对话（不换会话就并存），首轮喂的是执行者 prompt", async () => {
+ 		const h = makeHarness();
+ 		await h.port.setGoal("把 README 补全", { maxRounds: 3, locked: true });

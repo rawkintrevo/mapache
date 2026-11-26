@@ -92,6 +92,27 @@ cases cover removed-but-live job rows, delayed PID exit, and unverifiable plugin
 stops. Full upstream typecheck passes with the candidate patch set. Native Goal
 shutdown and the overall image/protocol/browser release gates remain open.
 
+`session-runner/upstream/pi-web-ui/patches/managed-v0123-goal-state.patch`
+adds native Goal display persistence and the adapter's drain implementation.
+The existing `__settings__.conversationGoals` schema and `session:`/`file:`
+identity prefixes are retained. `managed-core-goal-state.ts` owns the display
+projection; `core-goal-run-adapter.ts` remains the sole execution owner. Restore
+creates only a stopped, paused in-memory record with fresh wizard state and no
+child conversations or turns. Clear/pass removes the saved display record.
+Drain saves display state and invalidates every generation before awaiting any
+abort, preventing late turn callbacks from dispatching review or more work.
+The sink waits for turn settlement and rejects still-active SDK sessions before
+child disposal. Abort failures propagate to the bounded core drain.
+
+This component passes 38 native adapter/domain/sink/handler tests and full
+upstream typecheck. A real `ClientStateStore` round-trip verifies restoration
+under a new browser client id, session isolation, absence of execution fields,
+and explicit clearing. This does **not** prove live browser restore: connection
+and history-selection hooks still must call the restore capability, and the
+explicit Resume protocol/UI path and re-admission after successful drain still
+need integration. Keep the manifest unchanged until those paths and the full
+release gates pass.
+
 The remaining migration must preserve these contracts at their current owners:
 
 | Contract | v0.123 owner / required work |
@@ -100,7 +121,7 @@ The remaining migration must preserve these contracts at their current owners:
 | Persisted state | `packages/keel/src/projects-schema.ts` owns types; `server/client-state.ts` owns storage. Preserve paused goals, model timestamps, and interrupted workspace-request metadata. |
 | Automation and workspace requests | Replace old daemon hooks with current core runtime/host integration; preserve status, cancellation, readiness, model validation, and restart recovery. |
 | Quiesce and counters | Counter, bounded core drain, and background-host components are tested but inactive; native Goal shutdown, process-group escalation validation, and complete admission coverage remain required. |
-| Native Pi Goals | `server/core-goal-run-adapter.ts`, core goal contracts/handlers, and runtime state own execution. Passing old `goal-service.ts` tests does not establish persistence or paused restore here. |
+| Native Pi Goals | Native adapter display persistence and drain are tested; connection/history restore hooks, explicit Resume, and re-admission remain. Old `goal-service.ts` tests do not establish these new runtime paths. |
 | SDK setup | `packages/keel/src/adapters/sdk/session-opener.ts` and host ports must preserve credentials, transcript placement, prompt references, and the single MCP integration. Do not import server modules into the core package. |
 | Embedding and browser surfaces | Revalidate authenticated `/agent/`, native terminal, model selection, Goals, and proxy paths against the actual new engine. |
 
