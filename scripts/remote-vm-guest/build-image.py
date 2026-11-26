@@ -26,10 +26,15 @@ MANIFEST_PATH = ROOT / "manifest.json"
 IMAGE_VERSION_RE = re.compile(r"^ubuntu-24\.04-v[0-9]+$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 SECRET_NAME_RE = re.compile(
-    r"(^|[-_.])(id_rsa|id_ed25519|authorized_keys|credentials?|service[-_]?account|\.env)([-_.]|$)",
+    r"(^|[-_.])(id_rsa|id_ed25519|authorized_keys)([-_.]|$)"
+    r"|^\.env(?:\..*)?$"
+    r"|(?:^|[-_.])(?:credentials?|service[-_]?account)(?:\.(?:json|yaml|yml|pem|key|txt))?$",
     re.IGNORECASE,
 )
-PRIVATE_KEY_RE = re.compile(r"-----BEGIN (?:OPENSSH|RSA|EC|DSA) PRIVATE KEY-----")
+PRIVATE_KEY_RE = re.compile(
+    r"-----BEGIN (?:OPENSSH |RSA |EC |DSA |ENCRYPTED )?PRIVATE KEY-----"
+    r"\s+(?:(?:Proc-Type|DEK-Info):[^\n]+\n\s*)*[A-Za-z0-9+/=\s]{64,}"
+)
 SERVICE_ACCOUNT_RE = re.compile(r'"private_key"\s*:\s*"-----BEGIN', re.IGNORECASE)
 
 
@@ -163,11 +168,13 @@ def validate_payload(payload: Path, manifest: dict) -> dict:
         if SECRET_NAME_RE.search(path.name):
             raise BuildError(f"guest payload contains a credential-looking file: {path.name}")
         try:
-            sample = path.read_bytes()[:2 * 1024 * 1024]
+            with path.open("rb") as stream:
+                sample = stream.read(2 * 1024 * 1024)
         except OSError as error:
             raise BuildError(f"unable to inspect guest payload file: {path}") from error
-        if PRIVATE_KEY_RE.search(sample.decode("utf-8", errors="ignore")) or SERVICE_ACCOUNT_RE.search(
-            sample.decode("utf-8", errors="ignore")
+        decoded = sample.decode("utf-8", errors="ignore").replace("\\n", "\n").replace("\\r", "\r")
+        if PRIVATE_KEY_RE.search(decoded) or SERVICE_ACCOUNT_RE.search(
+            decoded
         ):
             raise BuildError(f"guest payload contains private-key material: {path.name}")
     if scanned_files == 0:
@@ -209,8 +216,8 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
         raise BuildError("output image must not overwrite the base image")
     if output.exists():
         raise BuildError(f"refusing to overwrite existing guest image: {output}")
-    if shutil.which("qemu-img") is None or shutil.which("virt-customize") is None:
-        raise BuildError("qemu-img and virt-customize are required to build a guest image")
+    if any(shutil.which(tool) is None for tool in ("qemu-img", "virt-customize", "virt-resize")):
+        raise BuildError("qemu-img, virt-customize and virt-resize are required to build a guest image")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix="mapache-guest-image-"))
@@ -221,15 +228,19 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
         shutil.copytree(payload, staged_payload, symlinks=True)
         # Copy to a new standalone QCOW2 first. A retained workspace disk must
         # not depend on the downloadable base image remaining on the host.
-        runner(["qemu-img", "convert", "-p", "-O", "qcow2", str(base_image), str(output)], check=True)
-        runner(["qemu-img", "resize", str(output), f"{manifest['resources']['diskGiB']}G"], check=True)
+        runner(["qemu-img", "create", "-f", "qcow2", str(output), f"{manifest['resources']['diskGiB']}G"], check=True)
+        # Root on the hash-pinned Noble image is /dev/sda1.
+        runner(["virt-resize", "--format", "qcow2", "--output-format", "qcow2",
+                "--expand", "/dev/sda1", str(base_image), str(output)], check=True)
         runner([
             "virt-customize", "-a", str(output),
             "--install", "ca-certificates,curl,git,openssh-client,python3",
             "--mkdir", "/opt/mapache",
             "--mkdir", "/etc/mapache-vm",
+            "--mkdir", "/usr/local/libexec",
             "--mkdir", "/var/lib/mapache/workspace",
-            "--upload", f"{staged_payload}:/opt/mapache/payload",
+            *[argument for path in manifest["durablePaths"] for argument in ("--mkdir", path)],
+            "--copy-in", f"{staged_payload}:/opt/mapache",
             "--upload", f"{bootstrap}:/usr/local/libexec/mapache-guest-bootstrap",
             "--upload", f"{unit}:/etc/systemd/system/mapache-guest.service",
             "--run-command", "useradd --system --home-dir /var/lib/mapache --shell /usr/sbin/nologin mapache || true",

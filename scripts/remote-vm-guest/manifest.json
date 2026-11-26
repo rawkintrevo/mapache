@@ -59,7 +59,7 @@
     "credentialPolicy": "no-baked-credentials"
   },
   "build": {
-    "requiredTools": ["qemu-img", "virt-customize"],
+    "requiredTools": ["qemu-img", "virt-customize", "virt-resize"],
     "upgradePolicy": "new-workspaces-only-unless-explicit-migration"
   }
 }

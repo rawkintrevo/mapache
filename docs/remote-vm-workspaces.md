@@ -341,6 +341,25 @@ way to implement remote-libvirt.
 
 ## Verification and rollout
 
+Guest payload extraction rewrites the npm Pi launcher symlink for the
+payload's relocated module directory and excludes ssh2's test fixtures.
+The builder uses `virt-resize` to expand the pinned image's root partition
+and filesystem before installing the payload, and creates all durable
+directories before systemd enters the runtime working directory.
+The image validator rejects saved credential filenames and private-key
+material while allowing dependency source filenames and documentation that
+only illustrate key headers. With Snap Docker, extract into a non-hidden
+directory under the current user's home; `/var/tmp` may be inaccessible to
+the Docker client. These preparation changes affect the remote guest image
+only and do not require a Cloud Run runner revision.
+
+On Ubuntu, supermin may fail if the selected `/boot/vmlinuz-*` is readable
+only by root. Diagnose with `libguestfs-test-tool`. An operator can copy that
+specific kernel to a readable build directory with `sudo install -m 0644`;
+set `SUPERMIN_KERNEL` to that copy and `SUPERMIN_MODULES` to its matching
+`/lib/modules/<version>` directory when invoking the builder. This avoids
+changing permissions on the installed boot kernel.
+
 Contract verification is documentation/link checking plus review against the
 current runtime-provider dispatch, Firebase ownership rules, credential
 materialization and gateway authorization. Implementation tickets add unit and
