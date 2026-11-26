@@ -30,19 +30,24 @@ managed storage directory. It validates `sshd` before reloading it. It does
 not flush the host firewall, restart unrelated guests, replace an existing
 network definition, or overwrite an unmanaged account/configuration.
 
-The generated account has no interactive shell. Its key can run only the
+The generated account uses the restricted helper as its login shell, with no
+interactive shell or arbitrary command evaluation. Its key can run only the
 Mapache helper protocol and local forwarding to the `192.168.250.0/24` guest
 network. The helper rejects arbitrary shell commands, paths and guest IDs.
+The account joins the `libvirt` group to reach the system management socket;
+the root-owned helper and SSH configuration constrain this privileged access.
+The root-owned authorized-keys file is mode 0644 so sshd can read the public
+key as the managed account. No private SSH key is installed on the host.
 
 ## Install the guest image
 
 Build the pinned `ubuntu-24.04-v1` image using the instructions in
 [`scripts/remote-vm-guest/README.md`](../../scripts/remote-vm-guest/README.md),
-then copy it to the managed image directory and give the managed account read
-access:
+then copy it to the managed image directory. The credential-free base image
+must be readable by both the managed account and libvirt's QEMU user:
 
 ```bash
-sudo install -o mapache-vm -g mapache-vm -m 0640 \
+sudo install -o root -g root -m 0644 \
   ubuntu-24.04-v1.qcow2 /var/lib/mapache-vm/images/ubuntu-24.04-v1.qcow2
 ```
 

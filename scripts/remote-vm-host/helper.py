@@ -199,10 +199,12 @@ def memory_bytes():
 
 
 def handle_ssh(original_arguments):
+    if original_arguments:
+        raise ValueError("ssh does not accept arguments")
     original = os.environ.get("SSH_ORIGINAL_COMMAND", "").strip()
     if original:
         parts = original.split()
-        if parts[:1] != ["mapache-vm"]:
+        if parts[:1] != ["mapache-vm"] or parts[1:2] == ["ssh"]:
             raise ValueError("unsupported SSH command")
         return handle(parts[1:])
     # Empty command is the forwarding-only case. PermitOpen in sshd_config is
@@ -212,9 +214,16 @@ def handle_ssh(original_arguments):
 
 def main(argv=None):
     try:
-        result = handle(list(argv or sys.argv[1:]))
+        arguments = list(sys.argv[1:] if argv is None else argv)
+        # sshd invokes the account's login shell with -c and ForceCommand.
+        # This executable is that shell: never evaluate arbitrary shell text.
+        if arguments[:1] == ["-c"]:
+            if arguments != ["-c", "/usr/local/libexec/mapache-vm-helper ssh"]:
+                raise ValueError("unsupported SSH shell command")
+            arguments = ["ssh"]
+        result = handle(arguments)
         print(json.dumps(result, sort_keys=True))
-        if list(argv or sys.argv[1:]) == ["ssh"] and not os.environ.get("SSH_ORIGINAL_COMMAND") and os.environ.get("SSH_CONNECTION"):
+        if arguments == ["ssh"] and not os.environ.get("SSH_ORIGINAL_COMMAND") and os.environ.get("SSH_CONNECTION"):
             # Keep an -N forwarding session alive until the SSH client closes
             # it. No shell or command execution is attached to this process.
             while True:

@@ -22,6 +22,20 @@ Mapache marker (or the exact managed libvirt network definition), and reports
 readiness with `--check-only --json`. It refuses an unmanaged account, helper,
 SSH configuration or network definition instead of overwriting it.
 
+The managed account uses the root-owned helper itself as its login shell:
+sshd's exact forced-command invocation is accepted without shell evaluation.
+The account belongs to `libvirt` for the system socket; this is privileged host
+management access, so the helper and SSH restrictions are the authorization
+boundary and must remain root-owned. No sudo grant is installed. The public
+authorized-keys file is root-owned and readable (0644), while private transport
+keys remain server-side. `PermitOpen` enumerates guest addresses .2 through
+.254 because OpenSSH does not expand host globs. Installation starts libvirtd
+before querying networks, defines a missing managed network, and starts an
+inactive one; repeating setup preserves active guests and networks.
+Managed storage directories use mode 0711 so libvirt's QEMU user can traverse
+them without directory listing access; disk file permissions govern content
+access. The credential-free base image is root-owned and readable by QEMU.
+
 The authenticated `/app` host surface is implemented in
 `src/components/remoteHosts/RemoteHostsPage.jsx` and
 `src/controllers/remoteHostsController.js`. It is intentionally limited to
