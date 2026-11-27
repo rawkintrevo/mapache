@@ -4,6 +4,8 @@ const {randomUUID} = require("node:crypto");
 const {httpError, toClientDoc} = require("./backendUtils.helpers");
 const {isSupportedProvisioningSession} = require("./runnerCatalog.helpers");
 
+const {isRemoteLibvirtRuntime} = require("./runtimeProvider.helpers");
+
 const ACTIVE_RESIZE_STATES = new Set(["queued", "running"]);
 const RESIZABLE_STATES = new Set(["running", "stopped", "needs_image", "needs_service", "provision_failed", "update_failed", "stop_failed"]);
 // Longer than the worker's 540-second execution limit. Never overlap workers.
@@ -25,6 +27,7 @@ function createSessionResizeService({admin, db, requireSession, resizeSession, n
       const snapshot = await transaction.get(sessionRef);
       if (!snapshot.exists) throw httpError(404, "session_not_found");
       const session = snapshot.data();
+      if (isRemoteLibvirtRuntime(session)) throw httpError(409, "remote_vm_use_workspace_settings");
       if (!isSupportedProvisioningSession(session)) throw httpError(400, "unsupported_runner");
       if (ACTIVE_RESIZE_STATES.has(session.resizeOperationState)) {
         if (session.resizeRequestedResources?.cpu === resources.cpu && session.resizeRequestedResources?.memory === resources.memory) return;
@@ -64,6 +67,7 @@ function createSessionResizeService({admin, db, requireSession, resizeSession, n
     if (!session) return;
     let failure = null;
     try {
+      if (isRemoteLibvirtRuntime(session)) throw httpError(409, "remote_vm_use_workspace_settings");
       const result = await resizeSession(session.ownerUid, event.params.workspaceId, after.id, session.resizeRequestedResources);
       if (["provision_failed", "update_failed", "stop_failed", "delete_failed"].includes(result.status)) {
         failure = result.lastError || "session_resize_failed";

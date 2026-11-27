@@ -135,7 +135,7 @@ async function testCreateWorkspaceUsesManagedDefaults() {
   );
 }
 
-async function testCreateRemoteWorkspaceUsesOwnerReadyHostAndFixedRuntime() {
+async function testCreateRemoteWorkspaceValidatesResourcesOnCreateAndEdit() {
   let stored = null;
   const updates = [];
   const workspaceRef = {
@@ -152,13 +152,15 @@ async function testCreateRemoteWorkspaceUsesOwnerReadyHostAndFixedRuntime() {
     admin: {firestore: {FieldValue: {serverTimestamp: () => "server-time"}}},
     db: {
       collection(name) {
+        if (name === "remoteHosts") return {doc: () => ({get: async () => ({data: () => ({
+          ownerUid: "user-1", ready: true, status: "ready",
+          capacity: {cpuCount: 8, memoryBytes: 32 * 1024 ** 3, freeDiskBytes: 128 * 1024 ** 3},
+        })})})};
         assert.strictEqual(name, "workspaces");
-        return {
-          add: async (doc) => {
-            stored = doc;
-            return workspaceRef;
-          },
-        };
+        return {doc: () => workspaceRef};
+      },
+      async runTransaction(fn) {
+        return fn({get: (ref) => ref.get(), set: (ref, data) => ref.update(data), update: (ref, data) => ref.update(data)});
       },
     },
     remoteHostService: {
@@ -181,11 +183,19 @@ async function testCreateRemoteWorkspaceUsesOwnerReadyHostAndFixedRuntime() {
 
   assert.equal(created.source.type, REMOTE_LIBVIRT_BACKEND);
   assert.equal(created.source.hostId, "host-1");
-  assert.deepStrictEqual(created.resources, {cpu: "2", memory: "8Gi"});
+  assert.deepStrictEqual(created.resources, {cpu: "1", memory: "2Gi"});
   assert.equal(created.runtimeBackend, REMOTE_LIBVIRT_BACKEND);
   assert.equal(created.runtimeProvider.backend, REMOTE_LIBVIRT_BACKEND);
   assert.equal(created.runtimeProvider.hostId, "host-1");
   assert.equal(updates.length, 1);
+  const rename = (resources) => service.renameWorkspace("user-1", workspaceRef.id, {name: "Resized", resources});
+  await assert.rejects(rename({cpu: "0", memory: "2Gi"}), /invalid_remote_vm_resources/);
+  await assert.rejects(rename({cpu: "2", memory: "32Gi"}), /remote_vm_capacity_exhausted/);
+  assert.equal(updates.length, 1);
+  const edited = await rename({cpu: "3", memory: "4Gi"});
+  assert.deepEqual(edited.resources, {cpu: "3", memory: "4Gi"});
+  assert.equal(edited.runtimeProvider.guestResources.vcpus, 1);
+
   await assert.rejects(
       normalizeWorkspaceSourcePayload("user-1", {source: {type: "remote-libvirt", hostId: "host-1"}}, {
         env: {REMOTE_VM_ADMISSION_ENABLED: "true"},
@@ -258,7 +268,7 @@ Promise.all([
   testRenameWorkspace(),
   testCreateWorkspaceUsesManagedDefaults(),
   testRemoteWorkspaceAdmissionDisabledBeforeHostLookupOrWrite(),
-  testCreateRemoteWorkspaceUsesOwnerReadyHostAndFixedRuntime(),
+  testCreateRemoteWorkspaceValidatesResourcesOnCreateAndEdit(),
   testCanonicalSessionAdoptionPrefersActiveRuntime(),
 ]).then(() => {
   console.log("workspace service tests passed");

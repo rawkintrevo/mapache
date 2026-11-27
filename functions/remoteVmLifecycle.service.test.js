@@ -404,3 +404,37 @@ test("owner and managed guest fences reject foreign identifiers", async () => {
   await assert.rejects(() => service.start(fixtureValue.workspace, {id: "session-1"}, foreignSession), /workspace_forbidden/);
   await assert.rejects(() => service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "foreign-guest"}), /remote_vm_foreign_guest/);
 });
+
+test("offline resize retries use the reserved size even after a concurrent settings edit", async () => {
+  const f = fixture();
+  f.workspace.resources = {cpu: "3", memory: "4Gi"};
+  await seed(f);
+  const remote = fakeHost();
+  const name = f.descriptor.guestName;
+  remote.guests.set(name, {exists: true, state: "stopped", supportsResize: true, vcpus: 2, memoryMiB: 8192});
+  let offline = true;
+  let resizeCount = 0;
+  const service = createRemoteVmLifecycleService({db: f.db, hostOperation: async (request) => {
+    if (offline) throw Object.assign(new Error("offline"), {code: "remote_host_unreachable"});
+    if (request.action === "capacity") return f.host.capacity;
+    if (request.action === "resize") {
+      resizeCount++;
+      const actual = {...remote.guests.get(name), ...request.guest.resources};
+      remote.guests.set(name, actual);
+      return actual;
+    }
+    return remote.operation(request);
+  }});
+  const op = await service.start(f.workspace, {id: "session-1"}, f.session, {idempotencyKey: "resize-1"});
+  assert.equal(op.state, "unreachable");
+  const hostRef = f.db.collection("remoteHosts").doc("host-1");
+  assert.equal((await hostRef.get()).data().remoteVmReservations.vcpus, 3);
+  await f.db.collection("workspaces").doc(f.workspace.id).update({resources: {cpu: "4", memory: "6Gi"}});
+  offline = false;
+  const result = await service.start(f.workspace, {id: "session-1"}, f.session, {idempotencyKey: "resize-1"});
+  assert.equal(result.state, "completed");
+  assert.equal(result.vcpus, 3);
+  assert.equal(result.memoryMiB, 4096);
+  assert.equal(resizeCount, 1);
+  assert.equal((await hostRef.get()).data().remoteVmReservations.entries.length, 1);
+});

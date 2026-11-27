@@ -74,9 +74,27 @@ workspace identity. The host is a Linux machine with KVM/QEMU/libvirt and an
 internet-reachable SSH service. The initial host setup targets Ubuntu 22.04;
 that host operating-system choice is independent of the Ubuntu 24.04 LTS guest
 image. Each workspace owns one retained guest and one retained thin-provisioned
-QCOW2 disk sized at 2 vCPU, 8 GiB RAM, and 40 GiB. Sizing changes, disk growth,
+40 GiB QCOW2 disk. Guests default to 2 vCPU and 8 GiB RAM. Disk growth,
 multiple hosts, backups, and scheduled/idle runtime policies are
 follow-up work.
+
+Workspace creation and **Edit workspace** accept 1–64 virtual CPUs and
+1–256 GiB RAM in whole units, subject to host capacity. The workspace API
+stores the desired pair in `resources` and checks host reservations with
+headroom. Saving changes leaves a running guest online. Stop it and then
+start it through Mapache to apply the new size. A stopped guest applies
+changes on its next start. Admission checks capacity again at start, freezes
+the requested size on the operation, and reserves it across offline retries.
+The helper redefines only CPU and memory in the inactive domain XML. The
+worker checks both values again after boot. The retained disk and VM identity
+survive the change.
+
+Install the matching root-owned host helper before enabling custom sizes.
+Existing hosts with an older helper still support the default pair. Deploy
+`reconcileRemoteVmOperation`, `provisionQueuedSession`, `vmGatewayResolve_v2`,
+`remoteVmCredentials_v2` and `resizeQueuedSession` before `api` so all consumers
+accept the new descriptor and use workspace settings for remote resizes.
+The guest image and gateway do not require a new revision.
 
 The guest workspace account can use passwordless `sudo` to install packages.
 This grants guest root to both terminal commands and agent processes running as
@@ -143,7 +161,7 @@ introduced with the implementation):
 | --- | --- | --- |
 | `remoteHosts/{hostId}` | `ownerUid`, display name, address, SSH port, managed username, pinned host-key fingerprint, setup version, readiness state, capacity snapshot, created/updated timestamps, removal tombstone | No private key or credential body in client DTOs. |
 | `users/{uid}/private/remoteHosts/{hostId}` | Host SSH private key reference, key version, revocation state and server-only secret metadata | Stored/read only by the backend secret boundary; never returned to browser, guest, logs or URLs. |
-| `workspaces/{workspaceId}` | Existing workspace fields plus `source.type=remote-libvirt`, `source.hostId`, `runtimeProvider.backend=remote-libvirt`, fixed guest preset, provider state, desired/applied config versions and deletion tombstone | Only IDs and redacted status are public. |
+| `workspaces/{workspaceId}` | Existing workspace fields plus `source.type=remote-libvirt`, `source.hostId`, `runtimeProvider.backend=remote-libvirt`, desired CPU and memory, provider state, desired/applied config versions and deletion tombstone | Only IDs and redacted status are public. |
 | `workspaces/{workspaceId}/sessions/{sessionId}` | Runtime generation, guest identity, access generation, tunnel route reference, lifecycle state and operation reference | Browser/session tokens are short-lived and audience-scoped. |
 | `remoteVmOperations/{operationId}` | UID, workspace/host IDs, operation kind, idempotency key, state, attempt, timestamps, worker lease, safe error code and provider generation | Never include private keys, raw SSH output or arbitrary command text. |
 | `remoteVmRoutes/{routeId}` | Owner/workspace/session IDs, host/guest target selected by the backend, runtime/access generation, expiry and gateway status | The browser receives a signed access URL, never a target address or forwarding authority. |
@@ -217,12 +235,12 @@ after the operation reaches a terminal state or verified cleanup.
 Each request creates a deterministic operation ID from owner, workspace, kind,
 and idempotency key in `remoteVmOperations/{operationId}`. A transaction checks
 the owner, host readiness, workspace tombstone, fixed guest identity, and host
-capacity before reserving one 2-vCPU/8-GiB/40-GiB entry. Reservations are stored
+capacity before reserving the requested CPU, RAM and 40 GiB of disk. Reservations are stored
 per workspace so stop and verified delete can release exactly the owning entry;
 the transaction never performs a read after its callback returns.
 
 Workers claim an operation lease and use only the managed `mapache-vm` helper
-actions (`inspect`, `create`, `start`, `stop`, `destroy`). A lost SSH response is
+actions (`inspect`, `capacity`, `create`, `resize`, `configure`, `start`, `stop`, `destroy`). A lost SSH response is
 resolved by inspecting the deterministic guest and disk before any side effect
 is retried. Host errors produce `unreachable` and retain the workspace and
 guest; the Firestore trigger retries the same operation after reconnect. Delete
@@ -529,7 +547,7 @@ The v1 work is deliberately split so each ticket has one owner boundary:
 | #642 | Existing `/app` workspace creation, list, lifecycle and capability UI (implemented) |
 | #643 | Rollout gate, real-host QA, deployment, rollback and release evidence |
 
-Deferred policies, custom resources, disk growth, multiple hosts,
+Deferred policies, disk growth, multiple hosts,
 backups/recovery and image slimming are tracked under #633. No child ticket
 may change Blank, GitHub, legacy SSH or Compute Engine behavior as an incidental
 way to implement remote-libvirt.

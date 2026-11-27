@@ -82,9 +82,18 @@ previous matching helper and image, after stopping only a newly created v4
 guest if one exists.
 
 The lifecycle helper creates one 40 GiB thin QCOW2 overlay per workspace under
-`/var/lib/mapache-vm/disks/`. It defines 2 vCPUs, 8192 MiB, the private
+`/var/lib/mapache-vm/disks/`. It defaults to 2 vCPUs and 8192 MiB. The resize-capable helper applies the
+workspace CPU/RAM settings while the guest is off. It uses the private
 `mapache-vm` network, and disables libvirt autostart. Do not rename the image,
 copy owner credentials into it, or edit a workspace disk while Mapache owns it.
+
+To verify the installed resize helper on a prepared test host, run
+`python3 scripts/remote-vm-host/verify-resize.py` from the repository as a
+user with system libvirt access. The check needs 3 free vCPUs, 4 GiB of
+available RAM and temporary overlay storage. It creates one disposable domain
+and boots its own overlay twice. The guest reports its CPU count, Linux
+MemTotal and a sentinel from the previous boot, then powers off. The script
+removes that test domain and its temporary files.
 
 ## Verify readiness
 

@@ -37,6 +37,17 @@ afterEach(() => {
 });
 
 describe("workspaceController", () => {
+  test("saves remote guest resources for the next start while the current session runs", async () => {
+    const fixture = createFixture({
+      workspaces: [{id: "workspace-1", canonicalSessionId: "session-1", source: {type: "remote-libvirt"}}],
+      sessions: [{id: "session-1", status: "running", resources: {cpu: "2", memory: "8Gi"}}],
+    });
+    const payload = {name: "Remote", resources: {cpu: "3", memory: "6Gi"}};
+    await createWorkspaceController(fixture).renameWorkspace("workspace-1", payload);
+    expect(fixture.state.api.renameWorkspace).toHaveBeenCalledWith("workspace-1", payload);
+    expect(fixture.state.api.resizeSession).not.toHaveBeenCalled();
+  });
+
   test.each(["provision_failed", "update_failed", "stop_failed"])("recovers a %s runtime even when its saved size already matches", async (status) => {
     const resources = {cpu: "2", memory: "8Gi"};
     const fixture = createFixture({

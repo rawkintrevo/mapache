@@ -60,7 +60,7 @@ Retained authenticated responsibilities are:
   Google Workspace connections, and GitHub account/repository connections.
 - Owner-scoped remote host registration, trust verification and key revocation;
   explicit `remote-libvirt` workspace creation validates a ready owner host and
-  persists the fixed guest runtime descriptor. Real-host admission remains
+  validates capacity before saving the requested CPU and RAM. The remote lifecycle worker reserves and applies that size at start. Real-host admission remains
   behind the #643 rollout gate.
 
 The embedded upstream application owns the agent protocol and its live files,

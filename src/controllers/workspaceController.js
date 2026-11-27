@@ -1,3 +1,4 @@
+import {isRemoteVmWorkspace} from "../utils/workspaceProvider.js";
 import {APP_ACTIONS} from "../state/appStore.js";
 import {friendlyWorkspaceError} from "../utils/friendlyErrors.js";
 import {OPERATION_KEYS} from "../utils/operationKeys.js";
@@ -64,6 +65,7 @@ export function createWorkspaceController({
         const request = {
           name: payload.name,
           source: normalizeCreateWorkspaceSource(payload),
+          ...(payload.resources ? {resources: payload.resources} : {}),
           env: payload.env || {},
         };
         if (Array.isArray(payload.environmentEntryIds) && payload.environmentEntryIds.length) {
@@ -124,7 +126,7 @@ export function createWorkspaceController({
           resources.cpu !== currentSession.resources?.cpu || resources.memory !== currentSession.resources?.memory
         )));
         await state.api.renameWorkspace(workspaceId, resources ? {name: nextName, resources} : nextName);
-        if (shouldResize) {
+        if (shouldResize && !isRemoteVmWorkspace(currentWorkspace || {})) {
           await state.api.resizeSession(workspaceId, canonicalSessionId, resources);
         }
         await refreshWorkspaceList();

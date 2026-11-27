@@ -35,7 +35,7 @@ describe("WorkspaceModal remote VM option", () => {
     }));
   });
 
-  test("shows fixed resources and submits the ready host identity", async () => {
+  test("shows resource defaults and submits the ready host identity", async () => {
     const user = userEvent.setup();
     const props = renderModal({
       hosts: [{id: "host-1", displayName: "Home machine", address: "home.example.com", status: "ready", ready: true}],
@@ -43,7 +43,10 @@ describe("WorkspaceModal remote VM option", () => {
       remoteVmAdmissionEnabled: true,
     });
     await user.click(screen.getByRole("radio", {name: "VM on remote machine"}));
-    expect(screen.getByText("2 vCPU · 8 GiB RAM · 40 GiB disk")).toBeInTheDocument();
+    expect(screen.getByLabelText("Virtual CPUs")).toHaveValue(2);
+    expect(screen.getByLabelText("Memory (GiB)")).toHaveValue(8);
+    await user.clear(screen.getByLabelText("Virtual CPUs"));
+    await user.type(screen.getByLabelText("Virtual CPUs"), "3");
     expect(screen.getByText("Home machine")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Workspace Name"), "Remote workspace");
     await user.click(screen.getByRole("button", {name: "Create Workspace"}));
@@ -51,6 +54,7 @@ describe("WorkspaceModal remote VM option", () => {
     expect(props.onLoadRemoteHosts).toHaveBeenCalled();
     expect(props.onCreateWorkspace).toHaveBeenCalledWith(expect.objectContaining({
       name: "Remote workspace",
+      resources: {cpu: "3", memory: "8Gi"},
       source: {type: "remote-libvirt", hostId: "host-1"},
     }));
   });

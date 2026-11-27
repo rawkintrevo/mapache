@@ -275,7 +275,7 @@ test("hides deferred controls for remote VM workspaces while keeping power contr
   expect(screen.queryByRole("menuitem", {name: "Logs"})).not.toBeInTheDocument();
   expect(screen.queryByRole("menuitem", {name: "Gateway: Off"})).not.toBeInTheDocument();
   expect(screen.getByRole("menuitem", {name: "Upload file"})).toBeDisabled();
-  expect(screen.getByRole("menuitem", {name: "Edit workspace HubSpot"})).toBeDisabled();
+  expect(screen.getByRole("menuitem", {name: "Edit workspace HubSpot"})).toBeEnabled();
   await user.click(screen.getByRole("button", {name: "More workspace actions"}));
   await user.click(screen.getByRole("button", {name: "Workspace power controls: running"}));
   expect(screen.getByRole("menuitem", {name: "Stop workspace"})).toBeEnabled();

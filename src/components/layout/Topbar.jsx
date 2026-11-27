@@ -173,7 +173,7 @@ export function Topbar({
           onOpenMcpServers={onOpenMcpServers}
           onOpenRequestGrants={onOpenRequestGrants}
           onOpenPiAuthManage={onOpenPiAuthManage}
-          onOpenWorkspaceEditModal={remoteWorkspace ? null : onOpenWorkspaceEditModal}
+          onOpenWorkspaceEditModal={onOpenWorkspaceEditModal}
           onOpenWorkspaceModal={onOpenWorkspaceModal}
           selectedWorkspace={selectedWorkspace}
         />

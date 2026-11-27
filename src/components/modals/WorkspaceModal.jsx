@@ -1,3 +1,4 @@
+import {DEFAULT_REMOTE_RESOURCES, RemoteVmResourceFields} from "../workspaces/RemoteVmResourceFields.jsx";
 import {Plus, X} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
 import {parseEnvText} from "../../utils/envText.js";
@@ -20,6 +21,7 @@ export function WorkspaceModal({
   const [manualRepoUrl, setManualRepoUrl] = useState("");
   const [selectedRepoKey, setSelectedRepoKey] = useState("");
   const isGithub = sourceType === "github";
+  const [resources, setResources] = useState(DEFAULT_REMOTE_RESOURCES);
   const isRemoteVm = sourceType === "remote-libvirt";
   const repos = repoPicker && Array.isArray(repoPicker.repos) ? repoPicker.repos : [];
   const remoteHosts = remoteHostState && Array.isArray(remoteHostState.hosts) ? remoteHostState.hosts : [];
@@ -76,6 +78,7 @@ export function WorkspaceModal({
             const environmentEntryIds = formData.getAll("environmentEntryId");
             const workspacePayload = {
               name: formData.get("name"),
+              ...(isRemoteVm ? {resources} : {}),
               source,
               repoUrl,
               branch,
@@ -199,12 +202,12 @@ export function WorkspaceModal({
             <section aria-label="Remote VM settings" className="workspace-remote-vm-fields">
               <div>
                 <strong>Remote VM resources</strong>
-                <p className="subtle">This first version uses a fixed 2 vCPU, 8 GiB RAM, and 40 GiB disk guest.</p>
+                <RemoteVmResourceFields resources={resources} onChange={setResources} />
               </div>
               <dl className="workspace-remote-vm-specs">
                 <div><dt>Host</dt><dd>{readyRemoteHost ? readyRemoteHost.displayName || readyRemoteHost.address : "No ready host"}</dd></div>
                 <div><dt>Guest</dt><dd>Ubuntu 24.04 · pi-web-ui</dd></div>
-                <div><dt>Resources</dt><dd>2 vCPU · 8 GiB RAM · 40 GiB disk</dd></div>
+                <div><dt>Disk</dt><dd>40 GiB</dd></div>
               </dl>
               {remoteHostState?.loading ? <p className="subtle" role="status">Loading remote host…</p> : null}
               {!remoteHostState?.loading && !readyRemoteHost ? (

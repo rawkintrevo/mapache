@@ -98,9 +98,9 @@ function normalizeRuntimeDescriptor(value, {workspaceId, ownerUid, allowMissing 
     guestName: value.guestName ? safeIdentifier(value.guestName, "guestName") : null,
     guestIp: value.guestIp ? String(value.guestIp).trim() : null,
     guestResources: value.guestResources && typeof value.guestResources === "object" ? {
-      vcpus: Number(value.guestResources.vcpus || REMOTE_GUEST_VCPUS),
-      memoryMiB: Number(value.guestResources.memoryMiB || REMOTE_GUEST_MEMORY_MIB),
-      diskGiB: Number(value.guestResources.diskGiB || REMOTE_GUEST_DISK_GIB),
+      vcpus: Number(value.guestResources.vcpus ?? REMOTE_GUEST_VCPUS),
+      memoryMiB: Number(value.guestResources.memoryMiB ?? REMOTE_GUEST_MEMORY_MIB),
+      diskGiB: Number(value.guestResources.diskGiB ?? REMOTE_GUEST_DISK_GIB),
     } : {
       vcpus: REMOTE_GUEST_VCPUS,
       memoryMiB: REMOTE_GUEST_MEMORY_MIB,
@@ -126,8 +126,9 @@ function normalizeRuntimeDescriptor(value, {workspaceId, ownerUid, allowMissing 
     if (!/^ubuntu-24\.04-v[0-9]+$/.test(descriptor.guestImageVersion)) {
       throw runtimeDescriptorError("runtime_provider_descriptor_invalid", {field: "guestImageVersion"});
     }
-    if (descriptor.guestResources.vcpus !== REMOTE_GUEST_VCPUS ||
-        descriptor.guestResources.memoryMiB !== REMOTE_GUEST_MEMORY_MIB ||
+    if (!Number.isInteger(descriptor.guestResources.vcpus) || descriptor.guestResources.vcpus < 1 || descriptor.guestResources.vcpus > 64 ||
+        !Number.isInteger(descriptor.guestResources.memoryMiB) || descriptor.guestResources.memoryMiB < 1024 ||
+        descriptor.guestResources.memoryMiB > 262144 || descriptor.guestResources.memoryMiB % 1024 !== 0 ||
         descriptor.guestResources.diskGiB !== REMOTE_GUEST_DISK_GIB) {
       throw runtimeDescriptorError("runtime_provider_descriptor_invalid", {field: "guestResources"});
     }

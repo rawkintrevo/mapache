@@ -253,11 +253,11 @@ every request by authenticated user and epoch so sign-out or account changes
 cannot publish a prior owner's host. It never requests or renders a personal
 SSH private key. Workspace creation includes the explicit **VM on remote
 machine** option. Selecting it loads the single owner-scoped host, blocks
-submission until the host is ready, sends its stable `hostId`, and shows the
-fixed v1 guest shape (2 vCPU, 8 GiB RAM, 40 GiB disk, Ubuntu 24.04 with
-pi-web-ui). Blank and GitHub payloads remain unchanged. Remote workspaces use
+submission until the host is ready, sends its stable `hostId`, and offers CPU and memory inputs
+(default 2 vCPU and 8 GiB, with a 40 GiB disk). **Edit workspace** stages a
+new size for the next stop/start. Blank and GitHub payloads remain unchanged. Remote workspaces use
 the existing power controls and pi-web-ui/native terminal, while Chrome,
-upload, automations, SSH-gateway assignment, workspace resource editing, and
+upload, automations, SSH-gateway assignment, and
 idle/keep-running/scheduled policy controls are hidden until their provider
 capabilities exist. Remote deletion uses an explicit permanent-delete
 confirmation; host or guest failures remain visible through the normal pending

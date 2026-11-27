@@ -30,6 +30,10 @@ function fixture() {
 
 (async () => {
   const resources = {cpu: "2", memory: "8Gi"};
+  const remote = fixture();
+  remote.set({runtimeProvider: {backend: "remote-libvirt"}});
+  await assert.rejects(remote.service.enqueueResize("u", "w", "s", resources), /remote_vm_use_workspace_settings/);
+  assert.equal(remote.calls(), 0);
   const f = fixture();
   await assert.rejects(f.service.enqueueResize("other", "w", "s", resources), /forbidden/);
   await assert.rejects(f.service.enqueueResize("u", "w", "s", {}), /invalid_session_resources/);

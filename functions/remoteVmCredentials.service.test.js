@@ -44,6 +44,7 @@ const descriptor = {
     workspaceId: "workspace-1",
     ownerUid: "owner-1",
     generation: 4,
+    guestResources: {vcpus: 3, memoryMiB: 4096, diskGiB: 40},
     hostId: "host-1",
     guestIp: "192.168.250.12",
   }),

@@ -112,11 +112,12 @@ function connectRemoteHost(options) {
 async function runRemoteHostCommand(options) {
   const {action, guestName, host} = options;
   if (!host?.hostKeyFingerprint) throw httpError(409, "remote_host_trust_incomplete");
-  if (!["capacity", "inspect", "create", "configure", "start", "stop", "destroy"].includes(action) ||
+  if (!["capacity", "inspect", "create", "resize", "configure", "start", "stop", "destroy"].includes(action) ||
       (action !== "capacity" && !/^mapache-ws-[a-z0-9][a-z0-9-]{0,62}$/.test(guestName || ""))) {
     throw httpError(400, "remote_host_command_invalid");
   }
-  const input = action === "configure" ? JSON.stringify(options.configuration) : undefined;
+  const input = action === "configure" ? JSON.stringify(options.configuration) :
+    action === "resize" ? JSON.stringify(options.resources) : undefined;
   if (action === "configure" && (!input || Buffer.byteLength(input) > 16384)) {
     throw httpError(400, "remote_host_command_invalid");
   }
