@@ -168,7 +168,7 @@ test("malformed namespaces never open a transport or establish cookies", async (
 });
 
 test("signed health GET from Hosting reaches the guest directly with readable CORS headers", async (t) => {
-  const origin = "https://pi-agents-cloud.web.app";
+  const origin = "https://mapache.tools";
   const path = "/workspaces/a/runner/health?mapache_access=valid";
   const f = await fixture(t, (input, target) => {
     assert.equal(input.path, "/workspaces/a/runner/health");
@@ -184,7 +184,10 @@ test("signed health GET from Hosting reaches the guest directly with readable CO
   for (const options of [{method: "POST"}, {headers: {origin: "https://foreign.example"}}]) {
     assert.equal((await request(f, path, options)).status, 404);
   }
-  assert.equal(f.count(), 1);
+  const hosting = "https://pi-agents-cloud.web.app";
+  const alias = await request(f, path, {headers: {origin: hosting, cookie: ""}});
+  assert.equal(alias.headers["access-control-allow-origin"], hosting);
+  assert.equal(f.count(), 2);
 });
 
 test("a private WebSocket rejection promptly denies the public handshake", async (t) => {

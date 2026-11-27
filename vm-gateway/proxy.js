@@ -35,7 +35,7 @@ function createGateway({resolve, request = http.request, transportFactory = crea
     const health = Boolean(input.prefix && input.privatePath === "/runner/health");
     if (health && (req.method !== "GET" || websocket || !input.bootstrap)) throw new Error("not_found");
     const parentOrigin = health && input.origin;
-    if (parentOrigin && !["https://pi-agents-cloud.web.app", "https://pi-agents-cloud.firebaseapp.com",
+    if (parentOrigin && !["https://mapache.tools", "https://pi-agents-cloud.web.app", "https://pi-agents-cloud.firebaseapp.com",
       `https://${input.host}`].includes(parentOrigin)) throw new Error("not_found");
     // The resolver checks gateway-origin browser requests. For a health read,
     // the proxy has already checked the parent origin; all token checks still apply.
