@@ -605,6 +605,12 @@ and retained-disk runtimes. The runner links it to the current workspace's
 retained home or the private runtime's home. The remote VM image builder
 creates the link during guest provisioning because the guest runner cannot
 write to `/home`. Paths used for storage and restore use the backing directory.
+Fresh interactive pi-web-ui clients start at that home. The file browser and
+project picker can open home projects and existing `/workspace` projects.
+Restored clients keep their selected project when it still resolves inside
+either root. Automation retains its separate working-directory policy.
+This requires a rebuilt runner image and new Cloud Run revision, or an updated
+guest runtime for remote VMs.
 
 The runner also owns a 0600 `automation-agent.sock` Unix socket in that private
 runtime root for the managed MCP process. Its adapter keeps the five-minute

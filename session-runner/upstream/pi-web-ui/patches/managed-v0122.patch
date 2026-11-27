@@ -255,7 +255,7 @@ index b26ffcd..31778d0 100644
  		"pluginCatalogAdd": "新增外掛",
  		"pluginCatalogAddHint": "把第三方外掛填進可安裝列表（owner/repo 或完整 GitHub 位址）",
 diff --git a/server/agent-service-daemon.ts b/server/agent-service-daemon.ts
-index 19f87cd..be54381 100644
+index 19f87cd..c20191b 100644
 --- a/server/agent-service-daemon.ts
 +++ b/server/agent-service-daemon.ts
 @@ -1,3 +1,72 @@
@@ -327,7 +327,7 @@ index 19f87cd..be54381 100644
 +}
 +
 +const QUIESCE_TIMEOUT_MS = 5_000;
-+import { isCanonicalPathWithinRootSync, managedWorkspaceRoot } from "./managed-workspace.js";
++import { managedCwdAllowed } from "./managed-workspace.js";
  import { join, resolve } from "node:path";
  import { sleep } from "./async-utils.js";
  import { statSync } from "node:fs";
@@ -815,7 +815,7 @@ index 19f87cd..be54381 100644
  					let cwd = this.cwd;
  					const saved = this.stateStore.get(clientId);
 -					if (saved.lastCwd && saved.lastCwd !== this.cwd) {
-+					if (saved.lastCwd && saved.lastCwd !== this.cwd && (!managedWorkspaceRoot() || isCanonicalPathWithinRootSync(managedWorkspaceRoot()!, saved.lastCwd))) {
++					if (saved.lastCwd && saved.lastCwd !== this.cwd && managedCwdAllowed(saved.lastCwd)) {
  						if (isRemoteWorkspaceUri(saved.lastCwd)) {
  							cwd = saved.lastCwd;
  						} else {
@@ -832,7 +832,7 @@ index 19f87cd..be54381 100644
  	}
  }
 diff --git a/server/agent-service.ts b/server/agent-service.ts
-index 8a962a1..6fbca9f 100644
+index 8a962a1..058ef1c 100644
 --- a/server/agent-service.ts
 +++ b/server/agent-service.ts
 @@ -1,3 +1,11 @@
@@ -862,7 +862,7 @@ index 8a962a1..6fbca9f 100644
  import { isTraditionalLocale, pick, resolveServerLang, type ServerLang } from "./i18n.js";
 +import { isManaged, managedMcpAdapterPath } from "./managed.js";
 +import { withManagedReference } from "./managed-reference.js";
-+import { isCanonicalPathWithinRootSync, managedWorkspaceRoot } from "./managed-workspace.js";
++import { isCanonicalPathWithinRootSync, managedCwdAllowed, managedDisplayPath, managedWorkspaceRoot } from "./managed-workspace.js";
 +import {shouldResumeInterruptedWorkspaceRequest} from "./workspace-request-resume.js";
 +import {
 +	createAutomationRunState,
@@ -913,7 +913,7 @@ index 8a962a1..6fbca9f 100644
  export type TakeoverQuestion = PendingQuestion;
  
  const consultWaitingParents = new WeakSet<Conversation>();
-@@ -1025,6 +1069,25 @@ export function clipListText(text: string): string {
+@@ -1025,6 +1069,20 @@ export function clipListText(text: string): string {
  	return `${text.slice(0, end)}…`;
  }
  
@@ -931,15 +931,10 @@ index 8a962a1..6fbca9f 100644
 +	return realpathSync(target);
 +}
 +
-+function managedCwdAllowed(cwd: string): boolean {
-+	const root = managedWorkspaceRoot();
-+	return !root || isCanonicalPathWithinRootSync(root, cwd);
-+}
-+
  export class ClientSession {
  	static mcpProjects: McpProjectRuntimeRegistry | null = null;
  	clientId: string;
-@@ -1041,6 +1104,11 @@ export class ClientSession {
+@@ -1041,6 +1099,11 @@ export class ClientSession {
  	private activeId = "";
  	private convSeq = 0;
  	private pluginModelKeys = new Map<string, string>();
@@ -951,7 +946,7 @@ index 8a962a1..6fbca9f 100644
  	private sharedModelRuntime: Awaited<ReturnType<typeof createAgentSessionServices>>["modelRuntime"] | undefined;
  	private turnEndWaiters = new Map<string, Set<(o: RoleWaitOutcome) => void>>();
  	private subagentSettleStore?: SubagentSettleRegistry;
-@@ -1226,6 +1294,11 @@ export class ClientSession {
+@@ -1226,6 +1289,11 @@ export class ClientSession {
  	private notifiedQuestions = new Set<string>();
  	/** 扩展报错去重计数：**按会话**存，跨 `bindSession` / reload 不重置（#958）。 */
  	private extensionErrorCounts = new Map<string, Map<string, number>>();
@@ -963,7 +958,7 @@ index 8a962a1..6fbca9f 100644
  	onConversationChanged: (() => void) | undefined = undefined;
  	onClientModelChanged: ((snap: PluginConversationSnapshot) => void) | undefined = undefined;
  	pluginToolsProvider: ((cwd?: string) => PluginAgentTool[]) | undefined = undefined;
-@@ -1260,10 +1333,45 @@ export class ClientSession {
+@@ -1260,10 +1328,45 @@ export class ClientSession {
  	get runtime(): AgentSessionRuntime {
  		return this.conv.runtime;
  	}
@@ -1009,7 +1004,7 @@ index 8a962a1..6fbca9f 100644
  	get terminals(): TerminalManager {
  		return this.conv.terminals;
  	}
-@@ -1575,7 +1683,7 @@ export class ClientSession {
+@@ -1575,7 +1678,7 @@ export class ClientSession {
  		lastLines = "",
  	): void {
  		const conv = this.convs.get(conversationId);
@@ -1018,7 +1013,7 @@ index 8a962a1..6fbca9f 100644
  		if (!conv.runtime.session.isStreaming) return;
  		const seconds = Math.max(1, Math.round(idleMs / 1000));
  		void promptSession(
-@@ -1592,7 +1700,7 @@ export class ClientSession {
+@@ -1592,7 +1695,7 @@ export class ClientSession {
  		info: { terminalId: string; command: string; exitCode: number | null },
  	): void {
  		const conv = [...this.convs.values()].find((c) => c.terminals === terminals);
@@ -1027,7 +1022,7 @@ index 8a962a1..6fbca9f 100644
  		let tail = "";
  		try {
  			const end = terminals.endCursor(info.terminalId);
-@@ -1846,7 +1954,7 @@ export class ClientSession {
+@@ -1846,7 +1949,7 @@ export class ClientSession {
  			const sessionBaseDir = resolveWorkspaceSessionDir(this.stateStore?.dataDir, effectiveCwd);
  			const terminals = this.makeTerminalManager(conversationId, effectiveCwd);
  			pendingTerminals = terminals;
@@ -1036,7 +1031,7 @@ index 8a962a1..6fbca9f 100644
  			if (!persist) {
  				ephemeralDir = join(this.agentDir, "subagent-sessions", conversationId);
  				try {
-@@ -4497,12 +4605,14 @@ export class ClientSession {
+@@ -4497,12 +4600,14 @@ export class ClientSession {
  			emit: (msg) => this.emit(msg),
  			flushSnapshot: () => this.flushSnapshot(),
  			isDisposed: () => this.disposed,
@@ -1051,7 +1046,7 @@ index 8a962a1..6fbca9f 100644
  			cwd: () => this.cwd,
  			gitDiff: (dir) => this.gitDiff(dir),
  			getPlan: (convId) => this.planManager.getPlan(convId),
-@@ -4639,6 +4749,7 @@ export class ClientSession {
+@@ -4639,6 +4744,7 @@ export class ClientSession {
  
  		this.modelAdmin = new ModelAdminService({
  			agentDir,
@@ -1059,7 +1054,7 @@ index 8a962a1..6fbca9f 100644
  			emit: (msg) => this.emit(msg),
  			flushSnapshot: () => this.flushSnapshot(),
  			isDisposed: () => this.disposed,
-@@ -4772,8 +4883,8 @@ export class ClientSession {
+@@ -4772,8 +4878,8 @@ export class ClientSession {
  				botExecution
  					? SessionManager.create(sessionBaseDir, join(agentDir, "bot-sessions", clientId))
  					: opts?.blank
@@ -1070,7 +1065,7 @@ index 8a962a1..6fbca9f 100644
  			(m) =>
  				createAgentSessionRuntime(cs.makeRuntimeFactory(terminals, undefined, conversationId), {
  					cwd: sessionBaseDir,
-@@ -4856,7 +4967,7 @@ export class ClientSession {
+@@ -4856,7 +4962,7 @@ export class ClientSession {
  				if (!existsSync(targetPath)) continue;
  				await cs.repairTranscriptFileBeforeOpen(targetPath);
  				assertSupportedTranscriptVersion(targetPath);
@@ -1079,7 +1074,7 @@ index 8a962a1..6fbca9f 100644
  				const convId = cs.nextConversationId();
  				const terms = cs.makeTerminalManager(convId, cwd);
  				const rt = await createAgentSessionRuntime(cs.makeRuntimeFactory(terms, undefined, convId), {
-@@ -4923,6 +5034,134 @@ export class ClientSession {
+@@ -4923,6 +5029,134 @@ export class ClientSession {
  		return created.capability;
  	}
  
@@ -1214,7 +1209,7 @@ index 8a962a1..6fbca9f 100644
  	private makeRuntimeFactory(
  		terminals: TerminalManager,
  		apply?: SubagentTemplate,
-@@ -5048,10 +5287,13 @@ export class ClientSession {
+@@ -5048,10 +5282,13 @@ export class ClientSession {
  						return out;
  					},
  				});
@@ -1228,7 +1223,7 @@ index 8a962a1..6fbca9f 100644
  						...sandboxExtensionOptions(Boolean(sandboxIdentity) || Boolean(botExecution)),
  						systemPromptOverride: promptBase.systemPromptOverride,
  						appendSystemPromptOverride: promptBase.appendSystemPromptOverride,
-@@ -5188,7 +5430,7 @@ export class ClientSession {
+@@ -5188,7 +5425,7 @@ export class ClientSession {
  								factory: (pi) => {
  									pi.on(
  										"before_agent_start",
@@ -1237,7 +1232,7 @@ index 8a962a1..6fbca9f 100644
  											const { core, rewrap } = prepareBotExecutionSystemPrompt(event, botExecution);
  											if (apply) {
  												const tplPrompt = this.templatePrompt(apply).trim();
-@@ -5268,7 +5510,7 @@ export class ClientSession {
+@@ -5268,7 +5505,7 @@ export class ClientSession {
  												}
  											}
  											return undefined;
@@ -1246,7 +1241,7 @@ index 8a962a1..6fbca9f 100644
  									);
  								},
  							},
-@@ -5869,6 +6111,7 @@ export class ClientSession {
+@@ -5869,6 +6106,7 @@ export class ClientSession {
  		// issue #946：登记持有会话，让父链/执行身份解析走 O(1) 快路径（移除时 forget）。
  		registerConversationHome(conv, this);
  		this.restorePlan(conv);
@@ -1254,7 +1249,7 @@ index 8a962a1..6fbca9f 100644
  		return conv;
  	}
  
-@@ -5963,6 +6206,48 @@ export class ClientSession {
+@@ -5963,6 +6201,48 @@ export class ClientSession {
  		return out;
  	}
  
@@ -1303,7 +1298,7 @@ index 8a962a1..6fbca9f 100644
  	private restartInterruptedFiles = new Set<string>();
  
  	private danglingCauseFor(file: string | undefined): DanglingCause {
-@@ -6711,6 +6996,11 @@ export class ClientSession {
+@@ -6711,6 +6991,11 @@ export class ClientSession {
  	private onEvent(conv: Conversation, event: AgentSessionEvent): void {
  		conv.lastSdkEventAt = Date.now();
  		conv.stallNoticed = false;
@@ -1315,7 +1310,7 @@ index 8a962a1..6fbca9f 100644
  		switch (event.type) {
  			case "bash_execution_update": {
  				if (event.id) {
-@@ -6919,6 +7209,10 @@ export class ClientSession {
+@@ -6919,6 +7204,10 @@ export class ClientSession {
  				break;
  			}
  			case "agent_end": {
@@ -1326,7 +1321,7 @@ index 8a962a1..6fbca9f 100644
  				if (event.willRetry) {
  					let errorMessage = "";
  					for (let i = event.messages.length - 1; i >= 0; i--) {
-@@ -9455,11 +9749,11 @@ export class ClientSession {
+@@ -9455,11 +9744,11 @@ export class ClientSession {
  	 *  Silent + self-healing like the bulk restore above. Falls back to the
  	 *  GLOBAL default key when the project has no pin for this provider (new
  	 *  project following the global default model). */
@@ -1340,7 +1335,7 @@ index 8a962a1..6fbca9f 100644
  		if (projectPin) {
  			const cur = this.modelAdmin.getActiveKeyName(provider);
  			if (cur === projectPin) return;
-@@ -11438,9 +11732,37 @@ export class ClientSession {
+@@ -11438,9 +11727,37 @@ export class ClientSession {
  		return this.convs.size;
  	}
  
@@ -1379,7 +1374,7 @@ index 8a962a1..6fbca9f 100644
  		return n;
  	}
  
-@@ -11632,6 +11954,41 @@ export class ClientSession {
+@@ -11632,6 +11949,41 @@ export class ClientSession {
  		this.emit(msg);
  	}
  
@@ -1421,7 +1416,7 @@ index 8a962a1..6fbca9f 100644
  	async prompt(
  		text: string,
  		attachments?: PromptAttachment[],
-@@ -11639,6 +11996,13 @@ export class ClientSession {
+@@ -11639,6 +11991,13 @@ export class ClientSession {
  		targetConversation?: Conversation,
  		samplingOverrides?: import("./protocol.js").SamplingOverrides,
  	): Promise<void> {
@@ -1435,7 +1430,7 @@ index 8a962a1..6fbca9f 100644
  		// 私聊会话的能力挂在会话上（`conv.bot`）；无头设备任务才有客户端级能力。
  		(this.botOf(targetConversation?.id) ?? this.botExecution)?.assertActive();
  		const conv = targetConversation ?? this.conv;
-@@ -12874,9 +13238,9 @@ export class ClientSession {
+@@ -12874,9 +13233,9 @@ export class ClientSession {
  				() => {
  					if (ownFile && existsSync(ownFile)) {
  						assertSupportedTranscriptVersion(ownFile);
@@ -1447,7 +1442,7 @@ index 8a962a1..6fbca9f 100644
  				},
  				(m) =>
  					createAgentSessionRuntime(
-@@ -13025,7 +13389,7 @@ export class ClientSession {
+@@ -13025,7 +13384,7 @@ export class ClientSession {
  			const id = this.nextConversationId();
  			terminals = this.makeTerminalManager(id, targetCwd);
  			const sessionBaseDir = resolveWorkspaceSessionDir(this.stateStore?.dataDir, targetCwd);
@@ -1456,7 +1451,7 @@ index 8a962a1..6fbca9f 100644
  			runtime = await createAgentSessionRuntime(this.makeRuntimeFactory(terminals, undefined, id), {
  				cwd: sessionBaseDir,
  				agentDir: this.agentDir,
-@@ -13411,7 +13775,7 @@ export class ClientSession {
+@@ -13411,7 +13770,7 @@ export class ClientSession {
  				// Bot 私聊的转录落在 bot 自己的目录里：与普通会话历史分开，下次点这个 Bot 就回到这一份。
  				sessionManager = SessionManager.create(sessionBaseDir, botChatSessionDir(this.agentDir, botChat.bot.id));
  			} else {
@@ -1465,7 +1460,7 @@ index 8a962a1..6fbca9f 100644
  			}
  			if (botChat) this.pendingBotChat.set(conversationId, botChat.capability);
  			const runtime = await createAgentSessionRuntime(
-@@ -15027,16 +15391,14 @@ export class ClientSession {
+@@ -15027,16 +15386,14 @@ export class ClientSession {
  
  	async deleteSession(path: string): Promise<void> {
  		try {
@@ -1490,7 +1485,7 @@ index 8a962a1..6fbca9f 100644
  			const holdsTarget = (conv: Conversation): boolean => {
  				const file = conv.session.sessionFile;
  				return file !== undefined && resolve(file) === abs;
-@@ -15112,7 +15474,7 @@ export class ClientSession {
+@@ -15112,7 +15469,7 @@ export class ClientSession {
  				return;
  			}
  			if (existsSync(abs) && readFileSync(abs, "utf8").includes(NATIVE_CLI_ENTRY)) {
@@ -1499,7 +1494,7 @@ index 8a962a1..6fbca9f 100644
  				const config = readNativeCliConfig(manager);
  				if (config?.keepAlive) {
  					const header = manager.getHeader();
-@@ -15152,18 +15514,9 @@ export class ClientSession {
+@@ -15152,18 +15509,9 @@ export class ClientSession {
  		try {
  			const trimmed = (name ?? "").trim();
  			if (!trimmed) return;
@@ -1520,7 +1515,7 @@ index 8a962a1..6fbca9f 100644
  			mgr.appendSessionInfo(trimmed);
  			this.setConversationTitleForFile(abs, trimmed);
  			this.invalidateSessionInfos(abs);
-@@ -15340,7 +15693,7 @@ export class ClientSession {
+@@ -15340,7 +15688,7 @@ export class ClientSession {
  		try {
  			const cwd = conv.cwd || this.cwd;
  			const sessionBaseDir = resolveWorkspaceSessionDir(this.stateStore?.dataDir, cwd);
@@ -1529,7 +1524,7 @@ index 8a962a1..6fbca9f 100644
  			const sessionDir = sampleSm.getSessionDir();
  			if (!existsSync(sessionDir)) {
  				mkdirSync(sessionDir, { recursive: true });
-@@ -15850,17 +16203,7 @@ export class ClientSession {
+@@ -15850,17 +16198,7 @@ export class ClientSession {
  				}
  				path = resolved;
  			}
@@ -1548,7 +1543,7 @@ index 8a962a1..6fbca9f 100644
  
  			for (const conv of this.convs.values()) {
  				const sessionFile = conv.session.sessionFile;
-@@ -16220,7 +16563,7 @@ export class ClientSession {
+@@ -16220,7 +16558,7 @@ export class ClientSession {
  				forkedManager = SessionManager.open(forkedSessionPath, sessionDir);
  				calibrateSessionLeaf(forkedManager);
  			} else {
@@ -1557,7 +1552,7 @@ index 8a962a1..6fbca9f 100644
  				if (targetLeafId) {
  					const branch = targetConv.session.sessionManager.getBranch(targetLeafId);
  					for (const e of branch) {
-@@ -16631,7 +16974,7 @@ export class ClientSession {
+@@ -16631,7 +16969,7 @@ export class ClientSession {
  				void this.ensureProjectsCache(true).catch(() => {});
  			}
  			const recent = await this.stateStore.getRecentProjects(this.clientId);
@@ -1566,18 +1561,18 @@ index 8a962a1..6fbca9f 100644
  		} catch {
  			this.emit({ type: "projects", projects: this.withCurrentCwd([], now) });
  		}
-@@ -16930,6 +17273,10 @@ export class ClientSession {
+@@ -16930,6 +17268,10 @@ export class ClientSession {
  				}
  				sessionBaseDir = abs;
  			}
 +			if (!managedCwdAllowed(abs)) {
-+				throw new Error("工作目录必须位于 /workspace 内");
++				throw new Error("Directory is outside the managed project roots");
 +			}
-+			if (managedWorkspaceRoot()) abs = realpathSync(abs);
++			if (managedWorkspaceRoot()) sessionBaseDir = abs = managedDisplayPath(abs);
  			if (abs === this.cwd) {
  				this.emit({
  					type: "notice",
-@@ -16990,8 +17337,8 @@ export class ClientSession {
+@@ -16990,8 +17332,8 @@ export class ClientSession {
  				const opened = await this.openManagerAndRuntime(
  					() =>
  						resumeSkipped || !openRecent
@@ -1588,7 +1583,7 @@ index 8a962a1..6fbca9f 100644
  					(m) =>
  						createAgentSessionRuntime(this.makeRuntimeFactory(terminals, undefined, conversationId), {
  							cwd: sessionBaseDir,
-@@ -17480,6 +17827,10 @@ export class ClientSession {
+@@ -17480,6 +17822,10 @@ export class ClientSession {
  		return this.goalSvc.setGoalPrefs(opts, conv);
  	}
  
@@ -2547,7 +2542,7 @@ index 634fe38..9370f77 100644
  	{ name: "PI_WEB_ASYNC_SESSION_OPEN", scope: "internal" },
  	{ name: "PI_WEB_CLAUDE_PERMISSION_MODE", scope: "internal" },
 diff --git a/server/files-service.ts b/server/files-service.ts
-index 167d1ce..0c7dbf8 100644
+index 167d1ce..5b6d041 100644
 --- a/server/files-service.ts
 +++ b/server/files-service.ts
 @@ -3,7 +3,7 @@ import { saveFilePreservingMetadata } from "./file-save.js";
@@ -2563,7 +2558,7 @@ index 167d1ce..0c7dbf8 100644
  	resolveRemoteWorkspacePath,
  } from "./remote-ssh-service.js";
  import { launchShell, openArgv, revealArgv, type ShellName } from "./shell-activate.js";
-+import { isCanonicalPathWithinRoot, managedWorkspaceRoot, pathWithinRoot } from "./managed-workspace.js";
++import { managedCwdAllowed, managedProjectRoots, pathWithinRoot } from "./managed-workspace.js";
  
  export const IS_WIN32 = process.platform === "win32";
  
@@ -2571,9 +2566,9 @@ index 167d1ce..0c7dbf8 100644
  				expanded = resolve(this.host.getCwd(), expanded);
  			}
  			const abs = resolve(expanded);
-+			const managedRoot = managedWorkspaceRoot();
-+			if (managedRoot && (!pathWithinRoot(managedRoot, abs) || !await isCanonicalPathWithinRoot(managedRoot, dirname(abs)))) {
-+				throw new Error("工作目录必须位于 /workspace 内");
++			const roots = managedProjectRoots();
++			if (roots.length && (!roots.some(root => pathWithinRoot(root, abs)) || !managedCwdAllowed(dirname(abs)))) {
++				throw new Error("Directory is outside the managed project roots");
 +			}
  			await fs.mkdir(abs, { recursive: true });
  			this.host.emit({
@@ -2582,14 +2577,14 @@ index 167d1ce..0c7dbf8 100644
  			const home = homedir();
  			const isWin = IS_WIN32;
  			const rawInput = input.trim();
-+			const managedRoot = managedWorkspaceRoot();
++			const roots = managedProjectRoots();
  			if (rawInput === "") {
  				empty();
  				return;
  			}
  
  			if (rawInput === MACHINE_ROOT || rawInput === MACHINE_ROOT + "/") {
-+				if (managedRoot) {
++				if (roots.length) {
 +					empty();
 +					return;
 +				}
@@ -2598,7 +2593,7 @@ index 167d1ce..0c7dbf8 100644
  			}
  
  			if (isWin && /^[A-Za-z]:?$/.test(rawInput)) {
-+				if (managedRoot) {
++				if (roots.length) {
 +					empty();
 +					return;
 +				}
@@ -2609,7 +2604,7 @@ index 167d1ce..0c7dbf8 100644
  			const lastSlash = Math.max(expanded.lastIndexOf("/"), expanded.lastIndexOf("\\"));
  			const dirPart = lastSlash >= 0 ? expanded.slice(0, lastSlash + 1) : "";
  			const prefix = lastSlash >= 0 ? expanded.slice(lastSlash + 1) : expanded;
-+			if (managedRoot && (!pathWithinRoot(managedRoot, expanded) || !await isCanonicalPathWithinRoot(managedRoot, dirPart || expanded))) {
++			if (roots.length && (!roots.some(root => pathWithinRoot(root, expanded)) || !managedCwdAllowed(dirPart || expanded))) {
 +				empty();
 +				return;
 +			}
@@ -2877,7 +2872,7 @@ index 1aa0f55..c6cbd89 100644
  		goal.feedback = undefined;
  		goal.status = "";
 diff --git a/server/index.ts b/server/index.ts
-index 9c32a98..418ca12 100644
+index 9c32a98..2395ba2 100644
 --- a/server/index.ts
 +++ b/server/index.ts
 @@ -8,13 +8,17 @@
@@ -2915,23 +2910,21 @@ index 9c32a98..418ca12 100644
  	isClientMessageEnvelope,
  	isClientMessageWithinByteLimit,
  } from "./ws-pending-queue.js";
-+import { managedWorkspaceRoot } from "./managed-workspace.js";
++import { managedProjectRoots } from "./managed-workspace.js";
  import {
  	installPack,
  	isKnownPack,
-@@ -202,7 +207,10 @@ function cliFlag(name: string): string | undefined {
+@@ -202,7 +207,8 @@ function cliFlag(name: string): string | undefined {
  	return undefined;
  }
  
 -const CWD = resolve(cliFlag("--cwd") ?? process.env.PI_WEB_CWD ?? process.cwd());
-+// Managed runners expose the Mapache workspace only. Ignore stale client or
-+// command-line cwd values here; per-client project changes are checked again
-+// against the same canonical root in AgentService.
-+const CWD = resolve(managedWorkspaceRoot() ?? cliFlag("--cwd") ?? process.env.PI_WEB_CWD ?? process.cwd());
++// Use the runner-selected managed project root for a fresh client.
++const CWD = resolve(managedProjectRoots()[0] ?? cliFlag("--cwd") ?? process.env.PI_WEB_CWD ?? process.cwd());
  const DATA_DIR = resolve(cliFlag("--data-dir") ?? process.env.PI_WEB_DATA_DIR ?? join(homedir(), ".pi-web"));
  try {
  	mkdirSync(DATA_DIR, { recursive: true });
-@@ -289,7 +297,13 @@ function buildId(): string {
+@@ -289,7 +295,13 @@ function buildId(): string {
  	}
  	return buildIdCache;
  }
@@ -2946,7 +2939,7 @@ index 9c32a98..418ca12 100644
  
  const proxyInfo = initHttpProxy(getAgentDir());
  if (proxyInfo.active) {
-@@ -639,7 +653,8 @@ registerQuickAskRoutes(app, {
+@@ -639,7 +651,8 @@ registerQuickAskRoutes(app, {
  	},
  });
  
@@ -2956,7 +2949,7 @@ index 9c32a98..418ca12 100644
  let currentDefaultEngine: EngineId =
  	EXPLICIT_ENGINE_ARG === "codex"
  		? "codex"
-@@ -655,6 +670,7 @@ let currentDefaultEngine: EngineId =
+@@ -655,6 +668,7 @@ let currentDefaultEngine: EngineId =
  const clientEngines = new Map<string, EngineId>();
  
  function resolveClientEngine(clientId: string): EngineId {
@@ -2964,7 +2957,7 @@ index 9c32a98..418ca12 100644
  	const mem = clientEngines.get(clientId);
  	if (mem) return mem;
  	if (!EXPLICIT_ENGINE_ARG) {
-@@ -669,13 +685,13 @@ function resolveClientEngine(clientId: string): EngineId {
+@@ -669,13 +683,13 @@ function resolveClientEngine(clientId: string): EngineId {
  }
  
  function setClientEngine(clientId: string, engine: EngineId): void {
@@ -2979,7 +2972,7 @@ index 9c32a98..418ca12 100644
  const ORIGIN = launchOrigin();
  const SERVICE_INFO = toServiceInfo(ORIGIN);
  
-@@ -750,10 +766,36 @@ registerFileTransferRoutes(
+@@ -750,10 +764,36 @@ registerFileTransferRoutes(
  	(clientId) => (sharedStateStore.getSettingsSnapshot(clientId).folderUploadMaxMb ?? 32) * 1024 * 1024,
  );
  
@@ -3016,7 +3009,7 @@ index 9c32a98..418ca12 100644
  		piSdkCopies: sdkCopies(),
  		engine: currentDefaultEngine,
  		instanceName: process.env.PI_WEB_INSTANCE_NAME?.trim() || undefined,
-@@ -1573,7 +1615,14 @@ function ensureEngine(engine: EngineId): EngineService {
+@@ -1573,7 +1613,14 @@ function ensureEngine(engine: EngineId): EngineService {
  
  ensureEngine(currentDefaultEngine);
  
@@ -3032,7 +3025,7 @@ index 9c32a98..418ca12 100644
  	attach(clientId, send, sendShared) {
  		return ensureEngine(resolveClientEngine(clientId)).attach(clientId, send, sendShared);
  	},
-@@ -1612,9 +1661,10 @@ const service: EngineService = {
+@@ -1612,9 +1659,10 @@ const service: EngineService = {
  	isQuiesced() {
  		return sharedQuiesced || activeEngines().some((s) => s.isQuiesced());
  	},
@@ -3045,7 +3038,7 @@ index 9c32a98..418ca12 100644
  	},
  	unquiesce() {
  		sharedQuiesced = false;
-@@ -1639,6 +1689,8 @@ const service: EngineService = {
+@@ -1639,6 +1687,8 @@ const service: EngineService = {
  		return {
  			...base,
  			activeConversations: active,
@@ -3054,7 +3047,7 @@ index 9c32a98..418ca12 100644
  			pendingMessages: pending,
  		};
  	},
-@@ -2047,8 +2099,8 @@ const mcpProjects = new McpProjectRuntimeRegistry({
+@@ -2047,8 +2097,8 @@ const mcpProjects = new McpProjectRuntimeRegistry({
  	onNotice: (_cwd, level, text, textEn) => pushNoticeToAll(level, text, textEn),
  	log: (...a) => console.log("[mcp]", ...a),
  });
@@ -3065,7 +3058,7 @@ index 9c32a98..418ca12 100644
  wireEngineHooks = (svc: EngineService) => {
  	svc.onNotificationEvent = async (event) => {
  		const results = await Promise.allSettled([
-@@ -2071,7 +2123,7 @@ wireEngineHooks = (svc: EngineService) => {
+@@ -2071,7 +2121,7 @@ wireEngineHooks = (svc: EngineService) => {
  	svc.onRunEvent = (ev) => pluginMgr.emitRunEvent(ev);
  	svc.onConversationChanged = () => pluginMgr.emitConversationChanged();
  	svc.onClientModelChanged = (snap) => pluginMgr.emitClientModelChanged(snap);
@@ -3074,7 +3067,7 @@ index 9c32a98..418ca12 100644
  	svc.pluginCommandsProvider = () => pluginMgr.listCommands();
  	svc.pluginBgTasksProvider = () => pluginMgr.bgTasks();
  	svc.pluginStopBgTask = (taskId) => pluginMgr.stopPluginBgTask(taskId);
-@@ -2411,6 +2463,7 @@ wss.on("connection", (ws) => {
+@@ -2411,6 +2461,7 @@ wss.on("connection", (ws) => {
  	};
  
  	const handleSwitchEngine = async (msg: Extract<ClientMessage, { type: "switch_engine" }>): Promise<void> => {
@@ -3082,7 +3075,7 @@ index 9c32a98..418ca12 100644
  		const targetEngine: EngineId | null =
  			msg.engine === "codex"
  				? "codex"
-@@ -2810,7 +2863,7 @@ wss.on("connection", (ws) => {
+@@ -2810,7 +2861,7 @@ wss.on("connection", (ws) => {
  			}
  			return;
  		}
@@ -3091,7 +3084,7 @@ index 9c32a98..418ca12 100644
  		if (refusal) {
  			// 请求型消息必须回它自己的结果包（notice 只是附加提示），否则等待方永久 loading。
  			refuse(msg, { text: refusal, textEn: refusal, error: refusal }, send);
-@@ -3405,7 +3458,7 @@ if (!bootCatalogDisabled) {
+@@ -3405,7 +3456,7 @@ if (!bootCatalogDisabled) {
  }
  
  const stopControl = startControlServer({
@@ -3145,16 +3138,17 @@ index 0000000..596696a
 +}
 diff --git a/server/managed-workspace.ts b/server/managed-workspace.ts
 new file mode 100644
-index 0000000..80dbab1
+index 0000000..4db4faf
 --- /dev/null
 +++ b/server/managed-workspace.ts
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,57 @@
 +import { realpathSync } from "node:fs";
 +import { realpath } from "node:fs/promises";
++import { relative, join } from "node:path";
 +import { isInsideRoots } from "./path-boundary.js";
 +import { isManaged } from "./managed.js";
 +
-+/** The single workspace root exposed by a managed runner. */
++const MAPACHE_HOME = "/home/mapache";
 +export const MANAGED_WORKSPACE_ROOT = "/workspace";
 +
 +export function managedWorkspaceRoot(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -3181,6 +3175,29 @@ index 0000000..80dbab1
 +	} catch {
 +		return false;
 +	}
++}
++
++/** Only the runner-provisioned interactive home can become a second project root. */
++export function managedProjectRoots(env: NodeJS.ProcessEnv = process.env): string[] {
++	if (!isManaged(env)) return [];
++	return env.HOME === MAPACHE_HOME && env.PI_WEB_CWD === MAPACHE_HOME
++		? [MAPACHE_HOME, MANAGED_WORKSPACE_ROOT]
++		: [MANAGED_WORKSPACE_ROOT];
++}
++
++export function managedCwdAllowed(target: string): boolean {
++	const roots = managedProjectRoots();
++	return !roots.length || roots.some(root => isCanonicalPathWithinRootSync(root, target));
++}
++
++export function managedDisplayPath(target: string): string {
++	const canonical = realpathSync(target);
++	for (const root of managedProjectRoots()) {
++		if (isCanonicalPathWithinRootSync(root, canonical)) {
++			return join(root, relative(realpathSync(root), canonical));
++		}
++	}
++	throw new Error("Directory is outside the managed project roots");
 +}
 diff --git a/server/managed.ts b/server/managed.ts
 index 7cfcd19..c954659 100644
@@ -4223,10 +4240,10 @@ index 0000000..02cd1a7
 +});
 diff --git a/tests/unit/managed-workspace.test.ts b/tests/unit/managed-workspace.test.ts
 new file mode 100644
-index 0000000..cb79a15
+index 0000000..54a9731
 --- /dev/null
 +++ b/tests/unit/managed-workspace.test.ts
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,114 @@
 +import assert from "node:assert/strict";
 +import { mkdtemp, mkdir, rm, symlink } from "node:fs/promises";
 +import { tmpdir } from "node:os";
@@ -4236,10 +4253,19 @@ index 0000000..cb79a15
 +import {
 +  isCanonicalPathWithinRoot,
 +  isCanonicalPathWithinRootSync,
++  managedProjectRoots,
 +  pathWithinRoot,
 +} from "../../server/managed-workspace.js";
 +
 +describe("managed workspace", () => {
++  it("defaults interactive managed sessions to the provisioned home and keeps the worktree accessible", () => {
++    const env = { PI_WEB_MANAGED: "1", HOME: "/home/mapache", PI_WEB_CWD: "/home/mapache" };
++    assert.deepEqual(managedProjectRoots(env), ["/home/mapache", "/workspace"]);
++    assert.deepEqual(managedProjectRoots({ ...env, PI_WEB_CWD: "/automation-output/run" }), ["/workspace"]);
++    assert.deepEqual(managedProjectRoots({ ...env, HOME: "/root" }), ["/workspace"]);
++    assert.deepEqual(managedProjectRoots({ ...env, PI_WEB_MANAGED: "0" }), []);
++  });
++
 +  it("checks canonical paths and rejects symlink escapes", async () => {
 +    const root = await mkdtemp(join(tmpdir(), "pi-web-ui-managed-workspace-"));
 +    const workspace = join(root, "workspace");
