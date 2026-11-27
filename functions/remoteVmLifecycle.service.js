@@ -769,7 +769,7 @@ function normalizeObserved(value, descriptor) {
   const state = String(value.state || "unknown").toLowerCase();
   return {
     exists: value.exists !== false,
-    guestImageVersion: value.guestImageVersion === "ubuntu-24.04-v4" ? value.guestImageVersion : null,
+    guestImageVersion: /^ubuntu-24\.04-v[45]$/.test(String(value.guestImageVersion || "")) ? value.guestImageVersion : null,
     supportsResize: value.supportsResize === true,
     vcpus: value.vcpus ?? null,
     memoryMiB: value.memoryMiB ?? null,

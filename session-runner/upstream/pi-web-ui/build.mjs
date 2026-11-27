@@ -48,7 +48,9 @@ export function readManifest(manifestPath = MANIFEST_PATH) {
 	if (!manifest.piMcpAdapter?.package || !manifest.piMcpAdapter.version || !manifest.piMcpAdapter.integrity) {
 		fail("manifest is missing the managed MCP adapter compatibility contract");
 	}
-	if (!manifest.patches?.length) fail("manifest is missing integration patches");
+	if (!manifest.patches?.length && manifest.integrationProfile !== "remote-vm") {
+		fail("manifest is missing integration patches");
+	}
 	if (!manifest.build?.runtimeEntries?.length) fail("manifest is missing runtime entries");
 	return manifest;
 }
@@ -165,7 +167,9 @@ export function managedSourceFiles() {
 	return readdirSync(root, {recursive: true}).filter(name => lstatSync(join(root, name)).isFile()).sort();
 }
 
-export function installManagedSource(sourceDir) {
+
+export function installManagedSource(sourceDir, manifest = {}) {
+	if (manifest.includeManagedSource === false) return;
 	for (const name of managedSourceFiles()) {
 		const target = join(sourceDir, name);
 		mkdirSync(dirname(target), {recursive: true});
@@ -397,7 +401,7 @@ export async function buildUpstream(options = {}) {
 		}
 		const {sourceFiles} = verifySourceFiles(sourceDir, manifest, resolvedSource);
 		await applyPatches(sourceDir, manifest);
-		installManagedSource(sourceDir);
+		installManagedSource(sourceDir, manifest);
 		if (options.verifyOnly) {
 			return {
 				commit: resolvedSource.commit,

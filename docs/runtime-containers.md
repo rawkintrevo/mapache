@@ -868,18 +868,21 @@ JSONL history is captured and restored as storage state, but the runner does not
 tail it into a second Chat UI or inject prompts through a Mapache Chat socket.
 The only managed child is the upstream pi-web-ui process on the marked path.
 
-Remote-libvirt guests reuse the same managed process and health contract. The
-guest image sets `MAPACHE_RUNTIME_PROVIDER=remote-libvirt`, which selects the
+Remote-libvirt guests use the dedicated `session-runner/Dockerfile.remote-vm-runner`
+image and the versioned `scripts/remote-vm-guest/manifest.json` contract. The
+image sets `MAPACHE_RUNTIME_PROVIDER=remote-libvirt`, which selects the
 retained-disk path in `lib/config.js`, and passes a lifecycle-assigned
 `RUNNER_BIND_HOST` so the HTTP/WebSocket server listens only on the private
-libvirt interface. The image does not change the upstream child listener:
-pi-web-ui remains on loopback port 8787 and the canonical runner health route is
-`/runner/health`. Remote guests set capabilities to terminal-only in v1; Chrome,
-Preview, and Cloud Storage checkpoint loops are not part of this image.
-Building the guest image does not replace an existing Cloud Run revision; it is
-an additional versioned artifact consumed only by the remote-libvirt provider.
-Changes to the shared runner still require the normal `gcp-runner` rebuild and
-revision rollout described below.
+libvirt interface. The upstream pi-web-ui release is built without the GCP
+`managed-keel` integration patch. It still opens the existing pi-web-ui Agent
+surface and native terminal, starts the shared Chrome desktop, and uses the
+same loopback pi-web-ui listener and `/runner/health` route. Preview, browser
+QA, Cloud Storage checkpoint loops, and installation-skill seeding are disabled
+or absent from this image. The GCP automation MCP and Google Workspace MCP
+bundles are also excluded pending an explicit VM capability decision. Building
+the guest image does not replace an
+existing Cloud Run revision; it is an additional versioned artifact consumed
+only by the remote-libvirt provider.
 
 ## Managed gcp-runner runtime
 

@@ -24,6 +24,7 @@ test("invalid revisions fail closed", () => {
 
 test("compatibility tags use the supported runner key", () => {
   assert.equal(compatibilityRunnerTag("gcp-runner"), "gcp-runner");
+  assert.equal(compatibilityRunnerTag("remote-vm-runner"), "remote-vm-runner");
 });
 
 test("retired variants fail closed", () => {

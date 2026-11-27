@@ -44,14 +44,14 @@ key as the managed account. No private SSH key is installed on the host.
 
 ## Install the guest image
 
-Build the pinned `ubuntu-24.04-v4` image using the instructions in
+Build the pinned `ubuntu-24.04-v5` image using the instructions in
 [`scripts/remote-vm-guest/README.md`](../../scripts/remote-vm-guest/README.md),
 then use the install block below. The managed account and libvirt's QEMU
 user both need read access to the credential-free base image.
 
-Install v4 beside the earlier images. Reinstall the matching `install.py`,
+Install v5 beside the earlier images. Reinstall the matching `install.py`,
 `helper.py`, and `mapache_guest_config.py` from the same release before the
-readiness check; the helper selects v4 for new workspaces while retained
+readiness check; the helper selects v5 for new workspaces while retained
 disks continue to reference their original backing image. Do not overwrite or
 rebase an image that an existing QCOW2 overlay references.
 
@@ -62,14 +62,14 @@ the new base alongside existing versions, and finishes with the read-only readin
 
 ```bash
 set -e
-image="$PWD/ubuntu-24.04-v4.qcow2"
+image="$PWD/ubuntu-24.04-v5.qcow2"
 manifest="$image.manifest.json"
 expected="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["imageSha256"])' "$manifest")"
 observed="$(sha256sum "$image" | awk '{print $1}')"
 test "$expected" = "$observed"
-stage=$(sudo mktemp /var/lib/mapache-vm/images/.chrome-v4-XXXXXX)
+stage=$(sudo mktemp /var/lib/mapache-vm/images/.chrome-v5-XXXXXX)
 sudo install -o root -g root -m 0644 "$image" "$stage" &&
-  sudo ln "$stage" /var/lib/mapache-vm/images/ubuntu-24.04-v4.qcow2 || exit 1
+  sudo ln "$stage" /var/lib/mapache-vm/images/ubuntu-24.04-v5.qcow2 || exit 1
 sudo rm "$stage"
 sudo install -o root -g root -m 0755 helper.py /usr/local/libexec/mapache-vm-helper
 sudo install -o root -g root -m 0644 mapache_guest_config.py /usr/local/libexec/mapache_guest_config.py

@@ -52,6 +52,12 @@ const collisionMcp = runnerMcpConfig({
 });
 assert.equal(collisionMcp.mcpServers[AUTOMATION_MCP_SERVER_NAME].command, "user-server");
 assert.equal(collisionMcp.mcpServers[`${AUTOMATION_MCP_SERVER_NAME}-2`].command, "node");
+assert.deepStrictEqual(runnerMcpConfig({
+  automationMcpEnabled: false,
+  automationAgentSocketPath: "/tmp/automation.sock",
+  chromeEnabled: false,
+  mcpConfigRaw: "{}",
+}), {mcpServers: {}});
 
 assert.deepStrictEqual(piMcpConfig({
   mcpServers: {

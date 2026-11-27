@@ -72,7 +72,7 @@ test("remote-libvirt descriptors pin the guest identity and fixed v2 resources",
   });
   assert.equal(descriptor.guestName, remoteGuestName("workspace-1"));
   assert.equal(descriptor.dataDiskName, remoteDiskName("workspace-1"));
-  assert.equal(descriptor.guestImageVersion, "ubuntu-24.04-v2");
+  assert.equal(descriptor.guestImageVersion, "ubuntu-24.04-v5");
   assert.deepEqual(descriptor.guestResources, {
     vcpus: REMOTE_GUEST_VCPUS,
     memoryMiB: REMOTE_GUEST_MEMORY_MIB,

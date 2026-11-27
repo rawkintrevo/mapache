@@ -1,5 +1,5 @@
 const SUPPORTED_VARIANT = "gcp-runner";
-const STANDARD_VARIANTS = Object.freeze([SUPPORTED_VARIANT]);
+const STANDARD_VARIANTS = Object.freeze(["gcp-runner", "remote-vm-runner"]);
 const ALL_VARIANTS = STANDARD_VARIANTS;
 
 function normalizeFiles(files) {
@@ -7,7 +7,7 @@ function normalizeFiles(files) {
 }
 
 function imageVariantForFile(file) {
-  const match = file.match(/(?:Dockerfile|cloudbuild)\.(gcp-runner)(?:\.yaml)?$/);
+  const match = file.match(/(?:Dockerfile|cloudbuild)\.(gcp-runner|remote-vm-runner)(?:\.yaml)?$/);
   if (match) return match[1];
   return null;
 }
@@ -23,7 +23,11 @@ function affectedRunnerVariants(files, options = {}) {
   for (const file of runnerFiles) {
     const directVariant = imageVariantForFile(file);
     if (directVariant) affected.add(directVariant);
-    else affected.add(SUPPORTED_VARIANT);
+    else if (file.startsWith("session-runner/seeded-skills/")) affected.add("gcp-runner");
+    else {
+      affected.add("gcp-runner");
+      affected.add("remote-vm-runner");
+    }
   }
   return ALL_VARIANTS.filter((variant) => affected.has(variant));
 }

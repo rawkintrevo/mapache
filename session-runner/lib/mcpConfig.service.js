@@ -46,7 +46,7 @@ function mcpConfigPath(config = {}) {
 function runnerMcpConfig(config = {}) {
   const parsed = parseMcpConfig(config.mcpConfigRaw);
   const mcpServers = {...parsed.mcpServers};
-  if (config.automationAgentSocketPath) {
+  if (config.automationMcpEnabled !== false && config.automationAgentSocketPath) {
     const name = uniqueManagedServerName(mcpServers, AUTOMATION_MCP_SERVER_NAME);
     mcpServers[name] = {
       command: "node",

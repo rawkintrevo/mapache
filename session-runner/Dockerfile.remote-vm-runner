@@ -1,0 +1,98 @@
+FROM node:24-bookworm-slim AS vm-runner-base
+
+# The VM owns its filesystem and lifecycle. Keep this image limited to the
+# runtime needed by the retained-disk guest, pi-web-ui, and the shared Chrome
+# desktop. Cloud Run preview/QA helpers and installation-skill seeding are not
+# part of this image.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends bash ca-certificates chromium curl fd-find fonts-liberation git gzip novnc openbox openssh-client python3 make g++ ripgrep tar tint2 websockify wmctrl x11-utils x11vnc xvfb \
+  && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+  && ln -s /usr/bin/python3 /usr/local/bin/python \
+  && python --version \
+  && python3 --version \
+  && rm -rf /var/lib/apt/lists/*
+
+ARG MAPACHE_BUILD_RESOLUTION_KEY=local
+ARG MAPACHE_SKIP_UPSTREAM_TESTS=1
+
+RUN echo "Mapache VM runner build resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
+  && npm install --global --no-fund --no-audit @earendil-works/pi-coding-agent@1.6.0 \
+  && pi --version
+
+RUN pi install npm:pi-mcp-adapter@2.32.1
+RUN npm install -g chrome-devtools-mcp@1.6.0
+
+WORKDIR /app
+
+FROM vm-runner-base AS pi-web-ui-builder
+ARG MAPACHE_BUILD_RESOLUTION_KEY=local
+ARG MAPACHE_SKIP_UPSTREAM_TESTS=1
+COPY upstream ./upstream
+COPY pi-web-ui-build-inputs.json /app/pi-web-ui-build-inputs.json
+COPY pi-web-ui-cache.tar.gz /app/pi-web-ui-cache.tar.gz
+RUN echo "Mapache VM pi-web-ui resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
+  && if [ "${MAPACHE_SKIP_UPSTREAM_TESTS}" = "1" ]; then \
+    echo "Skipping upstream pi-web-ui tests for this fast VM image build"; \
+    MAPACHE_REQUIRE_ADAPTER_INSPECTION=1 node /app/upstream/pi-web-ui/build.mjs \
+      --skip-tests \
+      --manifest /app/upstream/pi-web-ui/manifest.remote-vm.json \
+      --output-dir /opt/mapache/pi-web-ui \
+      --build-inputs /app/pi-web-ui-build-inputs.json \
+      --cache-archive /app/pi-web-ui-cache.tar.gz; \
+  else \
+    apt-get update && apt-get install -y --no-install-recommends tini && \
+    MAPACHE_REQUIRE_ADAPTER_INSPECTION=1 tini -s -- node /app/upstream/pi-web-ui/build.mjs \
+      --manifest /app/upstream/pi-web-ui/manifest.remote-vm.json \
+      --output-dir /opt/mapache/pi-web-ui \
+      --build-inputs /app/pi-web-ui-build-inputs.json \
+      --cache-archive /app/pi-web-ui-cache.tar.gz; \
+  fi
+
+FROM vm-runner-base
+COPY package*.json ./
+RUN npm install --omit=dev
+COPY server.js ./
+COPY bin/check-chrome-runtime.js bin/chrome-smoke.js bin/mapache-chrome-status.js bin/mapache.js bin/mapache-gh bin/mapache-git-credential.js bin/patch-novnc-webutil.js ./bin/
+COPY lib ./lib
+COPY routes ./routes
+COPY --from=pi-web-ui-builder /opt/mapache/pi-web-ui /opt/mapache/pi-web-ui
+COPY chromium-policies.json /etc/chromium/policies/managed/mapache.json
+RUN node /app/lib/patchPiMcpAdapter.js \
+  && node /app/lib/patchPiModelCatalog.js /opt/mapache/pi-web-ui
+
+RUN chmod +x /app/bin/mapache.js /app/bin/check-chrome-runtime.js /app/bin/mapache-chrome-status.js /app/bin/chrome-smoke.js /app/bin/mapache-gh /app/bin/mapache-git-credential.js \
+  && ln -sf /app/bin/mapache.js /usr/local/bin/mapache \
+  && ln -sf /app/bin/mapache-chrome-status.js /usr/local/bin/mapache-chrome-status \
+  && ln -sf /app/bin/mapache-gh /usr/local/bin/mapache-gh \
+  && ln -sf /app/bin/mapache-git-credential.js /usr/local/bin/mapache-git-credential \
+  && node /app/bin/patch-novnc-webutil.js \
+  && node /app/bin/check-chrome-runtime.js \
+  && node /app/bin/chrome-smoke.js
+
+RUN mkdir -p /workspace /root/.pi /var/lib/mapache/chrome/profile
+ENV PORT=8080
+ENV HOME=/root
+ENV WORKSPACE_DIR=/workspace
+ENV PI_CODING_AGENT_DIR=/root/.pi/agent
+ENV TERMINAL_COMMAND=pi
+ENV TERMINAL_ARGS='["-c"]'
+ENV PI_WEB_MCP_ADAPTER_PATH=/root/.pi/agent/npm/node_modules/pi-mcp-adapter/index.ts
+ENV PREVIEW_ENABLED=false
+ENV MAPACHE_RUNTIME_PROVIDER=remote-libvirt
+ENV WORKSPACE_STORAGE_MODE=retained-disk
+ENV MAPACHE_RETAINED_DISK_ROOT=/var/lib/mapache/workspace
+ENV MAPACHE_AGENT_UI_VERSION=pi-web-ui-v1
+ENV MAPACHE_AUTOMATION_MCP_ENABLED=false
+ENV MAPACHE_PI_WEB_UI_ROOT=/opt/mapache/pi-web-ui
+ENV RUNNER_CAPABILITIES={"terminal":true,"preview":false,"previewQa":false,"functions":false,"chrome":true}
+ENV CHROME_PROFILE_DIR=/var/lib/mapache/chrome/profile
+ENV CHROME_DISPLAY=:99
+ENV CHROME_CDP_HOST=127.0.0.1
+ENV CHROME_CDP_PORT=9222
+ENV CHROME_VNC_HOST=127.0.0.1
+ENV CHROME_VNC_PORT=5900
+ENV CHROME_NOVNC_PORT=6080
+ENV NODE_PATH=/usr/local/lib/node_modules
+
+EXPOSE 8080
+CMD ["node", "server.js"]

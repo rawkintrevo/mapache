@@ -1,32 +1,42 @@
 # Versioned remote VM guest image
 
-`manifest.json` is the v4 guest contract for the remote-libvirt provider:
+`manifest.json` is the v5 guest contract for the remote-libvirt provider:
 Ubuntu 24.04 LTS (amd64), 2 vCPU, 8 GiB RAM, and one 40 GiB thin QCOW2 disk.
 The base image is a dated Ubuntu release artifact with a checked-in SHA-256;
 the builder refuses a changed or unverified base image.
 
-The guest payload is extracted from an immutable `gcp-runner` image. It reuses
-the repository's pinned pi-web-ui build (`pi-web-ui-v1`) and the session runner,
-including the native terminal protocol and the patched noVNC client. The image builder installs a checksum-pinned Google Chrome package and its desktop dependencies. The extraction command must receive a
+The guest payload is extracted from an immutable `remote-vm-runner` image. That
+image is built by `session-runner/Dockerfile.remote-vm-runner` and uses the
+upstream pi-web-ui release without the GCP `managed-keel` integration patch.
+It retains the native terminal protocol, pi-web-ui, connected Chrome, and the
+remote credential/runtime files. Installation-skill files are intentionally
+absent. The image builder installs a checksum-pinned Google Chrome package and
+its desktop dependencies. The extraction command must receive a
 content-addressed Docker image (`image@sha256:...`); a mutable tag is rejected.
 
-```bash
-scripts/remote-vm-guest/prepare-payload.sh \
-  us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:IMAGE_DIGEST \
-  /tmp/mapache-guest-payload
+Build the independent runtime image with the VM-specific Cloud Build
+configuration before preparing the QCOW2 payload:
 
-# Extract the same immutable payload and overlay the committed guest-only
-# repairs, recording source and per-file hashes in payload.json. The same
-# descriptor records the bootstrap and systemd files supplied to the image
-# builder.
-scripts/remote-vm-guest/prepare-repaired-payload.sh \
-  us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:IMAGE_DIGEST \
-  /tmp/mapache-repaired-guest-payload
+```bash
+gcloud builds submit session-runner \
+  --project pi-agents-cloud \
+  --config session-runner/cloudbuild.remote-vm-runner.yaml \
+  --substitutions=_IMAGE=us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:remote-vm-runner
+```
+
+Record the resulting image digest and use that immutable reference in the
+payload command below. The GCP runner image and its compatibility tag are not
+inputs to this build.
+
+```bash
+scripts/remote-vm-guest/prepare-repaired-vm-payload.sh \
+  us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner@sha256:VM_IMAGE_DIGEST \
+  /tmp/mapache-guest-payload
 
 scripts/remote-vm-guest/build-image.py \
   --base-image /var/tmp/ubuntu-24.04-server-cloudimg-amd64.img \
-  --payload /tmp/mapache-repaired-guest-payload \
-  --output /var/lib/mapache-vm/images/ubuntu-24.04-v4.qcow2
+  --payload /tmp/mapache-guest-payload \
+  --output /var/lib/mapache-vm/images/ubuntu-24.04-v5.qcow2
 ```
 
 The resulting image contains no owner, host, Firebase, model-provider, or SSH
@@ -55,8 +65,8 @@ host usage grows with writes. The builder records the base hash, upstream
 runtime digest, overlay source commit and file hashes, payload hash, output
 image checksum, virtual size, and image version in `<output>.manifest.json` for
 lifecycle and upgrade checks. Changing `imageVersion` affects new workspaces
-only. Keep existing backing images in place. Install v4 alongside v1 and v2
-and use an explicit later migration operation if one is ever approved.
+only. Keep existing backing images in place. Install v5 alongside earlier
+versions and use an explicit later migration operation if one is ever approved.
 
 Building requires `qemu-img`, `virt-customize`, a libvirt-capable host, and a
 guest with KVM access. A host without `/dev/kvm` can inspect or prepare an image

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 2,
+  "integrationProfile": "remote-vm",
+  "includeManagedSource": false,
+  "upstream": {
+    "repository": "https://github.com/xing-shuyin/pi-web-ui",
+    "releaseChannel": "stable",
+    "releaseApiUrl": "https://api.github.com/repos/xing-shuyin/pi-web-ui/releases/latest",
+    "commitApiUrl": "https://api.github.com/repos/xing-shuyin/pi-web-ui/commits/{tag}",
+    "packageName": "keel-agent",
+    "requiredFiles": ["package.json", "package-lock.json", "LICENSE"]
+  },
+  "piSdk": {
+    "package": "@earendil-works/pi-coding-agent",
+    "releaseChannel": "latest",
+    "version": "1.6.0"
+  },
+  "piMcpAdapter": {
+    "package": "pi-mcp-adapter",
+    "version": "2.32.1",
+    "integrity": "sha512-GNLYa2U9T5ZqIhZmhx/RTenEjfakJTelq/z6Q+At5SIxyuYvrvobriDEVsnx+lqetVDizUCudTWLfdZytQu0rg==",
+    "peerCompatibility": {
+      "@earendil-works/pi-ai": "^0.84.1",
+      "@earendil-works/pi-tui": "*",
+      "typebox": "*",
+      "zod": "^3.25.0 || ^4.0.0"
+    }
+  },
+  "build": {
+    "nodeMajor": 24,
+    "webBasePath": "/agent/",
+    "commands": [
+      "npm ci",
+      "npm install --no-save --package-lock=false --ignore-scripts <resolved-pi-sdk>",
+      "npm run typecheck",
+      "npm run build"
+    ],
+    "runtimeRoot": "/opt/mapache/pi-web-ui",
+    "runtimeEntries": [
+      "package.json", "package-lock.json", "LICENSE", "build-info.json", "bin", "dist",
+      "web/dist", "web/public", "themes", "extensions", "plugins/catalog.json",
+      "plugins/superagent", "plugin-sdk", "node_modules"
+    ]
+  },
+  "patches": []
+}

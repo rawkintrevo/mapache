@@ -21,8 +21,10 @@ GUEST_NETWORK_CIDR = "192.168.250.0/24"
 STORAGE_DIR = Path("/var/lib/mapache-vm")
 IMAGE_DIR = STORAGE_DIR / "images"
 DISK_DIR = STORAGE_DIR / "disks"
-IMAGE_VERSION = "ubuntu-24.04-v4"
+IMAGE_VERSION = "ubuntu-24.04-v5"
+LEGACY_IMAGE_VERSIONS = ("ubuntu-24.04-v4",)
 IMAGE_PATH = IMAGE_DIR / f"{IMAGE_VERSION}.qcow2"
+IMAGE_PATHS = {version: IMAGE_DIR / f"{version}.qcow2" for version in (IMAGE_VERSION, *LEGACY_IMAGE_VERSIONS)}
 DISK_SIZE = "40G"
 VCPUS = 2
 MEMORY_MIB = 8192
@@ -65,6 +67,13 @@ def parse_state(output):
     return "unknown"
 
 
+def image_version_for_path(path):
+    for version, image_path in IMAGE_PATHS.items():
+        if str(path) == str(image_path):
+            return version
+    return None
+
+
 def inspect_guest(guest_id, *, runner=subprocess.run):
     info = virsh_optional("dominfo", guest_id, runner=runner)
     if getattr(info, "returncode", 1) != 0:
@@ -90,14 +99,14 @@ def inspect_guest(guest_id, *, runner=subprocess.run):
                 source = disk.find("source")
                 backing = disk.find("backingStore/source")
                 if source is not None and source.get("file") == str(DISK_DIR / f"{guest_id}.qcow2"):
-                    headed_chrome = backing is not None and backing.get("file") == str(IMAGE_PATH)
+                    headed_chrome = backing is not None and image_version_for_path(backing.get("file"))
                     break
     cpu = re.search(r"^CPU\(s\):\s+(\d+)", info.stdout, re.MULTILINE)
     memory = re.search(r"^Max memory:\s+(\d+) KiB", info.stdout, re.MULTILINE)
     return {"version": VERSION, "network": NETWORK, "guestName": guest_id,
             "supportsResize": True, "vcpus": int(cpu[1]) if cpu else None,
             "memoryMiB": int(memory[1]) // 1024 if memory else None,
-            "guestImageVersion": IMAGE_VERSION if headed_chrome else None, "diskName": f"{guest_id}.qcow2", "exists": True, "supportsWorkspaceHostname": True,
+            "guestImageVersion": headed_chrome or None, "diskName": f"{guest_id}.qcow2", "exists": True, "supportsWorkspaceHostname": True,
             "state": state,
             "guestIp": ip_match.group(1) if ip_match else None, "autostart": autostart,
             "configurationId": config_id}
