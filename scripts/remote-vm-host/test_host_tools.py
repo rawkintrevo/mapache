@@ -213,6 +213,9 @@ class HostToolTests(unittest.TestCase):
         self.assertEqual(observed["state"], "running")
         self.assertFalse(observed["autostart"])
         self.assertEqual(observed["guestIp"], "192.168.250.42")
+        backing_image = helper.IMAGE_DIR / "ubuntu-24.04-v4.qcow2"
+        legacy_v4 = helper.handle(["inspect", "mapache-ws-abc123"], runner=runner)
+        self.assertEqual(legacy_v4["guestImageVersion"], "ubuntu-24.04-v4")
         backing_image = helper.IMAGE_DIR / "ubuntu-24.04-v2.qcow2"
         legacy = helper.handle(["inspect", "mapache-ws-abc123"], runner=runner)
         self.assertIsNone(legacy["guestImageVersion"])

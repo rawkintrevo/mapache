@@ -85,6 +85,8 @@ def validate_manifest(manifest: dict) -> None:
         raise BuildError("guest resources must remain 2 vCPU, 8 GiB, 40 GiB thin QCOW2")
 
     runtime = manifest.get("runtime") or {}
+    if runtime.get("source") != "session-runner/Dockerfile.remote-vm-runner" or runtime.get("sourceVariant") != "remote-vm-runner":
+        raise BuildError("guest runtime must use the dedicated remote-vm-runner image source")
     if runtime.get("agentUiVersion") != "pi-web-ui-v1" or runtime.get("healthPath") != "/runner/health":
         raise BuildError("guest must use the managed pi-web-ui v1 and /runner/health")
     if runtime.get("listenHost") != "private-guest-interface" or runtime.get("upstreamHost") != "127.0.0.1":
@@ -163,6 +165,8 @@ def validate_payload(payload: Path, manifest: dict) -> dict:
         source_image = descriptor.get("sourceImage")
         if source_image and not re.fullmatch(r".+@sha256:[0-9a-f]{64}", str(source_image)):
             raise BuildError("guest payload source image must be content-addressed")
+        if descriptor.get("sourceVariant") != manifest["runtime"]["sourceVariant"]:
+            raise BuildError("guest payload source variant does not match the image manifest")
         overlay = descriptor.get("guestOverlay")
         if overlay is not None:
             if not isinstance(overlay, dict) or overlay.get("schemaVersion") != 1:
@@ -220,6 +224,8 @@ def validate_payload(payload: Path, manifest: dict) -> dict:
     if descriptor:
         if descriptor.get("sourceImage"):
             result["sourceImage"] = descriptor["sourceImage"]
+        if descriptor.get("sourceVariant"):
+            result["sourceVariant"] = descriptor["sourceVariant"]
         if descriptor.get("guestOverlay"):
             result["guestOverlay"] = descriptor["guestOverlay"]
     return result

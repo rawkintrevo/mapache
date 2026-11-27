@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the gcp-runner compatibility tag as well as its immutable revision tag
+        description: Publish compatibility tags as well as immutable runner revision tags
         required: true
         default: false
         type: boolean
@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   detect:
-    name: Detect gcp-runner changes
+    name: Detect runner image changes
     runs-on: ubuntu-latest
     outputs:
       variants: ${{ steps.variants.outputs.variants }}
@@ -59,10 +59,14 @@ jobs:
           echo "variants=$json" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build gcp-runner
+    name: Build ${{ matrix.variant }}
     needs: detect
     if: needs.detect.outputs.variants != '[]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(needs.detect.outputs.variants) }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -82,10 +86,11 @@ jobs:
           PUBLISH: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true) }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          variant="${{ matrix.variant }}"
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            source_tag=$(node scripts/runner-image-release.mjs --variant=gcp-runner --pr="$PR_NUMBER" --sha="$GITHUB_SHA")
+            source_tag=$(node scripts/runner-image-release.mjs --variant="$variant" --pr="$PR_NUMBER" --sha="$GITHUB_SHA")
           else
-            source_tag=$(node scripts/runner-image-release.mjs --variant=gcp-runner --sha="$GITHUB_SHA")
+            source_tag=$(node scripts/runner-image-release.mjs --variant="$variant" --sha="$GITHUB_SHA")
           fi
           if [ "$EVENT_NAME" = "pull_request" ]; then
             skip_upstream_tests=1
@@ -95,7 +100,7 @@ jobs:
           image="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:${source_tag}"
           build_id=$(gcloud builds submit session-runner \
             --async \
-            --config session-runner/cloudbuild.gcp-runner.yaml \
+            --config "session-runner/cloudbuild.${variant}.yaml" \
             --format='value(id)' \
             --project pi-agents-cloud \
             --substitutions="_IMAGE=$image,_SKIP_UPSTREAM_TESTS=$skip_upstream_tests")
@@ -137,14 +142,14 @@ jobs:
           fi
           echo "image=$image digest=$digest source=$GITHUB_SHA build=$build_url"
           {
-            echo "### Runner image: gcp-runner"
+            echo "### Runner image: ${variant}"
             echo "- Cloud Build: $build_url"
             echo "- Image: \`$image\`"
             echo "- Digest: \`$digest\`"
             echo "- Source: \`$GITHUB_SHA\`"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$PUBLISH" = "true" ]; then
-            compatibility="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:$(node scripts/runner-image-release.mjs --variant=gcp-runner --compatibility=true)"
+            compatibility="us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:$(node scripts/runner-image-release.mjs --variant="$variant" --compatibility=true)"
             gcloud artifacts docker tags add "$image" "$compatibility" --project pi-agents-cloud
             echo "published compatibility tag=$compatibility"
           fi

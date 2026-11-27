@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "imageVersion": "ubuntu-24.04-v4",
+  "imageVersion": "ubuntu-24.04-v5",
   "distribution": {
     "id": "ubuntu",
     "version": "24.04",
@@ -21,7 +21,8 @@
     "thinProvisioned": true
   },
   "runtime": {
-    "source": "session-runner/Dockerfile.gcp-runner",
+    "source": "session-runner/Dockerfile.remote-vm-runner",
+    "sourceVariant": "remote-vm-runner",
     "agentUiVersion": "pi-web-ui-v1",
     "nodeMajor": 24,
     "listenHost": "private-guest-interface",

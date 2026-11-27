@@ -20,7 +20,9 @@ class GuestImageTests(unittest.TestCase):
         self.manifest = builder.load_manifest()
 
     def test_manifest_pins_guest_contract(self):
-        self.assertEqual(self.manifest["imageVersion"], "ubuntu-24.04-v4")
+        self.assertEqual(self.manifest["imageVersion"], "ubuntu-24.04-v5")
+        self.assertEqual(self.manifest["runtime"]["source"], "session-runner/Dockerfile.remote-vm-runner")
+        self.assertEqual(self.manifest["runtime"]["sourceVariant"], "remote-vm-runner")
         self.assertEqual(self.manifest["resources"], {
             "vcpus": 2,
             "memoryMiB": 8192,
@@ -77,6 +79,7 @@ class GuestImageTests(unittest.TestCase):
             (root / "payload.json").write_text(json.dumps({
                 "schemaVersion": 1,
                 "sourceImage": "registry.example/runner@sha256:" + "a" * 64,
+                "sourceVariant": "remote-vm-runner",
                 "runnerEntry": "session-runner/server.js",
                 "guestOverlay": {
                     "schemaVersion": 1,

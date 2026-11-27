@@ -1,8 +1,8 @@
-const SUPPORTED_VARIANT = "gcp-runner";
+const SUPPORTED_VARIANTS = new Set(["gcp-runner", "remote-vm-runner"]);
 
 function normalizeVariant(variant) {
   const cleanVariant = String(variant || "").trim();
-  if (cleanVariant !== SUPPORTED_VARIANT) throw new Error(`unsupported runner image variant: ${cleanVariant || "missing"}`);
+  if (!SUPPORTED_VARIANTS.has(cleanVariant)) throw new Error(`unsupported runner image variant: ${cleanVariant || "missing"}`);
   return cleanVariant;
 }
 
@@ -39,4 +39,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(tag);
 }
 
-export {SUPPORTED_VARIANT, compatibilityRunnerTag, immutableRunnerTag, normalizeSha, normalizeVariant, pullRequestRunnerTag};
+export {SUPPORTED_VARIANTS, compatibilityRunnerTag, immutableRunnerTag, normalizeSha, normalizeVariant, pullRequestRunnerTag};

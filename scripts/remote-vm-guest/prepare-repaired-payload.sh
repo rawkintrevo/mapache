@@ -5,13 +5,14 @@ set -euo pipefail
 # files that are deliberately shipped in the remote VM image. Keeping this
 # list explicit prevents a local checkout (or a future build-system change)
 # from accidentally becoming part of the guest artifact.
-if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 <runner-image@sha256:digest> <output-directory>" >&2
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  echo "Usage: $0 <runner-image@sha256:digest> <output-directory> [source-variant]" >&2
   exit 64
 fi
 
 image="$1"
 output="$2"
+source_variant="${3:-runner}"
 if [[ ! "${image}" =~ @sha256:[0-9a-fA-F]{64}$ ]]; then
   echo "runner image must be pinned by digest (image@sha256:<64 hex chars>)" >&2
   exit 64
@@ -62,7 +63,7 @@ for relative in "${overlay_files[@]}" "${guest_build_files[@]}"; do
 done
 source_commit="$(git -C "${repo_root}" rev-parse HEAD)"
 
-"${script_dir}/prepare-payload.sh" "${image}" "${output}"
+"${script_dir}/prepare-payload.sh" "${image}" "${output}" "${source_variant}"
 
 for relative in "${overlay_files[@]}"; do
   destination="${output}/${relative}"

@@ -176,6 +176,8 @@ function createConfig({workspaceGoogleApplicationCredentials = process.env.GOOGL
     startupSmoke: envFlag(process.env.MAPACHE_STARTUP_SMOKE),
     automationAgentApiUrl: normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_API_URL),
     automationAgentSocketPath,
+    automationMcpEnabled: !Object.prototype.hasOwnProperty.call(process.env, "MAPACHE_AUTOMATION_MCP_ENABLED") ||
+      envFlag(process.env.MAPACHE_AUTOMATION_MCP_ENABLED),
     automationAgentTokenUrl: normalizeEnvString(process.env.MAPACHE_AUTOMATION_AGENT_TOKEN_URL),
     automationRunId,
     automationOutputDir: isAutomationStorageMode(workspaceStorageMode) ? normalizeEnvString(process.env.MAPACHE_AUTOMATION_OUTPUT_DIR) : "",

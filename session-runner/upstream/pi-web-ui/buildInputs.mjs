@@ -2,7 +2,7 @@
 
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {dirname, join, resolve} from "node:path";
+import {basename, dirname, join, resolve} from "node:path";
 import {spawn} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {resolveLatestPackage, resolveStableRelease} from "./releaseResolver.mjs";
@@ -50,7 +50,7 @@ function readManifest(manifestPath) {
 	if (!manifest.piSdk?.package || manifest.piSdk.releaseChannel !== "latest") {
 		fail("manifest must resolve the embedded Pi SDK from the latest npm channel");
 	}
-	if (!manifest.patches?.length || !manifest.build?.runtimeEntries?.length) {
+	if ((!manifest.patches?.length && manifest.integrationProfile !== "remote-vm") || !manifest.build?.runtimeEntries?.length) {
 		fail("manifest is missing patches or runtime entries");
 	}
 	return manifest;
@@ -207,7 +207,7 @@ export async function resolveBuildInputs({
 			packageVersion: release.version,
 		})}\n`, "utf8");
 		await applyPatches(sourceDir, manifest, patchRoot);
-		installManagedSource(sourceDir);
+		installManagedSource(sourceDir, manifest);
 		const resolvedRelease = {...release, archiveSha256, sourceFiles: sourceFileHashes, resolvedAt: now};
 		const sdk = await resolveLatestPackage({packageName: manifest.piSdk.package, expectedVersion: manifest.piSdk.version, fetchImpl, now});
 		await run("npm", [
@@ -232,16 +232,19 @@ export async function resolveBuildInputs({
 			return fileDescriptor(relativePatch, patchPath);
 		});
 		const builderFiles = [
-			...managedSourceFiles().map(name => fileDescriptor("managed/" + name, join(HERE, "managed", name))),
+			...(manifest.includeManagedSource === false ? [] : managedSourceFiles().map(name => fileDescriptor("managed/" + name, join(HERE, "managed", name)))),
 			fileDescriptor("upstream/pi-web-ui/build.mjs", join(HERE, "build.mjs")),
 			fileDescriptor("upstream/pi-web-ui/buildInputs.mjs", join(HERE, "buildInputs.mjs")),
 			fileDescriptor("upstream/pi-web-ui/releaseResolver.mjs", join(HERE, "releaseResolver.mjs")),
 			fileDescriptor("upstream/pi-web-ui/artifactCache.mjs", join(HERE, "artifactCache.mjs")),
-			fileDescriptor("upstream/pi-web-ui/manifest.json", join(HERE, "manifest.json")),
+			fileDescriptor(`upstream/pi-web-ui/${basename(manifestPath)}`, manifestPath),
 			fileDescriptor("lib/patchPiMcpAdapter.js", join(HERE, "../../lib/patchPiMcpAdapter.js")),
 			fileDescriptor("lib/patchPiModelCatalog.js", join(HERE, "../../lib/patchPiModelCatalog.js")),
 			fileDescriptor("lib/piModelCatalogOverrides.json", join(HERE, "../../lib/piModelCatalogOverrides.json")),
-			fileDescriptor("Dockerfile.gcp-runner", join(HERE, "../../Dockerfile.gcp-runner")),
+			fileDescriptor(
+				manifest.integrationProfile === "remote-vm" ? "Dockerfile.remote-vm-runner" : "Dockerfile.gcp-runner",
+				join(HERE, "../../", manifest.integrationProfile === "remote-vm" ? "Dockerfile.remote-vm-runner" : "Dockerfile.gcp-runner"),
+			),
 		];
 		const identity = createBuildIdentity({
 			manifest,

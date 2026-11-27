@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 <runner-image@sha256:digest> <output-directory>" >&2
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  echo "Usage: $0 <runner-image@sha256:digest> <output-directory> [source-variant]" >&2
   exit 64
 fi
 
 image="$1"
 output="$2"
+source_variant="${3:-runner}"
+if [[ ! "${source_variant}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+  echo "source variant must be a simple identifier" >&2
+  exit 64
+fi
 if [[ ! "${image}" =~ @sha256:[0-9a-fA-F]{64}$ ]]; then
   echo "runner image must be pinned by digest (image@sha256:<64 hex chars>)" >&2
   exit 64
@@ -60,6 +65,7 @@ cat > "${output}/payload.json" <<EOF
 {
   "schemaVersion": 1,
   "sourceImage": "${image}",
+  "sourceVariant": "${source_variant}",
   "nodePath": "runtime/bin/node",
   "runnerEntry": "session-runner/server.js",
   "piWebUiRoot": "pi-web-ui",

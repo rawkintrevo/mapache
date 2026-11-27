@@ -141,9 +141,9 @@ isolated KVM canary, Chrome, Xvfb, x11vnc and Openbox together used about
 470 MiB of proportional memory with one local form open. This is an idle
 measurement. Browsing workload and tab count affect memory use.
 
-Install v4 beside earlier images and update the managed helper. On start,
+Install v5 beside earlier images and update the managed helper. On start,
 the helper inspects the running domain's actual QCOW2 backing image. Only
-a v4-backed guest receives a viewer URL. Earlier disks can continue using
+a v4- or v5-backed guest receives a viewer URL. Earlier disks can continue using
 pi-web-ui. Deploy the API, provisioning worker and remote operation reconciler
 together, plus Hosting for the viewer control. The SSH gateway needs no update.
 See [host setup](./guides/remote-vm-host-setup.md) for installation.
@@ -427,25 +427,26 @@ remote-operation workers together; existing Cloud Run runners do not need
 new revisions. Live guest boot and broker readiness remain the rollout gate.
 
 The checked-in `scripts/remote-vm-guest/manifest.json` defines guest image
-`ubuntu-24.04-v2`: Ubuntu 24.04 LTS amd64, 2 vCPU, 8192 MiB RAM, and a 40 GiB
+`ubuntu-24.04-v5`: Ubuntu 24.04 LTS amd64, 2 vCPU, 8192 MiB RAM, and a 40 GiB
 thin-provisioned QCOW2 disk. `build-image.py` verifies the dated Ubuntu cloud
 image SHA-256 before producing a standalone QCOW2, validates an immutable
-`gcp-runner` payload, and records a sidecar manifest with the base, upstream
-digest, guest overlay, payload and output hashes. `prepare-payload.sh` requires
-a content-addressed runner image; mutable tags are not accepted.
+`remote-vm-runner` payload, and records a sidecar manifest with the base,
+upstream digest, guest overlay, payload and output hashes. The VM packaging
+entry point requires a content-addressed `remote-vm-runner` image; mutable tags
+are not accepted.
 
-`prepare-repaired-payload.sh` is the v2 packaging entry point. It calls the
+`prepare-repaired-vm-payload.sh` is the v5 packaging entry point. It calls the
 immutable extraction command and overlays only the committed #682 guest files,
 recording their source commit and individual hashes in `payload.json`. No
-upstream runner release is rebuilt for this repair. v2 is installed alongside
-v1: the provider default is v2 for newly created workspaces, while existing v1
-descriptors and retained disks are never silently rebased.
+upstream runner release is rebuilt for this repair. v5 is installed alongside
+earlier versions: the provider default is v5 for newly created workspaces,
+while existing descriptors and retained disks are never silently rebased.
 
 The payload reuses the pinned `pi-web-ui-v1` runtime and session runner, so the
 guest has the existing pi-web-ui experience and native terminal protocol. The
 guest systemd unit binds the runner to the lifecycle-assigned
 `192.168.250.x` address, keeps pi-web-ui's upstream child on `127.0.0.1:8787`,
-and disables Chrome for v1. The bootstrap fails closed for a public/loopback
+and starts one connected Chrome desktop. The bootstrap fails closed for a public/loopback
 listener, an unexpected retained-disk root, an unsupported runtime version, or
 missing payload files. `/etc/mapache-vm/guest.env` is written only after guest
 creation; no owner, host, Firebase, model-provider, or SSH credentials are
