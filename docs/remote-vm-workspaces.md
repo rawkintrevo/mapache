@@ -124,7 +124,8 @@ host's SSH transport.
 ### Shared Chrome window
 
 The v4 image starts one sandboxed Chrome desktop alongside pi-web-ui. From
-pi-web-ui, select **Chrome** to watch the agent, type, click, or sign in.
+the upper-right workspace toolbar, select the Chrome icon with the up-right
+arrow to open that display in a new tab. From pi-web-ui, select **Chrome** to watch the agent, type, click, or sign in.
 **Open Chrome** opens the same display in a separate tab. Return to **Agent**
 to use the native terminal. Closing either viewer leaves Chrome running.
 The agent's managed `chrome-devtools` MCP server attaches to the same Chrome

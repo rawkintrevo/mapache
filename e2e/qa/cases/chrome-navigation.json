@@ -5,6 +5,9 @@
   "fixture": "/e2e/qa/fixtures/chrome-navigation.html",
   "artifactsDir": "artifacts/qa/chrome-navigation",
   "steps": [
+    {"assert": "Open the fixture with ?available and click Open remote Chrome in a new tab. Verify the new tab displays Shared Chrome viewer fixture and the original tab still displays the Agent frame. Close the new tab."},
+    {"capture": "screenshot", "fileName": "remote-chrome-launcher.png"},
+    {"assert": "Open the fixture without a query and verify the remote Chrome launcher is absent."},
     {"assert": "Open the fixture with ?available and click Chrome in the Agent frame. Verify Shared Chrome viewer fixture is visible in the Chrome frame."},
     {"capture": "screenshot", "fileName": "viewer.png"},
     {"assert": "Open with ?legacy&recover, select the Agent tab and click Chrome in the frame. Verify the viewer appears after the access refresh."},

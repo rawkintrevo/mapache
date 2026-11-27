@@ -88,6 +88,7 @@ export function AppShell(props) {
   return (
     <div className="app">
       <Topbar
+        browserUrl={access.accessUrls?.browserUrl}
         activeCanvas={activeCanvas}
         state={state}
         selectedSession={selectedSession}
