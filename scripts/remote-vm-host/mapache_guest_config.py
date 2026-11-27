@@ -86,6 +86,10 @@ def cloud_config(config):
     return "#cloud-config\n" + json.dumps({
         "ssh_pwauth": False,
         "write_files": [
+            file("/etc/sudoers.d/mapache-workspace", "mapache ALL=(root) NOPASSWD: ALL\n", "0440"),
+            # PrivateDevices and RestrictAddressFamilies also imply NoNewPrivileges for User=mapache.
+            file("/etc/systemd/system/mapache-guest.service.d/sudo.conf",
+                 "[Service]\nPrivateDevices=false\nRestrictAddressFamilies=\nNoNewPrivileges=false\n", "0644"),
             file("/etc/mapache-vm/guest.env", environment, "0600"),
             file("/usr/local/libexec/mapache-guest-network", NETWORK_SCRIPT, "0700"),
             file("/etc/systemd/system/mapache-guest-network.service", NETWORK_UNIT, "0644"),

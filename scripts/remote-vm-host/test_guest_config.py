@@ -41,6 +41,12 @@ class GuestConfigTests(unittest.TestCase):
     def test_seed_contains_only_scoped_configuration_and_boot_network_service(self):
         document = json.loads(cloud_config(configuration()).split("\n", 1)[1])
         files = {entry["path"]: entry for entry in document["write_files"]}
+        sudoers = files["/etc/sudoers.d/mapache-workspace"]
+        self.assertEqual((sudoers["owner"], sudoers["permissions"]), ("root:root", "0440"))
+        self.assertEqual(base64.b64decode(sudoers["content"]), b"mapache ALL=(root) NOPASSWD: ALL\n")
+        override = files["/etc/systemd/system/mapache-guest.service.d/sudo.conf"]
+        self.assertEqual(base64.b64decode(override["content"]).splitlines(),
+                         [b"[Service]", b"PrivateDevices=false", b"RestrictAddressFamilies=", b"NoNewPrivileges=false"])
         environment = files["/etc/mapache-vm/guest.env"]
         text = base64.b64decode(environment["content"]).decode()
         self.assertIn("PORT=8787\n", text)

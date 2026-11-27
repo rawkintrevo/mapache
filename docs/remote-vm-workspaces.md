@@ -78,6 +78,12 @@ QCOW2 disk sized at 2 vCPU, 8 GiB RAM, and 40 GiB. Sizing changes, disk growth,
 multiple hosts, backups, headed Chrome, and scheduled/idle runtime policies are
 follow-up work.
 
+The guest workspace account can use passwordless `sudo` to install packages.
+This grants guest root to both terminal commands and agent processes running as
+`mapache`. To roll out the change, update the host's installed
+`/usr/local/libexec/mapache_guest_config.py`, then stop and start the workspace
+through Mapache so cloud-init applies the new seed to its retained disk.
+
 The guest runs the existing pi-web-ui experience, including its native
 terminal. Mapache does not add a second terminal surface. Guest services have
 no public listener; browser traffic uses the authenticated gateway and the
