@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const path = require("node:path");
 const {execFileSync} = require("node:child_process");
-const {guestConfiguration, guestConfigurationId} = require("./remoteVmGuestConfig.helpers");
+const {guestConfiguration, guestConfigurationId, workspaceHostname} = require("./remoteVmGuestConfig.helpers");
 
 test("guest configuration excludes host keys and has the same identity in JS and Python", () => {
   const session = {ownerUid: "owner-1", browserAccessTokenSecret: "a".repeat(64), shutdownToken: "b".repeat(48),
@@ -17,4 +17,13 @@ test("guest configuration excludes host keys and has the same identity in JS and
     "import sys,json; sys.path.insert(0,sys.argv[1]); from mapache_guest_config import configuration_id; print(configuration_id(json.load(sys.stdin)))",
     path.resolve(__dirname, "../scripts/remote-vm-host")], {input: JSON.stringify(configuration), encoding: "utf8"}).trim();
   assert.equal(guestConfigurationId(configuration), pythonId);
+});
+
+test("workspace names become bounded single-label hostnames", () => {
+  assert.equal(workspaceHostname("Tower3-personal"), "tower3-personal");
+  assert.equal(workspaceHostname("  Team / Dev.Box  "), "team-dev-box");
+  assert.equal(workspaceHostname("x".repeat(62) + " workspace"), "x".repeat(62));
+  assert.equal(workspaceHostname("a".repeat(100)), "a".repeat(63));
+  assert.equal(workspaceHostname("🌲"), "");
+  assert.equal(workspaceHostname(undefined), "");
 });

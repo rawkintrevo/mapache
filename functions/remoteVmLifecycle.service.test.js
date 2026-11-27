@@ -73,7 +73,7 @@ function fixture() {
     ownerUid: "owner-1",
     hostId: "host-1",
   });
-  const workspace = {id: "workspace-1", ownerUid: "owner-1", runtimeProvider: descriptor};
+  const workspace = {id: "workspace-1", name: "Tower3-personal", ownerUid: "owner-1", runtimeProvider: descriptor};
   const session = {workspaceId: "workspace-1", ownerUid: "owner-1", runtimeProvider: descriptor, status: "provisioning",
     browserAccessTokenSecret: "a".repeat(64), shutdownToken: "b".repeat(48)};
   const host = {
@@ -93,17 +93,17 @@ async function seed(fixtureValue) {
       .collection("entries").doc("host-1").set(privateKey);
 }
 
-function fakeHost(behavior = {}) {
+function fakeHost(behavior = {}, supportsWorkspaceHostname) {
   const guests = new Map();
   const calls = [];
   const operation = async ({action, guest, configuration}) => {
     calls.push(action);
     if (behavior[action]) return behavior[action]({action, guest, guests, calls});
     const current = guests.get(guest.guestName) || {exists: false, state: "stopped"};
-    if (action === "inspect") return {...current, guestName: guest.guestName, diskName: guest.diskName};
+    if (action === "inspect") return {...current, supportsWorkspaceHostname, guestName: guest.guestName, diskName: guest.diskName};
     if (action === "create") {
       guests.set(guest.guestName, {exists: true, state: "stopped"});
-      return {exists: true, state: "stopped", guestName: guest.guestName, diskName: guest.diskName};
+      return {exists: true, state: "stopped", supportsWorkspaceHostname, guestName: guest.guestName, diskName: guest.diskName};
     }
     if (action === "start") {
       guests.set(guest.guestName, {...current, exists: true, state: "running", guestIp: "192.168.250.42"});
@@ -111,7 +111,7 @@ function fakeHost(behavior = {}) {
     }
     if (action === "configure") {
       assert.equal(current.state, "stopped");
-      guests.set(guest.guestName, {...current, configurationId: guestConfigurationId(configuration)});
+      guests.set(guest.guestName, {...current, hostname: configuration.WORKSPACE_HOSTNAME, configurationId: guestConfigurationId(configuration)});
       return {...guests.get(guest.guestName), guestName: guest.guestName, diskName: guest.diskName};
     }
     if (action === "stop") {
@@ -137,6 +137,7 @@ test("duplicate start requests converge on one retained guest and reservation", 
   assert.equal(first.state, "completed");
   assert.equal(second.state, "completed");
   assert.equal(host.guests.get(fixtureValue.descriptor.guestName).state, "running");
+  assert.equal(host.guests.get(fixtureValue.descriptor.guestName).hostname, undefined);
   assert.equal(host.calls.filter((action) => action === "start").length, 1);
   assert.equal(host.calls.filter((action) => action === "create").length, 1);
   assert.deepEqual(host.calls.slice(0, 4), ["inspect", "create", "configure", "start"]);
@@ -250,9 +251,10 @@ test("stop releases capacity and resume starts the same guest and disk", async (
   const fixtureValue = fixture();
   fixtureValue.session.status = "running";
   await seed(fixtureValue);
-  const host = fakeHost();
+  const host = fakeHost({}, true);
   const service = createRemoteVmLifecycleService({db: fixtureValue.db, hostOperation: host.operation});
   await service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "start-1"});
+  assert.equal(host.guests.get(fixtureValue.descriptor.guestName).hostname, "tower3-personal");
   const stopped = await service.stop({id: "session-1"}, fixtureValue.session, {idempotencyKey: "stop-1"});
   const stoppedSession = (await fixtureValue.db.collection("workspaces").doc("workspace-1")
       .collection("sessions").doc("session-1").get()).data();
@@ -260,7 +262,9 @@ test("stop releases capacity and resume starts the same guest and disk", async (
   assert.equal(stoppedSession.runtimeProvider.state, "stopped");
   assert.equal(stoppedSession.serviceUrl, null);
   assert.equal((await fixtureValue.db.collection("remoteHosts").doc("host-1").get()).data().remoteVmReservations.entries.length, 0);
+  await fixtureValue.db.collection("workspaces").doc("workspace-1").update({name: "Renamed workspace"});
   const resumed = await service.start(fixtureValue.workspace, {id: "session-1"}, fixtureValue.session, {idempotencyKey: "start-2"});
+  assert.equal(host.guests.get(fixtureValue.descriptor.guestName).hostname, "renamed-workspace");
   assert.equal(stopped.state, "completed");
   assert.equal(resumed.state, "completed");
   assert.equal(resumed.guestName, fixtureValue.descriptor.guestName);

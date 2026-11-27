@@ -32,7 +32,8 @@ class GuestConfigTests(unittest.TestCase):
                 self.assertEqual(environment.stat().st_mode & 0o777, 0o600)
 
     def test_rejects_extra_fields_shell_syntax_and_foreign_broker(self):
-        for changes in ({"HOST_PRIVATE_KEY": "no"}, {"OWNER_UID": "owner; id"},
+        for changes in ({"WORKSPACE_HOSTNAME": "Bad.name"}, {"WORKSPACE_HOSTNAME": "a" * 64},
+                        {"WORKSPACE_HOSTNAME": "-edge"}, {"HOST_PRIVATE_KEY": "no"}, {"OWNER_UID": "owner; id"},
                         {"SESSION_ID": "a\nPORT=22"}, {"MAPACHE_REMOTE_CREDENTIAL_BROKER_URL": "https://example.com"},
                         {"SESSION_SHUTDOWN_TOKEN": "short"}):
             with self.assertRaises(ValueError):
@@ -70,8 +71,11 @@ class GuestConfigTests(unittest.TestCase):
             self.assertIn(identity, json.loads(metadata)["instance-id"])
             with patch("subprocess.run", side_effect=AssertionError("seed was rebuilt")) as runner:
                 self.assertEqual(write_seed("mapache-ws-test", configuration(), directory, runner=runner), identity)
-            changed = {**configuration(), "SESSION_ID": "session-2"}
+            self.assertEqual(json.loads(metadata)["local-hostname"], "mapache-ws-test")
+            changed = {**configuration(), "WORKSPACE_HOSTNAME": "tower3-personal"}
             self.assertNotEqual(write_seed("mapache-ws-test", changed, directory), identity)
+            metadata = subprocess.check_output(["isoinfo", "-R", "-i", str(path), "-x", "/meta-data"], text=True)
+            self.assertEqual(json.loads(metadata)["local-hostname"], "tower3-personal")
 
 
 if __name__ == "__main__":
