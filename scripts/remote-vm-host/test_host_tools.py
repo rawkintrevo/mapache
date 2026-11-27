@@ -12,6 +12,7 @@ import os
 import shutil
 import io
 import json
+import xml.etree.ElementTree as ET
 from contextlib import ExitStack
 from functools import partial
 
@@ -69,6 +70,29 @@ class HostToolTests(unittest.TestCase):
             path.write_text(helper.guest_xml("mapache-ws-schema-check"))
             result = subprocess.run(["virt-xml-validate", str(path), "domain"], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_existing_guest_gets_host_cpu_passthrough_without_changing_disk(self):
+        guest_id = "mapache-ws-cpu-check"
+        domain = ET.fromstring(helper.guest_xml(guest_id))
+        domain.remove(domain.find("cpu"))
+        original_disk = domain.find("./devices/disk/source").get("file")
+        defined_xml = None
+
+        def virsh_result(action, *args, **kwargs):
+            nonlocal defined_xml
+            if action == "domstate":
+                return SimpleNamespace(stdout="shut off")
+            if action == "dumpxml":
+                return SimpleNamespace(stdout=ET.tostring(domain, encoding="unicode"))
+            if action == "define":
+                defined_xml = ET.fromstring(Path(args[0]).read_text())
+                return SimpleNamespace(stdout="")
+            raise AssertionError(f"unexpected virsh action {action}")
+
+        with patch.object(helper, "virsh", side_effect=virsh_result):
+            self.assertTrue(helper.ensure_host_cpu_passthrough(guest_id))
+        self.assertEqual(defined_xml.find("cpu").get("mode"), "host-passthrough")
+        self.assertEqual(defined_xml.find("./devices/disk/source").get("file"), original_disk)
 
     def test_status_checks_network_and_base_image_before_admitting_host(self):
         for active, readable, expected in [(False, True, False), (True, False, False), (True, True, True)]:
@@ -186,6 +210,7 @@ class HostToolTests(unittest.TestCase):
         self.assertIn("<name>mapache-ws-abc123</name>", xml)
         self.assertIn("/var/lib/mapache-vm/disks/mapache-ws-abc123.qcow2", xml)
         self.assertIn("<vcpu placement=\"static\">2</vcpu>", xml)
+        self.assertIn('<cpu mode="host-passthrough"/>', xml)
         with self.assertRaises(ValueError):
             helper.handle(["capacity", "mapache-ws-abc123"])
 

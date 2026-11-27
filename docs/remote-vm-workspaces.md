@@ -85,9 +85,12 @@ headroom. Saving changes leaves a running guest online. Stop it and then
 start it through Mapache to apply the new size. A stopped guest applies
 changes on its next start. Admission checks capacity again at start, freezes
 the requested size on the operation, and reserves it across offline retries.
-The helper redefines only CPU and memory in the inactive domain XML. The
-worker checks both values again after boot. The retained disk and VM identity
-survive the change.
+The helper redefines only CPU and memory in the inactive domain XML and uses
+libvirt `host-passthrough` CPU mode so supported host instructions such as
+`pclmulqdq` are available to the guest. The worker checks both resource values
+again after boot. The retained disk and VM identity survive the change. An
+updated helper reconciles this CPU mode on the next stop/start of an existing
+managed guest.
 
 Install the matching root-owned host helper before enabling custom sizes.
 Existing hosts with an older helper still support the default pair. Deploy
