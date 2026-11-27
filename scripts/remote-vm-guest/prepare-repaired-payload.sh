@@ -30,6 +30,11 @@ repo_root="$(cd -- "${script_dir}/../.." && pwd)"
 overlay_files=(
   "session-runner/server.js"
   "session-runner/lib/activity.js"
+  "session-runner/lib/remoteChromeAccess.js"
+  "session-runner/lib/webSocketUpgrade.js"
+  "session-runner/lib/chromeDesktop.js"
+  "session-runner/lib/runnerLifecycle.js"
+  "session-runner/lib/chromeProfileSnapshot.service.js"
   "session-runner/lib/runnerEnvironment.js"
   "session-runner/lib/piWebUiProcess.js"
   "session-runner/lib/piModelScope.service.js"
@@ -42,6 +47,7 @@ overlay_files=(
 guest_build_files=(
   "scripts/remote-vm-guest/mapache-guest-bootstrap.sh"
   "scripts/remote-vm-guest/mapache-guest.service"
+  "scripts/remote-vm-guest/install-chrome.sh"
 )
 for relative in "${overlay_files[@]}" "${guest_build_files[@]}"; do
   source_path="${repo_root}/${relative}"

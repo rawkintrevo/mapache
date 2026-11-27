@@ -26,7 +26,7 @@ scripts/remote-vm-guest/prepare-repaired-payload.sh \
 scripts/remote-vm-guest/build-image.py \
   --base-image /var/tmp/ubuntu-24.04-server-cloudimg-amd64.img \
   --payload /tmp/mapache-repaired-guest-payload \
-  --output /var/lib/mapache-vm/images/ubuntu-24.04-v2.qcow2
+  --output /var/lib/mapache-vm/images/ubuntu-24.04-v3.qcow2
 ```
 
 The resulting image contains no owner, host, Firebase, model-provider, or SSH

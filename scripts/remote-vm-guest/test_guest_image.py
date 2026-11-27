@@ -20,7 +20,7 @@ class GuestImageTests(unittest.TestCase):
         self.manifest = builder.load_manifest()
 
     def test_manifest_pins_guest_contract(self):
-        self.assertEqual(self.manifest["imageVersion"], "ubuntu-24.04-v2")
+        self.assertEqual(self.manifest["imageVersion"], "ubuntu-24.04-v3")
         self.assertEqual(self.manifest["resources"], {
             "vcpus": 2,
             "memoryMiB": 8192,

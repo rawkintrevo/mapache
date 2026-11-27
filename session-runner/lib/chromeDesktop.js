@@ -72,6 +72,7 @@ function createChromeDesktopService(config = {}, deps = {}) {
       startProcess("vnc", "x11vnc", [
         "-display", config.chromeDisplay,
         "-localhost",
+        ...(config.remoteGuestMode ? ["-no6"] : []),
         "-rfbport", String(config.chromeVncPort),
         "-forever",
         "-shared",

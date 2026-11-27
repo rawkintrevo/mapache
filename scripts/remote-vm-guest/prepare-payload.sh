@@ -43,6 +43,7 @@ if [[ -L "${output}/runtime/pi" ]]; then
 fi
 [[ -f "${output}/runtime/pi" ]] || { echo "pi launcher target is missing" >&2; exit 65; }
 docker cp "${container}:/root/.pi/agent/npm/node_modules/pi-mcp-adapter" "${output}/pi-mcp-adapter"
+docker cp -L "${container}:/usr/share/novnc" "${output}/novnc"
 docker cp "${container}:/app/." "${output}/session-runner/"
 docker cp "${container}:/opt/mapache/pi-web-ui/." "${output}/pi-web-ui/"
 # ssh2 ships private-key fixtures for its own test suite, not runtime use.

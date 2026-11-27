@@ -74,8 +74,10 @@ function createRunnerLifecycleCoordinator({
         lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       await piModelScope.restore();
-      const profileSeedRestore = await startupStep("chrome_seed_restore", () => chromeProfileSeed?.restore?.());
-      if (!profileSeedRestore?.restored) await startupStep("chrome_profile_restore", () => chromeProfile.restore());
+      if (!config.remoteGuestMode) {
+        const profileSeedRestore = await startupStep("chrome_seed_restore", () => chromeProfileSeed?.restore?.());
+        if (!profileSeedRestore?.restored) await startupStep("chrome_profile_restore", () => chromeProfile.restore());
+      }
       await browserEgress?.start();
       await startupStep("chrome_start", () => chromeRuntime.start());
       await activeHarness.materializeConfig();

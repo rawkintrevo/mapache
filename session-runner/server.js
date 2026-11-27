@@ -249,6 +249,14 @@ const runnerLifecycle = createRunnerLifecycleCoordinator({
   workspaceSync,
 });
 
+const {createRemoteChromeAccess} = require("./lib/remoteChromeAccess");
+const remoteChrome = createRemoteChromeAccess({config, agentAccess, workspaceAuthority});
+if (config.remoteGuestMode && config.chromeEnabled) {
+  app.use("/browser", (_req, res) => res.sendStatus(404));
+  app.use("/agent/chrome", remoteChrome.requireAccess, express.static("/opt/mapache/payload/novnc", {
+    fallthrough: false, redirect: false, index: false,
+  }));
+}
 app.use("/agent", agentGateway.handle);
 app.use(express.json());
 app.use(
@@ -319,11 +327,12 @@ browserWss.on("connection", (socket) => {
 
 server.on("upgrade", createWebSocketUpgradeRouter({
   agentWebSocket: agentWebSocket.handleUpgrade,
+  hasRemoteChromeAccess: remoteChrome.allowed,
   metricsWss: resourceMetricsSocket.server,
   shellWss,
   terminalWss: wss,
   browserWss,
-  hasBrowserAccess,
+  hasBrowserAccess: (req) => !config.remoteGuestMode && hasBrowserAccess(req),
   hasMetricsAccess: hasBrowserAccess,
   hasShellAccess: hasBrowserAccess,
 }));
