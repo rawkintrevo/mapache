@@ -115,7 +115,10 @@ generation and current broker admission. The existing relay rechecks authority
 on live sockets. Xvfb uses a Unix socket, and CDP and x11vnc use loopback.
 The profile lives at `/var/lib/mapache/workspace/browser/profile`. The
 retained disk preserves it across a stop/start. The v3 desktop runs inside
-the existing 2-vCPU, 8-GiB guest with Openbox and no taskbar.
+the existing 2-vCPU, 8-GiB guest with Openbox and no taskbar. In the #645
+isolated KVM canary, Chrome, Xvfb, x11vnc and Openbox together used about
+470 MiB of proportional memory with one local form open. This is an idle
+measurement. Browsing workload and tab count affect memory use.
 
 Install v3 beside earlier images and update the managed helper. On start,
 the helper inspects the running domain's actual QCOW2 backing image. Only

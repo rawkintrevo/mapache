@@ -4,9 +4,8 @@
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/remote-vm.shared-chrome",
   "parameters": {"workspaceName": ""},
-  "requires": {"chromeDevtools": true, "workspaceName": "A disposable signed-in owner's v3 workspace with a selected agent connection"},
+  "requires": {"chromeDevtools": true, "workspaceName": "Sign in as the registered host owner and select a disposable v3 workspace with a configured agent connection"},
   "steps": [
-    {"useCase": "cases/login.json"},
     {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "{{workspaceName}}"}},
     {"assert": "manual", "expected": "Have the agent use chrome-devtools to open a harmless local test form. Select Chrome in pi-web-ui and type a sentinel into that form. Have the agent read that sentinel from the same tab."},
     {"capture": "screenshot", "fileName": "shared-window.png"},
