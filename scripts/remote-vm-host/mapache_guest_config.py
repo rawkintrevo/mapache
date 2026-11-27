@@ -81,7 +81,11 @@ def configuration_id(config):
 
 def cloud_config(config):
     validate_config(config)
-    environment = "".join(f"{key}={config[key]}\n" for key in sorted(FIELDS)) + "PORT=8787\n"
+    # The guest runner owns the private 8080 listener.  Its embedded pi-web-ui
+    # process is the separate loopback upstream on 8787; leaking that upstream
+    # port into guest.env makes the runner bind the wrong socket and leaves the
+    # authenticated gateway unable to connect.
+    environment = "".join(f"{key}={config[key]}\n" for key in sorted(FIELDS)) + "PORT=8080\n"
     def file(path, content, permissions):
         return {"path": path, "content": base64.b64encode(content.encode()).decode(),
                 "encoding": "b64", "owner": "root:root", "permissions": permissions}

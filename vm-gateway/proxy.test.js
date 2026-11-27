@@ -46,7 +46,7 @@ async function fixture(t, resolveOverride) {
   const target = {
     transport: "ssh", sshAddress: "home.example.com", sshPort: 22, sshUsername: "mapache",
     hostKeyFingerprint: "SHA256/abcdefghijklmno", privateKey: "x".repeat(128),
-    guestAddress: "192.168.250.12", guestPort: 8787,
+    guestAddress: "192.168.250.12", guestPort: 8080,
     sessionId: "session", generation: 1, bootId: "boot", validUntil: Date.now() + 400,
   };
   const gateway = createGateway({
@@ -91,8 +91,8 @@ test("SSH relay streams HTTP and strips browser authority from the guest request
   assert.equal(response.status, 200);
   assert.deepEqual(JSON.parse(response.body), {
     url: "/agent/?x=1",
-    host: "192.168.250.12:8787",
-    origin: "http://192.168.250.12:8787",
+    host: "192.168.250.12:8080",
+    origin: "http://192.168.250.12:8080",
     cookie: "mapache_access=valid",
   });
   const body = Buffer.alloc(2 * 1024 * 1024, 123);
@@ -227,7 +227,7 @@ test("a changed boot closes an existing WebSocket without changing disk generati
 test("target validation rejects arbitrary forwarding and auth parsing removes the token", () => {
   const valid = {transport: "ssh", sshAddress: "home.example.com", sshPort: 22, sshUsername: "mapache",
     hostKeyFingerprint: "SHA256/abcdefghijklmno", privateKey: "x".repeat(128), guestAddress: "192.168.250.12",
-    guestPort: 8787, sessionId: "session", bootId: "boot", generation: 1, validUntil: Date.now() + 10000};
+    guestPort: 8080, sessionId: "session", bootId: "boot", generation: 1, validUntil: Date.now() + 10000};
   validateTarget(valid);
   for (const override of [{guestAddress: "169.254.169.254"}, {sshAddress: "127.0.0.1"}, {guestPort: 22}, {validUntil: Date.now() + 999999}]) {
     assert.throws(() => validateTarget({...valid, ...override}));

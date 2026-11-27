@@ -6,7 +6,9 @@ const {sshPrivateKey} = require("./remoteHost.connection");
 const {normalizeHostAddress, resolveAllowedAddresses} = require("./remoteHost.service");
 const {isRemoteLibvirtRuntime, normalizeRuntimeDescriptor} = require("./runtimeProvider.helpers");
 
-const DEFAULT_AGENT_PORT = 8787;
+// The guest runner is the authenticated gateway target on 8080. The embedded
+// pi-web-ui child remains a loopback-only upstream on 8787 inside the guest.
+const DEFAULT_AGENT_PORT = 8080;
 const ROUTE_TTL_MS = 10_000;
 const MAX_BODY_BYTES = 16 * 1024;
 const HOST_PATTERN = /^[a-z0-9][a-z0-9.-]{0,252}$/;

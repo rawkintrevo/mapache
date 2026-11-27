@@ -120,7 +120,7 @@ test("remote resolution is owner and generation fenced and returns only the SSH 
     hostKeyFingerprint: "SHA256/abcdEFGHijklmnop",
     privateKey: result.privateKey,
     guestAddress: "192.168.250.12",
-    guestPort: 8787,
+    guestPort: 8080,
     sessionId: "session-1",
     generation: 3,
     bootId: "boot-1",

@@ -58,7 +58,7 @@ async function startFixture(port = 0) {
       if (!guests.has(workspace) || input.token !== `fixture-${workspace}`) throw new Error("not_found");
       return {transport: "ssh", sshAddress: "fixture.example.com", sshPort: 22, sshUsername: "mapache",
         hostKeyFingerprint: "SHA256/fixture-key", privateKey: "x".repeat(128),
-        guestAddress: "192.168.250.12", guestPort: 8787, sessionId: workspace,
+        guestAddress: "192.168.250.12", guestPort: 8080, sessionId: workspace,
         generation: 1, bootId: "fixture-boot", validUntil: Date.now() + 10000};
     },
     transportFactory: async (target) => ({hostname: "127.0.0.1",
