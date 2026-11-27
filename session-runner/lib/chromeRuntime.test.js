@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const {EventEmitter} = require("node:events");
 const test = require("node:test");
-const {createChromeRuntime, probeTcpPort, sanitizeBrowserError} = require("./chromeRuntime");
+const {createChromeRuntime, isDesktopReady, probeTcpPort, sanitizeBrowserError} = require("./chromeRuntime");
 
 test("VNC TCP probes report a successful connection", async () => {
   const socket = new EventEmitter();
@@ -196,4 +196,13 @@ test("startup failures become actionable and do not expose profile arguments", a
   assert.equal(runtime.status().state, "failed");
   assert.doesNotMatch(runtime.status().error, /var\/lib\/mapache/);
   assert.equal(sanitizeBrowserError(new Error("--remote-debugging-port 9222")), "<redacted-argument>");
+});
+
+test("minimal desktop readiness still requires the window manager, browser, X server and VNC", () => {
+  const desktop = {state: "running", xvfb: true, windowManager: true, chromium: true, vnc: true, taskbar: false};
+  assert.equal(isDesktopReady(desktop, true), true);
+  assert.equal(isDesktopReady(desktop), false);
+  for (const name of ["xvfb", "windowManager", "chromium", "vnc"]) {
+    assert.equal(isDesktopReady({...desktop, [name]: false}, true), false);
+  }
 });
