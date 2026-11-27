@@ -491,7 +491,8 @@ function createPiWebUiProcess(config = {}, deps = {}) {
       HOME: config.workspaceProcessHome || config.homeDir || environment.HOME || "/root",
       PI_CODING_AGENT_DIR: config.piWebUiPiDir,
       PI_CODING_AGENT_SESSION_DIR: config.piWebUiSessionDir,
-      PI_WEB_CWD: config.automationOutputDir || config.workspaceDir,
+      PI_WEB_CWD: config.automationOutputDir ||
+        (config.runtimeKind !== "automation" && config.workspaceProcessHome) || config.workspaceDir,
       PI_WEB_DATA_DIR: config.piWebUiDataDir,
       PI_WEB_CONTROL_PATH: controlSocketPath(config),
       PI_WEB_ENGINE: "pi",

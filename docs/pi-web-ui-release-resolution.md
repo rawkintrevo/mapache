@@ -251,3 +251,18 @@ required for new sessions, while existing services retain their current image
 until restarted or recreated. No Cloud Functions deployment is required, but
 the published image digest and release/build descriptor must be recorded in
 the rollout note.
+
+## Keel runner integration
+
+Builds resolve the current stable release before checking the artifact cache.
+The upstream package is named `keel-agent`. Mapache-owned source modules and
+their tests live under `session-runner/upstream/pi-web-ui/managed/`; the
+builder copies them into the upstream tree and includes each file in the cache
+key. `patches/managed-keel.patch` connects those modules to the Keel session
+opener, HTTP server, control socket and embedded web UI. A new upstream file
+at the same path as an owned module causes a build error before compilation.
+
+GCP runners use the resulting runtime in their container. Remote libvirt VMs
+have a separately versioned guest image. Its payload builder extracts the web
+runtime from a selected runner image digest. Publishing a runner candidate
+does not update retained VM disks or install a new guest on a host.

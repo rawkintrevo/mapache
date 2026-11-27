@@ -267,7 +267,10 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     const health = await request(publicPort, `/runner/health?mapache_access=${encodeURIComponent(accessToken)}`);
     assert.equal(health.status, 200);
     assert.equal(health.body.agentRuntime.ready, true);
-    assert.equal(health.body.agentRuntime.health.build.upstreamCommit, "6a3a5e705f8084d2c9afee408b5c3dce9cf1e1c6");
+    const buildInfo = JSON.parse(execFileSync("docker", ["run", "--rm", "--entrypoint", "cat", IMAGE,
+      "/opt/mapache/pi-web-ui/build-info.json"], {encoding: "utf8"}));
+    assert.match(buildInfo.upstreamCommit, /^[0-9a-f]{40}$/);
+    assert.equal(health.body.agentRuntime.health.build.upstreamCommit, buildInfo.upstreamCommit);
     assert.equal((await request(publicPort, `/capabilities?mapache_access=${encodeURIComponent(accessToken)}`)).body.browser.state, "ready");
     assert.equal((await request(publicPort, `/preview/status?mapache_access=${encodeURIComponent(accessToken)}`)).body.ok, true);
     const bootstrap = await request(publicPort, `/agent/?mapache_access=${encodeURIComponent(accessToken)}`);

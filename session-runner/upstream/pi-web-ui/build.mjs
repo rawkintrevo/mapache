@@ -158,6 +158,21 @@ function verifySourceFiles(sourceDir, manifest, release) {
 	return {packageJson, sourceFiles};
 }
 
+// Mapache-owned modules are maintained as source files. Only edits to upstream
+// files need a patch. Refuse a collision if upstream introduces the same file.
+export function managedSourceFiles() {
+	const root = join(HERE, "managed");
+	return readdirSync(root, {recursive: true}).filter(name => lstatSync(join(root, name)).isFile()).sort();
+}
+
+export function installManagedSource(sourceDir) {
+	for (const name of managedSourceFiles()) {
+		const target = join(sourceDir, name);
+		mkdirSync(dirname(target), {recursive: true});
+		cpSync(join(HERE, "managed", name), target, {force: false, errorOnExist: true});
+	}
+}
+
 export async function applyPatches(sourceDir, manifest, patchRoot = PATCH_ROOT) {
 	for (const relativePatch of manifest.patches) {
 		const patchPath = join(patchRoot, relativePatch.replace(/^patches\//, ""));
@@ -382,6 +397,7 @@ export async function buildUpstream(options = {}) {
 		}
 		const {sourceFiles} = verifySourceFiles(sourceDir, manifest, resolvedSource);
 		await applyPatches(sourceDir, manifest);
+		installManagedSource(sourceDir);
 		if (options.verifyOnly) {
 			return {
 				commit: resolvedSource.commit,
