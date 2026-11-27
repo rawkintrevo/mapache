@@ -25,7 +25,7 @@ export interface ManagedRunResponse {
 	status?: string;
 	state?: AutomationRunState;
 }
-type Engine = Pick<CoreEngine, "attach" | "get" | "openManagedRun" | "isQuiesced" | "managedAdmission">;
+type Engine = Pick<CoreEngine, "attach" | "detach" | "get" | "openManagedRun" | "isQuiesced" | "managedAdmission">;
 type Entry = { state: AutomationRunState; handle?: ManagedRunHandle; cancellation?: Promise<void> };
 
 /** Run-id admission and outcome ownership; SDK execution remains in CoreEngine. */
@@ -35,6 +35,7 @@ export function createManagedRunController(options: {
 }) {
 	const requests = new Map<string, Entry>();
 	const automations = new Map<string, Entry>();
+	const sink = () => {};
 	const clients = new Map<string, Promise<unknown>>();
 	const response = (entry: Entry): ManagedRunResponse => ({
 		ok: true,
@@ -119,7 +120,7 @@ export function createManagedRunController(options: {
 		let flight = clients.get(clientId);
 		if (!flight && engine.get(clientId)) return;
 		if (!flight) {
-			flight = engine.attach(clientId, () => {}).finally(() => clients.delete(clientId));
+			flight = engine.attach(clientId, sink).finally(() => clients.delete(clientId));
 			clients.set(clientId, flight);
 		}
 		await flight;
@@ -137,6 +138,12 @@ export function createManagedRunController(options: {
 		const admitted = engine.managedAdmission();
 		if (engine.isQuiesced()) return { ok: false, error: "server_quiesced" };
 		const entry: Entry = { state: createAutomationRunState(runId) };
+		const clientId = unattended ? "plugin:mapache-automation" : "plugin:mapache-workspace-requests";
+		let attached = false;
+		let submitted = false;
+		const detachAutomation = () => {
+			if (unattended && attached) engine.detach(clientId, sink);
+		};
 		entries.set(runId, entry); // Reserve before any await so duplicate admission cannot dispatch twice.
 		try {
 			const catalog = await options.models();
@@ -150,8 +157,8 @@ export function createManagedRunController(options: {
 			} else if (!catalog.models?.some((model) => model.available)) throw new Error(`${prefix}_provider_auth_required`);
 			if (entry.state.terminal) return response(entry);
 			if (!admitted()) throw new Error("server_quiesced");
-			const clientId = unattended ? "plugin:mapache-automation" : "plugin:mapache-workspace-requests";
 			await ensureClient(engine, clientId);
+			attached = true;
 			if (entry.state.terminal) return response(entry);
 			if (!admitted()) throw new Error("server_quiesced");
 			entry.handle = await engine.openManagedRun(clientId, {
@@ -172,9 +179,10 @@ export function createManagedRunController(options: {
 				}
 				return response(entry);
 			}
+			submitted = true;
 			void entry.handle.submit(input.prompt).catch(() => {
 				reduce(entry, { type: "agent_end", result: "error", error: "managed_run_submit_failed" } as AutomationRunEvent);
-			});
+			}).finally(detachAutomation);
 			return response(entry);
 		} catch (error) {
 			if (entry.state.terminal) return response(entry);
@@ -189,6 +197,8 @@ export function createManagedRunController(options: {
 				finalError: allowed.test(code) ? code : `${prefix}_start_failed`,
 			};
 			return { ...response(entry), ok: false, error: entry.state.finalError! };
+		} finally {
+			if (!submitted) detachAutomation();
 		}
 	};
 	const status = (runId: string, unattended: boolean): ManagedRunResponse => {
@@ -205,6 +215,7 @@ export function createManagedRunController(options: {
 		if (entry.state.terminal === "canceled") {
 			try {
 				await stop(entry);
+				entry.handle?.release();
 			} catch {
 				return { ...response(entry), ok: false, error: "managed_run_cancel_failed" };
 			}

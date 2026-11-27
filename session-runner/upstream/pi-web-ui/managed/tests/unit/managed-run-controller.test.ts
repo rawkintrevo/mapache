@@ -13,6 +13,7 @@ function fixture() {
 		release: vi.fn(),
 	};
 	const engine = {
+		detach: vi.fn(),
 		attach: vi.fn(async () => ({}) as any),
 		get: vi.fn(() => undefined),
 		isQuiesced: () => false,

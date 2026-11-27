@@ -96,7 +96,7 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
   // Bind mounts must be visible to the Docker daemon, so keep this bounded
   // fixture directory in the checked-out runner tree and remove it in finally.
   const root = await fsp.mkdtemp(path.join(process.cwd(), ".mapache-pi-web-vertical-"));
-  const model = createLocalVerticalModelServer();
+  const model = createLocalVerticalModelServer({delayMs: 150});
   let processSupervisor;
   let gatewayServer;
   let socket;
@@ -288,12 +288,17 @@ test("runs the local pi-web vertical slice through the real image runtime and ga
     const firstConversationId = snapshot.state.conversationId;
     socket.send(JSON.stringify({type: "set_model", modelId: "fixture/fixture-model"}));
     await next(socket, (message) => isSnapshot(message) && message.state.model?.id === "fixture-model");
+    // Keel runs Goal execution and review in child conversations. Exercise the
+    // user's ordinary chat separately so its transcript is available to restore.
+    socket.send(JSON.stringify({type: "prompt", text: "Run the local vertical MCP and edit fixture."}));
+    const ordinaryChat = await next(socket, (message) => isSnapshot(message) &&
+      message.state.messages?.some((entry) => messageContentText(entry.content).includes("vertical model final")), 30_000);
     socket.send(JSON.stringify({type: "set_goal", goal: "Make the local vertical fixture pass", locked: false}));
     await next(socket, (message) => message.type === "goal_status" && message.status.goal === "Make the local vertical fixture pass");
     await next(socket, (message) => message.type === "goal_status" && message.status.verdict === "pass", 30_000);
-    snapshot = socket.verticalSnapshotState;
+    snapshot = ordinaryChat.state;
     assert(snapshot.messages.length > 0);
-    assert(socket.verticalMessageDeltaCount > 0, "the upstream must stream message deltas");
+    assert(socket.verticalPartialReplySeen, "the UI must receive assistant text before the completed reply");
     assert.equal(await fsp.readFile(path.join(workspaceDir, "edited.txt"), "utf8"), "after\n");
     const mcpResults = model.requests.flatMap((payload) => payload.messages || [])
         .filter((message) => message.role === "tool" &&
@@ -713,7 +718,7 @@ function openAgentSocket(port, token, origin) {
     socket.verticalMessages = [];
     socket.verticalWaiters = [];
     socket.verticalSnapshotState = null;
-    socket.verticalMessageDeltaCount = 0;
+    socket.verticalPartialReplySeen = false;
     socket.on("message", (raw) => {
       let message;
       try { message = JSON.parse(raw.toString()); } catch (error) { return; }
@@ -727,7 +732,10 @@ function openAgentSocket(port, token, origin) {
         socket.verticalSnapshotState = {...(previous || {}), ...(message.state || {}), messages};
         message = {...message, state: socket.verticalSnapshotState};
       }
-      if (message.type === "message_delta") socket.verticalMessageDeltaCount += 1;
+      const partialText = messageContentText(message.state?.streamingMessage?.content);
+      if (partialText && "vertical model final".startsWith(partialText) && partialText !== "vertical model final") {
+        socket.verticalPartialReplySeen = true;
+      }
       const waiter = socket.verticalWaiters.find((candidate) => candidate.predicate(message));
       if (waiter) {
         socket.verticalWaiters.splice(socket.verticalWaiters.indexOf(waiter), 1);

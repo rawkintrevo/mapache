@@ -1,3 +1,5 @@
+import type { ClientRuntime } from "./client-runtime.js";
+
 /** One deadline covers stop requests and verification, including hung adapters. */
 export async function drainManagedWriters(input: {
 	stop: readonly (() => void | Promise<unknown>)[];
@@ -23,4 +25,47 @@ export async function drainManagedWriters(input: {
 	};
 	try { return await Promise.race([drain().catch(() => false), timeout]); }
 	finally { expired = true; clearTimeout(timer); }
+}
+
+export class ManagedDrain {
+	since?: number;
+	private generation = 0;
+	private failed = false;
+	private flight?: Promise<{ ok: boolean; error?: string }>;
+
+	admission(): () => boolean {
+		const generation = this.generation;
+		return () => this.since === undefined && generation === this.generation;
+	}
+
+	info() {
+		return this.since === undefined ? { quiesced: false } : { quiesced: true, quiescedSince: this.since };
+	}
+
+	start(timeoutMs: number, pending: Set<Promise<unknown>>, runtimes: Iterable<ClientRuntime>,
+		recordInterrupted: () => void, idle: () => boolean) {
+		this.since ??= Date.now();
+		this.generation++;
+		this.flight ??= drainManagedWriters({
+			timeoutMs,
+			stop: [async () => {
+				await Promise.allSettled([...pending]);
+				recordInterrupted();
+				const results = await Promise.all(Array.from(runtimes, runtime => runtime.options.drainWriters?.(timeoutMs)));
+				if (results.some(ok => !ok)) throw new Error("runtime_drain_failed");
+			}],
+			isIdle: () => pending.size === 0 && idle(),
+		}).then(ok => {
+			this.failed ||= !ok;
+			return ok ? { ok } : { ok, error: "quiesce_timeout" };
+		}).finally(() => { this.flight = undefined; });
+		return this.flight;
+	}
+
+	resume(runtimes: Iterable<ClientRuntime>) {
+		if (this.flight) throw new Error("quiesce_in_progress");
+		if (this.failed) throw new Error("quiesce_failed_restart_required");
+		for (const runtime of runtimes) runtime.options.unquiesceWriters?.();
+		this.since = undefined;
+	}
 }
