@@ -343,6 +343,11 @@ The private hop uses HTTP, so its synthesized Origin uses HTTP as well; the
 resolver validates the public HTTPS origin before forwarding. Rejected upgrade
 responses close with a denial instead of leaving the browser handshake pending.
 
+For a workspace-scoped signed GET to `/runner/health`, the proxy validates
+the Hosting origin, resolves the signed workspace token, and forwards the
+request to the guest without a cookie bootstrap redirect. The response allows
+credentialed reads from that specific parent origin.
+
 Deploy the resolver with `firebase deploy --only functions:vmGatewayResolve_v2
 --project pi-agents-cloud`. Build and deploy `vm-gateway/Dockerfile` to the
 existing `mapache-vm-gateway-v2` service with
