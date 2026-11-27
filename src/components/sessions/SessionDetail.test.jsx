@@ -24,7 +24,7 @@ function renderDetail(overrides = {}, options = {}) {
   };
   return render(
       <SessionDetail
-        access={{accessUrls, error: "", refresh: vi.fn(), refreshAfterConnectionFailure: vi.fn()}}
+        access={{accessUrls, error: "", refresh: options.refresh || vi.fn(), refreshAfterConnectionFailure: vi.fn()}}
         isGithubWorkspace={false}
         isRemoteWorkspace={options.isRemoteWorkspace}
         metrics={{sample: null, connectionState: "connecting"}}
@@ -105,18 +105,27 @@ describe("SessionDetail Chrome workflow", () => {
     expect(screen.queryByRole("tab", {name: "Chrome"})).not.toBeInTheDocument();
   });
 
-  test.each([false, true])("opens shared remote Chrome only with signed viewer access (%s)", async (available) => {
-    const viewer = "https://gateway.example/workspaces/w/agent/chrome/vnc.html?mapache_access=test";
-    renderDetail({agentUiVersion: "pi-web-ui-v1"}, {isRemoteWorkspace: true, accessUrls: {
-      agentUrl: "https://gateway.example/workspaces/w/agent/?mapache_access=test",
-      browserUrl: available ? viewer : null,
-    }});
-    const frame = await screen.findByTitle("Agent Chrome smoke");
-    fireEvent(window, new MessageEvent("message", {source: frame.contentWindow, origin: "https://gateway.example",
-      data: {type: "mapache.agent.navigate", version: 1, surface: "chrome"}}));
-    if (available) expect(screen.getByTitle("Chrome Chrome smoke")).toHaveAttribute("src", viewer);
-    else expect(frame).toBeInTheDocument();
-    expect(screen.queryByRole("tab", {name: "Terminal"})).not.toBeInTheDocument();
+  describe.each([undefined, "pi-web-ui-v1"])("embedded Chrome navigation (%s)", (agentUiVersion) => {
+    test.each([false, true])("uses signed remote viewer access when available (%s)", async (available) => {
+      const viewer = "https://gateway.example/workspaces/w/agent/chrome/vnc.html?mapache_access=test";
+      const refresh = vi.fn();
+      renderDetail({agentUiVersion, capabilities: {chrome: false}}, {isRemoteWorkspace: true, refresh, accessUrls: {
+        agentUrl: "https://gateway.example/workspaces/w/agent/?mapache_access=test",
+        browserUrl: available ? viewer : null,
+      }});
+      if (!agentUiVersion) await userEvent.click(screen.getByRole("tab", {name: "Agent"}));
+      const frame = await screen.findByTitle("Agent Chrome smoke");
+      fireEvent(window, new MessageEvent("message", {source: frame.contentWindow, origin: "https://gateway.example",
+        data: {type: "mapache.agent.navigate", version: 1, surface: "chrome"}}));
+      if (available) {
+        expect(screen.getByTitle("Chrome Chrome smoke")).toHaveAttribute("src", viewer);
+        expect(refresh).not.toHaveBeenCalled();
+      } else {
+        expect(refresh).toHaveBeenCalledOnce();
+        expect(screen.getByText("Chrome access is unavailable for this session.")).toBeVisible();
+        expect(screen.queryByTitle("Chrome Chrome smoke")).not.toBeInTheDocument();
+      }
+    });
   });
 
   test("does not show Chat when capability or signed terminal access is absent", async () => {

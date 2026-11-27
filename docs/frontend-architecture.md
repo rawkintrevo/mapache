@@ -143,7 +143,10 @@ Logs are icon actions in the top navigation; Logs opens an owner-scoped modal wi
 runtime's Cloud Run entries and current recorded error. The managed upstream
 header places Chrome beside Chat, Terminal, and Git and uses the bounded
 postMessage bridge to ask `PiWebUiCanvas` to select the parent-owned persistent
-browser canvas. The managed header omits the upstream name/logo but retains
+browser canvas. In both managed and legacy layouts, SessionDetail opens the viewer URL
+returned by the access API even if the local session capability is stale. When
+the URL is missing, selecting Chrome refreshes access and BrowserCanvas shows
+the result. The managed header omits the upstream name/logo but retains
 release/version controls and the repository link. Embedded Settings also shows
 the upstream UI-plugin catalog and its add/install/update/remove controls in
 managed sessions. These exposed update controls are not yet a durable managed
