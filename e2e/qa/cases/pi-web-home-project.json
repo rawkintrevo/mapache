@@ -1,0 +1,16 @@
+{
+  "id": "pi-web-home-project",
+  "title": "Browse the managed home and create a project inside an existing home directory",
+  "baseUrl": "http://127.0.0.1:18716",
+  "artifactsDir": "artifacts/qa/pi-web-keel-home",
+  "prerequisites": [
+    "Start a disposable local managed pi-web-ui with the patched server, provisioned /home/mapache alias and an existing home directory named ExistingProject."
+  ],
+  "steps": [
+    {"assert": "A fresh client lists ExistingProject in Files."},
+    {"assert": "Open project starts at /home/mapache and lists ExistingProject. Enter that directory."},
+    {"capture": "home-project-picker.png"},
+    {"assert": "Create a project named NewProject and verify the selected directory is /home/mapache/ExistingProject/NewProject after reloading."},
+    {"capture": "home-project-created.png"}
+  ]
+}

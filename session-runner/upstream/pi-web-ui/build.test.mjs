@@ -13,10 +13,10 @@ function fixture() {
 
 function release(overrides = {}) {
 	return {
-		tag: "v0.122.0",
-		version: "0.122.0",
+		tag: "v9.8.7",
+		version: "9.8.7",
 		commit: "6a3a5e705f8084d2c9afee408b5c3dce9cf1e1c6",
-		archiveUrl: "https://github.com/xing-shuyin/pi-web-ui/archive/refs/tags/v0.122.0.tar.gz",
+		archiveUrl: "https://github.com/xing-shuyin/pi-web-ui/archive/refs/tags/v9.8.7.tar.gz",
 		...overrides,
 	};
 }
@@ -26,7 +26,7 @@ test("the manifest is a release policy rather than a manually pinned source", ()
 	assert.equal(manifest.schemaVersion, 2);
 	assert.equal(manifest.upstream.commit, undefined);
 	assert.equal(manifest.upstream.archiveSha256, undefined);
-	assert.equal(manifest.upstream.version, "0.122.0");
+	assert.equal(manifest.upstream.version, undefined);
 	assert.equal(manifest.piSdk.version, "1.6.0");
 	assert.equal(manifest.piSdk.releaseChannel, "latest");
 });
@@ -76,21 +76,4 @@ test("runtime copy rewrites absolute npm links to portable relative links", () =
 	const copiedLink = join(outputDir, "node_modules", ".bin", "demo");
 	assert.equal(lstatSync(copiedLink).isSymbolicLink(), true);
 	assert.equal(readlinkSync(copiedLink), "../demo/cli.js");
-});
-
-test("an incompatible resolved release fails before it can publish output", async () => {
-	const sourceDir = mkdtempSync(join(tmpdir(), "mapache-pi-web-ui-release-test-"));
-	const incompatible = release({
-		tag: "v0.123.0",
-		version: "0.123.0",
-		commit: "6142308d81a1c85bd7c1ec180955ba5331cc650e",
-	});
-	writeFileSync(join(sourceDir, ".mapache-source-commit"), `${JSON.stringify(incompatible)}\n`);
-	writeFileSync(join(sourceDir, "package.json"), JSON.stringify({name: "pi-web-ui", version: incompatible.version}));
-	writeFileSync(join(sourceDir, "package-lock.json"), "{}\n");
-	writeFileSync(join(sourceDir, "LICENSE"), "fixture\n");
-	await assert.rejects(
-		() => buildUpstream({sourceDir, verifyOnly: true, resolvedRelease: incompatible}),
-		/resolved upstream version mismatch/,
-	);
 });

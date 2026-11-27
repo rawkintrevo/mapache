@@ -92,6 +92,7 @@ test("starts one managed child, waits for local Pi health, and stops it", async 
     assert.equal(Buffer.byteLength(spawnCalls[0].options.env.PI_WEB_CONTROL_PATH) <= 100, true);
     assert.match(spawnCalls[0].options.env.PI_WEB_CONTROL_PATH, /^\/tmp\/mapache-ipc-/);
     assert.equal(spawnCalls[0].options.env.HOME, config.workspaceProcessHome);
+    assert.equal(spawnCalls[0].options.env.PI_WEB_CWD, config.workspaceProcessHome);
     assert.equal(spawnCalls[0].options.env.PI_WEB_HOST, "127.0.0.1");
     assert.equal(spawnCalls[0].options.env.PI_WEB_PORT, "8787");
     assert.equal(spawnCalls[0].options.env.PI_WEB_MANAGED, "1");

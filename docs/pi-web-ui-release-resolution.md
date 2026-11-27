@@ -5,84 +5,11 @@
 Issues #591 and #590 upgrade the embedded pi-web-ui and Pi coding-agent SDK while keeping
 the Mapache integration fail-closed on a known-compatible managed target.
 
-The build policy in
-session-runner/upstream/pi-web-ui/manifest.json records the managed targets
-pi-web-ui `0.122.0` and `@earendil-works/pi-coding-agent` `1.6.0`. The
-resolver still uses the GitHub stable-release and npm registry metadata
-endpoints, but it rejects a release or package that differs from those targets.
-build.mjs verifies the source package identity, applies the release-specific
-managed integration patch strictly, installs the exact SDK version, records the
-actual installed pi-ai metadata, and fails before producing a runtime directory
-when a compatibility check fails. There is no fallback to an older release.
-
-The current audit target is GitHub release
-v0.122.0 (https://github.com/xing-shuyin/pi-web-ui/releases/tag/v0.122.0),
-commit 6a3a5e705f8084d2c9afee408b5c3dce9cf1e1c6, with Pi SDK `1.6.0` and
-pi-ai `1.6.0`. A future stable release must either be intentionally selected in
-the manifest and accept the managed patch or fail the candidate image build
-until its integration is ported.
-
-## v0.122 compatibility port (#590)
-
-The active manifest applies `managed-v0122.patch`. It includes the retained
-v0.121 managed integration and archive-test compatibility changes; the earlier
-patch files remain historical and are not applied twice.
-
-Upstream moved `DispatchSession`, `EngineService`, and `TerminalManagerLike`
-from `server/index.ts` into `server/engine-service.ts`. The managed drain,
-active-tool accounting, and explicit goal-resume contracts now extend that
-owner. The daemon retains upstream's `implements EngineService` declaration.
-
-The port preserves upstream's stale-extension hook guard around the managed
-operating-reference injection, transcript-version validation alongside the
-managed workspace/session-root checks, shell-launch imports, and conversation
-counting. Goal material references remain part of the new upstream goal/wizard
-messages and are persisted/restored with paused goals; restore never starts
-review or wizard work. Existing managed credentials, automation, workspace
-request, MCP, and embedding restrictions remain in force. The new upstream
-plugin-catalog refusal test is adapted to Mapache's existing allow policy:
-it checks that catalog sync remains allowed and independently verifies the
-correlated failure-response shape when a catalog operation is refused. The
-operating-reference test now requires both the upstream stale-hook guard and
-the managed prompt wrapper. The cron rescheduling regression uses the existing
-`flushDisk` condition wait rather than a fixed 10 ms sleep, matching the other
-scheduler tests after upstream moved task-state persistence to asynchronous
-I/O; its running-state and next-fire assertions are unchanged.
-
-Managed workspace containment now delegates to upstream’s `isInsideRoots`,
-including symlink escapes through missing descendants. The desktop dependency
-list is regenerated after installing the resolved SDK (adding `semver` and
-`yallist`). The steer test waits for its abort callback to be installed before
-interrupting; two asynchronous-writer fixtures retry directory cleanup on
-`ENOTEMPTY`. No test assertions or build gates are disabled.
-
-The previous candidate failed before compilation because stable resolution
-returned 0.122.0 while the manifest expected 0.121.3. A direct application of
-the old patch rejected eight files. This port resolves those conflicts rather
-than relaxing version checks or accepting partial patch application.
-
-Runner source changes such as #595 remain separate: this compatibility branch
-unblocks their image build after integration. A successful candidate does not
-replace running services; existing sessions require a released image and a
-new revision. Keep the previously deployed digest for rollback.
-
-### Candidate verification
-
-Cloud Build `dd421d84-73e9-41a9-bb48-50d192b97a51` completed successfully
-in `pi-agents-cloud` with the normal typecheck, production build, and full
-upstream test gate: 1,264 files passed (one skipped), 14,566 tests passed
-(45 skipped). The authenticated `/agent/` smoke check returned 200 and loaded
-all referenced JavaScript bundles. Candidate image
-`us-central1-docker.pkg.dev/pi-agents-cloud/pi-agents/session-runner:gcp-runner-issue590-v0122`
-has digest `sha256:c2170998a9ff761089fd1c49c136026cf5bd66c08348438b12651c898699adb7`.
-The real-image local vertical slice also passes: streamed tool use, workspace
-editing, session history, auth renewal, quiesce/restart, and no automatic model
-execution after restore. Its fixture recognizes the upstream review marker,
-ignores stale session-list messages, waits for populated history snapshots,
-and aligns root-written private fixture files with the host snapshotter UID.
-Runner tests pass (463 passed, three opt-in tests skipped), as do lint and
-`npm run docs:check`.
-This build publishes a candidate only; it does not retarget production services.
+The builder selects the latest stable GitHub release on each new build.
+The manifest identifies the upstream repository and package. The resolved tag,
+commit, archive digest and package version identify the source in the build
+metadata and cache key. The Pi SDK and managed MCP adapter have separate
+dependency settings.
 
 ## Resolution contract
 
@@ -262,3 +189,20 @@ required for new sessions, while existing services retain their current image
 until restarted or recreated. No Cloud Functions deployment is required, but
 the published image digest and release/build descriptor must be recorded in
 the rollout note.
+
+## Keel runner integration
+
+Builds resolve the current stable release before checking the artifact cache.
+The upstream package is named `keel-agent`. Mapache-owned source modules and
+their tests live under `session-runner/upstream/pi-web-ui/managed/`; the
+builder copies them into the upstream tree and includes each file in the cache
+key. `patches/managed-keel.patch` connects those modules to the Keel session
+opener, HTTP server, control socket and embedded web UI. A new upstream file
+at the same path as an owned module causes a build error before compilation.
+
+GCP runners use the resulting runtime in their container. Remote libvirt VMs
+have a separately versioned guest image. Its payload builder extracts the web
+runtime from a selected runner image digest. Publishing a runner candidate
+does not update retained VM disks or install a new guest on a host.
+
+Release builds run the upstream suite under a child subreaper in the builder stage so detached process tests can verify that terminated child processes disappear.

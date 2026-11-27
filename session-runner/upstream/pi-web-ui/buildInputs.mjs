@@ -7,7 +7,7 @@ import {spawn} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {resolveLatestPackage, resolveStableRelease} from "./releaseResolver.mjs";
 import {CACHE_SCHEMA_VERSION, cacheIdentitySha256, sha256Buffer, sha256File} from "./artifactCache.mjs";
-import {applyPatches} from "./build.mjs";
+import {applyPatches, installManagedSource, managedSourceFiles} from "./build.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_OUTPUT = join(HERE, "../../pi-web-ui-build-inputs.json");
@@ -207,6 +207,7 @@ export async function resolveBuildInputs({
 			packageVersion: release.version,
 		})}\n`, "utf8");
 		await applyPatches(sourceDir, manifest, patchRoot);
+		installManagedSource(sourceDir);
 		const resolvedRelease = {...release, archiveSha256, sourceFiles: sourceFileHashes, resolvedAt: now};
 		const sdk = await resolveLatestPackage({packageName: manifest.piSdk.package, expectedVersion: manifest.piSdk.version, fetchImpl, now});
 		await run("npm", [
@@ -231,6 +232,7 @@ export async function resolveBuildInputs({
 			return fileDescriptor(relativePatch, patchPath);
 		});
 		const builderFiles = [
+			...managedSourceFiles().map(name => fileDescriptor("managed/" + name, join(HERE, "managed", name))),
 			fileDescriptor("upstream/pi-web-ui/build.mjs", join(HERE, "build.mjs")),
 			fileDescriptor("upstream/pi-web-ui/buildInputs.mjs", join(HERE, "buildInputs.mjs")),
 			fileDescriptor("upstream/pi-web-ui/releaseResolver.mjs", join(HERE, "releaseResolver.mjs")),

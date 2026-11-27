@@ -1,0 +1,3867 @@
+diff --git a/desktop/electron-builder.yml b/desktop/electron-builder.yml
+index a15f479..664e7d4 100644
+--- a/desktop/electron-builder.yml
++++ b/desktop/electron-builder.yml
+@@ -56,9 +56,11 @@ files:
+   - node_modules/ms/**
+   - node_modules/pend/**
+   - node_modules/sax/**
++  - node_modules/semver/**
+   - node_modules/tar/**
+   - node_modules/tiny-typed-emitter/**
+   - node_modules/universalify/**
++  - node_modules/yallist/**
+   - node_modules/yauzl/**
+   # <<< shell-deps
+ extraMetadata:
+diff --git a/locales/de.json b/locales/de.json
+index 9ccab93..a2eb144 100644
+--- a/locales/de.json
++++ b/locales/de.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "Geben Sie mindestens eine Modell-ID ein",
+ 		"goalBarTitle": "Ziel",
+ 		"goalBarPlaceholder": "Legen Sie ein Ziel fest, der Agent wird nach Abschluss automatisch überprüft…",
++		"goalBarResume": "Fortsetzen",
+ 		"goalBarClear": "Abbrechen",
+ 		"goalBarLocked": "Gesperrt: gilt für alle folgenden Runden",
+ 		"goalBarUnlocked": "Nur diese Runde (wird danach automatisch gelöscht)",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "Offizielles Plugin-Repository und Community-Marktplatz besuchen (GitHub)",
+ 		"pluginOfficialLink": "Offizieller Link",
+ 		"pluginOfficialLinkHint": "Plugin-Homepage oder Quellcode-Repository besuchen",
++		"credentialsManaged": "Anmeldedaten werden vom Mapache Authentication Center verwaltet. Provider-Verbindungen in Mapache aktualisieren.",
+ 		"updatesManaged": "Verwaltete Instanz: Updates und Plugin-Installationen übernimmt, wer sie bereitstellt",
+ 		"pluginCatalogAdd": "Plug-in hinzufügen",
+ 		"pluginCatalogAddHint": "Ein Drittanbieter-Plug-in in die installierbare Liste aufnehmen (owner/repo oder vollständige GitHub-Adresse)",
+diff --git a/locales/es.json b/locales/es.json
+index 2cf23c1..ebeba84 100644
+--- a/locales/es.json
++++ b/locales/es.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "Ingrese al menos un ID de modelo",
+ 		"goalBarTitle": "Objetivo",
+ 		"goalBarPlaceholder": "Defina un objetivo; el agente lo revisará automáticamente al completarlo…",
++		"goalBarResume": "Reanudar",
+ 		"goalBarClear": "Cancelar",
+ 		"goalBarLocked": "Bloqueado: se aplica a todos los turnos siguientes",
+ 		"goalBarUnlocked": "Solo este turno (se borra automáticamente al terminar)",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "Visitar el repositorio oficial de complementos y el mercado de la comunidad (GitHub)",
+ 		"pluginOfficialLink": "Enlace oficial",
+ 		"pluginOfficialLinkHint": "Visitar la página web del complemento o el repositorio de código",
++		"credentialsManaged": "Las credenciales las gestiona Mapache Authentication Center. Actualiza las conexiones de proveedores en Mapache.",
+ 		"updatesManaged": "Instancia gestionada: las actualizaciones y la instalación de plugins las hace quien la despliega",
+ 		"pluginCatalogAdd": "Añadir extensión",
+ 		"pluginCatalogAddHint": "Añada extensiones de terceros a la lista instalable (owner/repo o dirección completa de GitHub)",
+diff --git a/locales/fr.json b/locales/fr.json
+index f350cde..37fcff5 100644
+--- a/locales/fr.json
++++ b/locales/fr.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "Saisissez au moins un ID de modèle",
+ 		"goalBarTitle": "Objectif",
+ 		"goalBarPlaceholder": "Fixez un objectif, l'agent le fera relire automatiquement une fois accompli…",
++		"goalBarResume": "Reprendre",
+ 		"goalBarClear": "Annuler",
+ 		"goalBarLocked": "Verrouillé : appliqué à tous les tours suivants",
+ 		"goalBarUnlocked": "Tour actuel seul (effacé auto après modification)",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "Visiter le dépôt officiel des extensions et le marketplace communautaire (GitHub)",
+ 		"pluginOfficialLink": "Lien officiel",
+ 		"pluginOfficialLinkHint": "Visiter la page d'accueil ou le dépôt de l'extension",
++		"credentialsManaged": "Les identifiants sont gérés par Mapache Authentication Center. Modifiez les connexions des fournisseurs dans Mapache.",
+ 		"updatesManaged": "Instance gérée : les mises à jour et l'installation des plugins sont assurées par qui la déploie",
+ 		"pluginCatalogAdd": "Ajouter un plugin",
+ 		"pluginCatalogAddHint": "Ajoutez un plugin tiers à la liste installable (owner/repo ou adresse GitHub complète)",
+diff --git a/locales/it.json b/locales/it.json
+index f706374..8499b7a 100644
+--- a/locales/it.json
++++ b/locales/it.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "Inserisci almeno un ID modello",
+ 		"goalBarTitle": "Obiettivo",
+ 		"goalBarPlaceholder": "Fissa un obiettivo; l'output dell'agente viene revisionato automaticamente…",
++		"goalBarResume": "Riprendi",
+ 		"goalBarClear": "Annulla",
+ 		"goalBarLocked": "Bloccato: vale per ogni turno successivo",
+ 		"goalBarUnlocked": "Solo questo turno (cancellato dopo)",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "Visita il repository ufficiale dei plugin e il marketplace della community (GitHub)",
+ 		"pluginOfficialLink": "Link ufficiale",
+ 		"pluginOfficialLinkHint": "Visita la home page del plugin o il repository sorgente",
++		"credentialsManaged": "Le credenziali sono gestite da Mapache Authentication Center. Aggiorna le connessioni dei provider in Mapache.",
+ 		"updatesManaged": "Istanza gestita: aggiornamenti e installazione dei plugin li fa chi la mette in servizio",
+ 		"pluginCatalogAdd": "Aggiungi plugin",
+ 		"pluginCatalogAddHint": "Aggiungi un plugin di terze parti all'elenco installabile (owner/repo o URL GitHub completo)",
+diff --git a/locales/ja.json b/locales/ja.json
+index 50bcbbe..05564d6 100644
+--- a/locales/ja.json
++++ b/locales/ja.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "モデル ID を 1 つ以上入力してください",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "目標を設定すると、agent が完了後に自動レビューします…",
++		"goalBarResume": "再開",
+ 		"goalBarClear": "キャンセル",
+ 		"goalBarLocked": "固定：以降すべてのラウンドに適用します",
+ 		"goalBarUnlocked": "このラウンドのみ（変更後に自動クリア）",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "公式プラグインリポジトリとコミュニティマーケットプレイス（GitHub）を開く",
+ 		"pluginOfficialLink": "公式リンク",
+ 		"pluginOfficialLinkHint": "プラグインのホームページまたはソースリポジトリを開く",
++		"credentialsManaged": "認証情報は Mapache Authentication Center が管理します。プロバイダー接続は Mapache で更新してください。",
+ 		"updatesManaged": "管理されたインスタンス：更新とプラグインのインストールは展開した側が行います",
+ 		"pluginCatalogAdd": "プラグインを追加します",
+ 		"pluginCatalogAddHint": "サードパーティのプラグインをインストール可能なリストに追加します（owner/repo または完全なGitHubアドレス）",
+diff --git a/locales/ko.json b/locales/ko.json
+index 4786b74..efe6630 100644
+--- a/locales/ko.json
++++ b/locales/ko.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "모델 ID를 1개 이상 입력하세요",
+ 		"goalBarTitle": "목표",
+ 		"goalBarPlaceholder": "목표를 설정하세요. agent가 완료하면 자동으로 검토해요…",
++		"goalBarResume": "재개",
+ 		"goalBarClear": "취소",
+ 		"goalBarLocked": "고정: 이후 모든 라운드에 적용돼요",
+ 		"goalBarUnlocked": "이번 라운드에만 적용돼요 (수정 후 자동 해제돼요)",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "공식 플러그인 리포지토리 및 커뮤니티 마켓플레이스 방문 (GitHub)",
+ 		"pluginOfficialLink": "공식 링크",
+ 		"pluginOfficialLinkHint": "플러그인 홈페이지 또는 소스 리포지토리 방문",
++		"credentialsManaged": "자격 증명은 Mapache Authentication Center에서 관리합니다. Mapache에서 공급자 연결을 업데이트하세요.",
+ 		"updatesManaged": "관리형 인스턴스: 업데이트와 플러그인 설치는 배포한 쪽에서 처리합니다",
+ 		"pluginCatalogAdd": "plugin 추가하기",
+ 		"pluginCatalogAddHint": "서드파티 plugin을 설치 가능한 목록에 넣어요(owner/repo 또는 전체 GitHub 주소)",
+diff --git a/locales/pt.json b/locales/pt.json
+index db9353e..fe6167f 100644
+--- a/locales/pt.json
++++ b/locales/pt.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "Informe ao menos um ID de modelo",
+ 		"goalBarTitle": "Objetivo",
+ 		"goalBarPlaceholder": "Digite o objetivo a alcançar…",
++		"goalBarResume": "Retomar",
+ 		"goalBarClear": "Cancelar",
+ 		"goalBarLocked": "Travado: aplica a todas as rodadas seguintes",
+ 		"goalBarUnlocked": "Só esta rodada (limpa automaticamente ao terminar)",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "Visitar o repositório oficial de plugins e o mercado comunitário (GitHub)",
+ 		"pluginOfficialLink": "Link oficial",
+ 		"pluginOfficialLinkHint": "Visitar o site ou o repositório de código do plugin",
++		"credentialsManaged": "As credenciais são gerenciadas pelo Mapache Authentication Center. Atualize as conexões de provedores no Mapache.",
+ 		"updatesManaged": "Instância gerenciada: atualizações e instalação de plugins são feitas por quem a implanta",
+ 		"pluginCatalogAdd": "Adicionar plugin",
+ 		"pluginCatalogAddHint": "Inclua um plugin de terceiros na lista de instalação (owner/repo ou URL completa do GitHub)",
+diff --git a/locales/ru.json b/locales/ru.json
+index ce5de9a..bda88bd 100644
+--- a/locales/ru.json
++++ b/locales/ru.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "Укажите хотя бы один ID модели",
+ 		"goalBarTitle": "Цель",
+ 		"goalBarPlaceholder": "Задайте цель, агент автоматически проверит результат после выполнения…",
++		"goalBarResume": "Возобновить",
+ 		"goalBarClear": "Отменить",
+ 		"goalBarLocked": "Закреплено: применяется ко всем последующим ходам",
+ 		"goalBarUnlocked": "Только текущий ход (очищается автоматически)",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "Перейти в официальный репозиторий плагинов и каталог сообщества (GitHub)",
+ 		"pluginOfficialLink": "Официальная ссылка",
+ 		"pluginOfficialLinkHint": "Перейти на домашнюю страницу или в репозиторий плагина",
++		"credentialsManaged": "Учетные данные управляются Mapache Authentication Center. Обновляйте подключения провайдеров в Mapache.",
+ 		"updatesManaged": "Управляемый экземпляр: обновления и установку плагинов выполняет тот, кто его развёртывает",
+ 		"pluginCatalogAdd": "Добавить плагин",
+ 		"pluginCatalogAddHint": "Добавьте сторонний плагин в список доступных для установки (owner/repo или полный адрес GitHub)",
+diff --git a/locales/tr.json b/locales/tr.json
+index 80cc438..60b4583 100644
+--- a/locales/tr.json
++++ b/locales/tr.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "Önce en az bir model kimliği girin",
+ 		"goalBarTitle": "Hedef",
+ 		"goalBarPlaceholder": "Ulaşılacak hedefi girin…",
++		"goalBarResume": "Resume goal",
+ 		"goalBarClear": "İptal",
+ 		"goalBarLocked": "Kilitli: sonraki tüm turlara uygulanır",
+ 		"goalBarUnlocked": "Yalnızca bu tur (sonrasında temizlenir)",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "Resmî eklenti deposunu ve topluluk marketini ziyaret edin (GitHub)",
+ 		"pluginOfficialLink": "Resmî bağlantı",
+ 		"pluginOfficialLinkHint": "Eklentinin ana sayfasını veya kaynak deposunu ziyaret edin",
++		"credentialsManaged": "Provider credentials are managed in Mapache Authentication Center.",
+ 		"updatesManaged": "Bu örnek dağıtımı yapan tarafından yönetiliyor: güncellemeler ve eklenti kurulumları buradan yapılmaz",
+ 		"pluginCatalogAdd": "Eklenti ekle",
+ 		"pluginCatalogAddHint": "Üçüncü taraf bir eklentiyi kurulabilir listeye ekleyin (owner/repo veya tam GitHub adresi)",
+diff --git a/locales/zh-HK.json b/locales/zh-HK.json
+index 7b6aa16..61ef789 100644
+--- a/locales/zh-HK.json
++++ b/locales/zh-HK.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "先填寫至少一個模型 ID",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "輸入要達成的目標…",
++		"goalBarResume": "Resume goal",
+ 		"goalBarClear": "取消",
+ 		"goalBarLocked": "鎖定：應用到後續所有回合",
+ 		"goalBarUnlocked": "僅本回合（改完自動清除）",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "訪問官方插件倉庫與社區市場 (GitHub)",
+ 		"pluginOfficialLink": "官方鏈接",
+ 		"pluginOfficialLinkHint": "訪問插件主頁或源碼倉庫",
++		"credentialsManaged": "Provider credentials are managed in Mapache Authentication Center.",
+ 		"updatesManaged": "本實例由部署方管理：更新與插件安裝不在此進行",
+ 		"pluginCatalogAdd": "添加插件",
+ 		"pluginCatalogAddHint": "把第三方插件填進可安裝列表（owner/repo 或完整 GitHub 地址）",
+diff --git a/locales/zh-Hant.json b/locales/zh-Hant.json
+index d05e051..14af5bb 100644
+--- a/locales/zh-Hant.json
++++ b/locales/zh-Hant.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "先填寫至少一個模型 ID",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "輸入要達成的目標…",
++		"goalBarResume": "Resume goal",
+ 		"goalBarClear": "取消",
+ 		"goalBarLocked": "鎖定：應用到後續所有回合",
+ 		"goalBarUnlocked": "僅本回合（改完自動清除）",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "訪問官方插件倉庫與社區市場 (GitHub)",
+ 		"pluginOfficialLink": "官方鏈接",
+ 		"pluginOfficialLinkHint": "訪問插件主頁或源碼倉庫",
++		"credentialsManaged": "Provider credentials are managed in Mapache Authentication Center.",
+ 		"updatesManaged": "本實例由部署方管理：更新與插件安裝不在此進行",
+ 		"pluginCatalogAdd": "添加插件",
+ 		"pluginCatalogAddHint": "把第三方插件填進可安裝列表（owner/repo 或完整 GitHub 地址）",
+diff --git a/locales/zh-TW.json b/locales/zh-TW.json
+index a589122..d60e47d 100644
+--- a/locales/zh-TW.json
++++ b/locales/zh-TW.json
+@@ -1485,6 +1485,7 @@
+ 		"enrichModelsNeedIds": "先填寫至少一個模型 ID",
+ 		"goalBarTitle": "目標",
+ 		"goalBarPlaceholder": "輸入要達成的目標…",
++		"goalBarResume": "Resume goal",
+ 		"goalBarClear": "取消",
+ 		"goalBarLocked": "鎖定：應用程式到後續所有回合",
+ 		"goalBarUnlocked": "僅本回合（改完自動清除）",
+@@ -2282,6 +2283,7 @@
+ 		"pluginOfficialMarketHint": "前往官方外掛儲存庫與社群市集 (GitHub)",
+ 		"pluginOfficialLink": "官方連結",
+ 		"pluginOfficialLinkHint": "存取外掛主頁或原始碼儲存庫",
++		"credentialsManaged": "Provider credentials are managed in Mapache Authentication Center.",
+ 		"updatesManaged": "本執行個體由部署方管理：更新與外掛安裝不在此進行",
+ 		"pluginCatalogAdd": "新增外掛",
+ 		"pluginCatalogAddHint": "把第三方外掛填進可安裝列表（owner/repo 或完整 GitHub 位址）",
+diff --git a/packages/keel/src/adapters/sdk/session-opener.ts b/packages/keel/src/adapters/sdk/session-opener.ts
+index 5608190..0a079cc 100644
+--- a/packages/keel/src/adapters/sdk/session-opener.ts
++++ b/packages/keel/src/adapters/sdk/session-opener.ts
+@@ -1,3 +1,4 @@
++import { isManaged, managedMcpAdapterPath, withManagedReference } from "./managed-resources.js";
+ import { stat } from "node:fs/promises";
+ import { resolve } from "node:path";
+ import {
+@@ -50,6 +51,8 @@ export interface OpenSessionOptions {
+ }
+ 
+ export interface OpenedSession {
++	/** Assembly-owned project credential/model restoration; managed runs await it before explicit selection. */
++	ready?: Promise<void>;
+ 	session: TurnCapableSession;
+ 	sessionId: string;
+ 	sessionFile?: string;
+@@ -172,26 +175,37 @@ export async function openTurnSession(opts: OpenSessionOptions): Promise<OpenedS
+ 
+ 	let manager: SessionManager;
+ 	try {
+-		manager = await openSessionManager(cwd, sessionFile, opts.ephemeral, opts.sessionDir);
++		manager = await openSessionManager(cwd, sessionFile, opts.ephemeral, opts.sessionDir ?? process.env.PI_CODING_AGENT_SESSION_DIR);
+ 	} catch (error) {
+ 		throw new OpenSessionError("open-transcript", cwd, sessionFile, error);
+ 	}
+ 
+ 	let session: AgentSession;
+ 	try {
++		const adapter = managedMcpAdapterPath();
++		if (isManaged() && !adapter) throw new Error("managed_mcp_adapter_missing");
+ 		const services = await createAgentSessionServices({
+ 			cwd,
+ 			agentDir,
+ 			// 提示词覆写只走扩展（`before_agent_start`）：没给端口就一个扩展都不加，提示词维持 SDK 默认。
+-			...(opts.promptRender
+-				? { resourceLoaderOptions: { extensionFactories: [createPromptRenderExtension(opts.promptRender)] } }
+-				: {}),
++			...(adapter || opts.promptRender ? { resourceLoaderOptions: {
++				additionalExtensionPaths: adapter ? [adapter] : undefined,
++				extensionFactories: [
++					...(opts.promptRender ? [createPromptRenderExtension(opts.promptRender)] : []),
++					...(adapter ? [{
++						name: "mapache-operating-reference",
++						factory: (pi: import("@earendil-works/pi-coding-agent").ExtensionAPI) => {
++							pi.on("before_agent_start", withManagedReference(() => undefined));
++						},
++					}] : []),
++				],
++			} } : {}),
+ 		});
+ 		session = (
+ 			await createAgentSessionFromServices({
+ 				services,
+ 				sessionManager: manager,
+-				...(opts.tools ? { tools: [...opts.tools] } : {}),
++				...(opts.tools ? { tools: adapter ? [...opts.tools, "mcp"] : [...opts.tools] } : {}),
+ 				...(opts.customTools ? { customTools: [...opts.customTools] as ToolDefinition[] } : {}),
+ 			})
+ 		).session;
+diff --git a/packages/keel/src/adapters/sdk/session-persist.ts b/packages/keel/src/adapters/sdk/session-persist.ts
+index d6a4ddf..f3400d6 100644
+--- a/packages/keel/src/adapters/sdk/session-persist.ts
++++ b/packages/keel/src/adapters/sdk/session-persist.ts
+@@ -58,7 +58,7 @@ export interface PersistSessionFileInput {
+ export async function persistSessionFile(input: PersistSessionFileInput): Promise<string> {
+ 	const manager = managerOf(input.session);
+ 	if (!manager) throw new Error("这个会话没有 SDK sessionManager，无法落盘（fail-closed）");
+-	const sessionDir = SessionManager.create(input.sessionBaseDir).getSessionDir();
++	const sessionDir = sessionDirOfBase(input.sessionBaseDir);
+ 	if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
+ 
+ 	const timestamp = new Date().toISOString();
+@@ -86,5 +86,5 @@ export async function persistSessionFile(input: PersistSessionFileInput): Promis
+  * （`SessionManager.create(sessionBaseDir).getSessionDir()`），所以「本进程还没开过会话」也该算得出来。
+  */
+ export function sessionDirOfBase(sessionBaseDir: string): string {
+-	return SessionManager.create(sessionBaseDir).getSessionDir();
++	return process.env.PI_CODING_AGENT_SESSION_DIR || SessionManager.create(sessionBaseDir).getSessionDir();
+ }
+diff --git a/packages/keel/src/adapters/wire/dispatch-surface.ts b/packages/keel/src/adapters/wire/dispatch-surface.ts
+index 8392f55..5682eb0 100644
+--- a/packages/keel/src/adapters/wire/dispatch-surface.ts
++++ b/packages/keel/src/adapters/wire/dispatch-surface.ts
+@@ -123,10 +123,12 @@ export const DISPATCH_SURFACE = [
+ 	"getUserTerminalManager",
+ 	"findTerminalManager",
+ 	"getTerminalCwd",
++	"isQuiesceActive",
+ 	"listCommands",
+ 	"saveCommands",
+ 	"setGoal",
+ 	"clearGoal",
++	"resumeGoal",
+ 	"startGoalWizard",
+ 	"setGoalPrefs",
+ 	"pageCall",
+@@ -239,6 +241,8 @@ export const DISPATCH_OPTIONAL_MEMBERS = [
+ 	"testModelConnection",
+ 	"getUserTerminalManager",
+ 	"findTerminalManager",
++	"isQuiesceActive",
++	"resumeGoal",
+ 	"pageCall",
+ 	"readQuickAskConversation",
+ 	"listDshPatches",
+diff --git a/packages/keel/src/app/client-assembly.ts b/packages/keel/src/app/client-assembly.ts
+index 8539293..9dd0cb5 100644
+--- a/packages/keel/src/app/client-assembly.ts
++++ b/packages/keel/src/app/client-assembly.ts
+@@ -3,7 +3,7 @@ import type { ModelAdminPort } from "../contracts/model-admin.js";
+ import type { SettingsStorePort } from "../contracts/settings-store.js";
+ import type { PluginAgentToolFilter } from "../adapters/tools/plugin-agent-tools.js";
+ import type { PluginToolsBinder } from "./plugin-tools-binder.js";
+-import type { GoalRunPort } from "../contracts/goals.js";
++import type { GoalRunPort, GoalRunHooks } from "../contracts/goals.js";
+ import { createGoalRunSinks } from "../domains/goals/index.js";
+ import { isInsideSessionsDir } from "../session-search.js";
+ import type { createProjectSource } from "../adapters/state/index.js";
+@@ -26,6 +26,7 @@ import { DEFAULT_PI_CAPABILITIES } from "../engine-capabilities.js";
+ import type { ElsewhereRunning, ServerMessage } from "../protocol.js";
+ import type { MobileNotificationEvent } from "../mobile-notification-events.js";
+ import { ClientRuntime } from "./client-runtime.js";
++import { drainManagedWriters } from "./managed-drain.js";
+ import type { SessionRegistry } from "./session-registry.js";
+ import { createEngineSessionRegistry } from "./engine-sessions.js";
+ import type { Conversation } from "../kernel/conversation/index.js";
+@@ -48,6 +49,7 @@ const systemClock: ClockPort = {
+ };
+ 
+ export interface ClientAssemblyContext {
++	accounting?: import("./managed-run-accounting.js").ManagedRunAccounting;
+ 	clientId: string;
+ 	cwd: string;
+ 	options: CoreEngineOptions;
+@@ -101,6 +103,8 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 	let faces!: HostFaces;
+ 	let subagents: SubagentRuntime | undefined;
+ 	let goalPort: GoalRunPort | undefined;
++	let goalHooks: GoalRunHooks | undefined;
++	let lastGoalDisplayKey: string | undefined;
+ 
+ 	const deliver = (msg: ServerMessage) => ctx.deliverTo(runtime?.clientId ?? clientId, msg);
+ 	const transport: TransportPort = {
+@@ -141,6 +145,7 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 	ctx.askWaiters.set(clientId, askWaiter);
+ 
+ 	const sessions = createEngineSessionRegistry({
++		accounting: ctx.accounting,
+ 		agentDir: options.agentDir ?? cwd,
+ 		cwd,
+ 		clientId,
+@@ -169,7 +174,72 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 		onRunEvent: (ev) => ctx.onRunEvent?.(ev),
+ 	});
+ 
++	const getGoalPort = (hooks?: GoalRunHooks): GoalRunPort | undefined => {
++		if (hooks) goalHooks = hooks;
++		return (goalPort ??= options.goalRun?.(
++			createGoalRunSinks({
++				runtime,
++				sessions,
++				resolveModel: (provider, id) => faces.resolveModel(provider, id),
++				emit: deliver,
++				isDisposed: () => ctx.runtimes.get(runtime.clientId) !== runtime,
++				getLang: () => ctx.langOf(runtime.clientId),
++				setPlan: (id, steps) => goalHooks?.setPlan?.(id, steps),
++			}),
++		));
++	};
+ 	runtime = new ClientRuntime({
++		cancelManagedQuestions: (id) => askWaiter.cancelConversation(id, "managed_run_canceled"),
++		unquiesceWriters: () => {
++			if (goalPort && !goalPort.unquiesce) throw new Error("goal_unquiesce_unsupported");
++			goalPort?.unquiesce?.();
++		},
++		restoreGoalDisplay: (id) => {
++			if (ctx.runtimes.get(runtime.clientId) !== runtime || !sessions.has(id)) return false;
++			const port = getGoalPort();
++			if (!port?.restoreGoal) return false;
++			port.restoreGoal(id);
++			return true;
++		},
++		drainWriters: async (timeoutMs) => {
++			const conversations = runtime.registry.list();
++			const stopped = await drainManagedWriters({
++				timeoutMs,
++				stop: [
++					async () => {
++						if (goalPort && !goalPort.quiesce) throw new Error("goal_drain_unavailable");
++						await goalPort?.quiesce?.();
++					},
++					async () => {
++						if (faces.background && !faces.background.quiesce) throw new Error("background_drain_unavailable");
++						if (faces.background && !(await faces.background.quiesce!())) throw new Error("background_drain_failed");
++					},
++					() => bashKills.requestStopAll(),
++					() => terminalHost.requestStopAll(),
++					...conversations.map((conv) => async () => {
++						conv.queues.clear();
++						askWaiter.cancelConversation(conv.id, "server_quiesced");
++						const session = sessions.get(conv.id)?.session;
++						session?.clearQueue?.();
++						await session?.abort?.();
++					}),
++				],
++				isIdle: () =>
++					bashKills.activeCount() === 0 &&
++					terminalHost.activeCount() === 0 &&
++					runtime.registry.list().every((conv) => {
++						const session = sessions.get(conv.id)?.session;
++						return (
++							!runtime.turns.isStreaming(conv.id) &&
++							!session?.isStreaming &&
++							session?.isIdle !== false &&
++							conv.queues.total() === 0
++						);
++					}),
++			});
++			runtime.publisher.flush({ forceFull: true });
++			return stopped;
++		},
+ 		clientId,
+ 		cwd,
+ 		workspaceRoots: stateStore.getWorkspaceRoots(clientId, cwd),
+@@ -191,20 +261,7 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 				}
+ 			},
+ 		},
+-		goalRun: options.goalRun
+-			? (hooks) =>
+-					(goalPort = options.goalRun!(
+-						createGoalRunSinks({
+-							runtime,
+-							sessions,
+-							resolveModel: (provider, id) => faces.resolveModel(provider, id),
+-							emit: deliver,
+-							isDisposed: () => ctx.runtimes.get(clientId) !== runtime,
+-							getLang: () => ctx.langOf(clientId),
+-							...(hooks?.setPlan ? { setPlan: hooks.setPlan } : {}),
+-						}),
+-					))
+-			: undefined,
++		goalRun: options.goalRun ? getGoalPort : undefined,
+ 		getLang: () => ctx.langOf(clientId),
+ 		resolveToolApproval: (id, decision, editedParams, reason) =>
+ 			approvalWaiter.resolve(id, decision, editedParams, reason),
+@@ -255,7 +312,16 @@ export function assembleClient(ctx: ClientAssemblyContext): {
+ 				if (heldNotice) ctx.deliverTo(runtime.clientId, heldNotice);
+ 			});
+ 		},
+-		onConversationChanged: () => ctx.onConversationChanged?.(),
++		onConversationChanged: () => {
++			const id = runtime.activeConversationId();
++			const session = id ? sessions.get(id)?.session : undefined;
++			const key = session ? `${id}:${session.sessionId ?? session.sessionFile ?? ""}` : undefined;
++			if (key !== lastGoalDisplayKey) {
++				lastGoalDisplayKey = key;
++				runtime.restoreGoalDisplay();
++			}
++			ctx.onConversationChanged?.();
++		},
+ 		onSessionModelChanged: (conversationId) => {
+ 			const sess = sessions.get(conversationId)?.session;
+ 			if (sess) faces.settingsFrame?.applyCompactionOverrides?.(sess);
+diff --git a/packages/keel/src/app/client-runtime.ts b/packages/keel/src/app/client-runtime.ts
+index ba9842d..e534290 100644
+--- a/packages/keel/src/app/client-runtime.ts
++++ b/packages/keel/src/app/client-runtime.ts
+@@ -42,18 +42,14 @@ import type { ScmCommitMessagePort } from "../contracts/scm.js";
+ export type ClientEnvView = Omit<SnapshotEnvView, "clientId" | "cwd" | "workspaceRoots">;
+ 
+ /** 连接期帧：由组合根装配（适配器/域都在 app 层之外），运行时不自己认识它们。 */
+-export interface ClientFrames {
+-	pushSettings(): void;
+-	refreshSessions(): Promise<void>;
+-	/** 只重扫当前项目；`targetCwd` 不是当前项目时不动（别的项目的会话目录只有宿主认得）。 */
+-	refreshSessionsFor?(targetCwd: string): Promise<void>;
+-	pushProjects(): Promise<void>;
+-	listModels(): void;
+-	/** 全局默认模型帧（`default_model`）：换默认模型后必须显式推一次。 */
+-	pushDefaultModel(): void;
+-}
++import type { ClientFrames } from "./host-frames.js";
++export type { ClientFrames } from "./host-frames.js";
+ 
+ export interface ClientRuntimeOptions extends GoalHostPorts {
++	restoreGoalDisplay?(conversationId: string): boolean;
++	unquiesceWriters?(): void;
++	cancelManagedQuestions?(conversationId: string): void;
++	drainWriters?(timeoutMs: number): Promise<boolean>;
+ 	clientId: ClientId;
+ 	cwd: string;
+ 	workspaceRoots?: readonly string[];
+@@ -184,6 +180,10 @@ export interface ClientRuntimeOptions extends GoalHostPorts {
+  * 这里是「状态与生命周期」，两者分开才守得住「门面里不写业务」。跨域能力只在这里装配，域之间互不认识。
+  */
+ export class ClientRuntime {
++	restoreGoalDisplay(): boolean {
++		const id = this.activeConversationId();
++		return id ? (this.options.restoreGoalDisplay?.(id) ?? false) : false;
++	}
+ 	readonly registry = new ConversationRegistry<Conversation>();
+ 	readonly publisher: SnapshotPublisher;
+ 	readonly turns: TurnRunner;
+@@ -300,6 +300,7 @@ export class ClientRuntime {
+ 			frames: this.rebindFrames(),
+ 			onActivated: (id) => {
+ 				this.publisher.switchConversation(id);
++				this.restoreGoalDisplay();
+ 				this.options.onConversationChanged?.();
+ 			},
+ 			noteSessionFile: (file) => this.noteSessionFile(file),
+diff --git a/packages/keel/src/app/connection-init.ts b/packages/keel/src/app/connection-init.ts
+index 2e88ce6..b4b0c1a 100644
+--- a/packages/keel/src/app/connection-init.ts
++++ b/packages/keel/src/app/connection-init.ts
+@@ -50,6 +50,7 @@ export interface QuiesceGate {
+  * （每层都会发一条同样的 notice）。调用点因此只有 `initializeConnection()` 一处。
+  */
+ function applyQuiesceGate(session: DispatchSession, gate: QuiesceGate): void {
++	session.isQuiesceActive = () => gate.isQuiesced();
+ 	const reject = (): boolean => {
+ 		if (!gate.isQuiesced()) return false;
+ 		gate.emit(QUIESCE_NOTICE);
+@@ -79,6 +80,40 @@ function applyQuiesceGate(session: DispatchSession, gate: QuiesceGate): void {
+ 		if (reject()) return;
+ 		await retryLast();
+ 	};
++	const setGoal = session.setGoal.bind(session);
++	if (session.resumeGoal) {
++		const resume = session.resumeGoal.bind(session);
++		session.resumeGoal = async () => {
++			if (!reject()) await resume();
++		};
++	}
++	session.setGoal = async (...args) => {
++		if (!reject()) await setGoal(...args);
++	};
++	const startGoalWizard = session.startGoalWizard.bind(session);
++	session.startGoalWizard = async (...args) => {
++		if (!reject()) await startGoalWizard(...args);
++	};
++	if (session.startBgScript) {
++		const start = session.startBgScript.bind(session);
++		session.startBgScript = (...args) => {
++			if (!reject()) start(...args);
++		};
++	}
++	if (session.restartBgJob) {
++		const restart = session.restartBgJob.bind(session);
++		session.restartBgJob = (...args) => {
++			if (!reject()) restart(...args);
++		};
++	}
++	if (session.newCliChat) {
++		const start = session.newCliChat.bind(session);
++		session.newCliChat = async (...args) => (reject() ? false : start(...args));
++	}
++	if (session.openBotChat) {
++		const start = session.openBotChat.bind(session);
++		session.openBotChat = async (...args) => (reject() ? false : start(...args));
++	}
+ }
+ 
+ /**
+@@ -169,7 +204,9 @@ function pushConnectFrames(input: ConnectFrameInput, dispatch: DispatchSession):
+ 	// 4 运行列表：空白对话不入列（`inRunningList` 裁定），所以新连接这里通常是「零行 + activeId」。
+ 	runtime.pushConversations();
+ 	// 6 目标状态：真值是 `client-state.json` 里的偏好，没有目标在跑时就是这一支（老 `makeGoalStatus()`）。
+-	emit({ type: "goal_status", status: goalStatusOfPrefs(stateStore.getGoalPrefs(clientId) ?? DEFAULT_GOAL_PREFS) });
++	if (!runtime.restoreGoalDisplay()) {
++		emit({ type: "goal_status", status: goalStatusOfPrefs(stateStore.getGoalPrefs(clientId) ?? DEFAULT_GOAL_PREFS) });
++	}
+ 	// 7 设置帧：宿主 `SettingsService.push()` 自己兜住「会话还没打开」（资源目录读不到就给空表）。
+ 	dispatch.pushSettings();
+ 	// 8 后台面板：`bg_servers` 由宿主出帧。
+diff --git a/packages/keel/src/app/core-engine-options.ts b/packages/keel/src/app/core-engine-options.ts
+index 389c6ee..23104e1 100644
+--- a/packages/keel/src/app/core-engine-options.ts
++++ b/packages/keel/src/app/core-engine-options.ts
+@@ -48,6 +48,7 @@ export interface CoreEngineOptions extends HostFaceFactories {
+ 	 * 缺省 = 能力未接：`patch` 不附带诊断、`lsp` 工具不注册（老口径本来就是尽力而为，不抛）。
+ 	 */
+ 	lsp?: LspPort;
++	initialClientCwd?(clientId: string): string | undefined;
+ 	version: string;
+ 	attach?: boolean;
+ 	agentDir?: string;
+diff --git a/packages/keel/src/app/core-engine.ts b/packages/keel/src/app/core-engine.ts
+index 9fa3b54..6151583 100644
+--- a/packages/keel/src/app/core-engine.ts
++++ b/packages/keel/src/app/core-engine.ts
+@@ -67,7 +67,9 @@ import {
+ } from "./engine-takeover.js";
+ import { isOrphanAdoptionExcludedClientId } from "../client-id-utils.js";
+ import { assembleClient } from "./client-assembly.js";
+-
++import { ManagedRunAccounting } from "./managed-run-accounting.js";
++import { ManagedDrain } from "./managed-drain.js";
++import { openManagedRun, trackManagedSetup, type ManagedRunInput } from "./managed-run-bridge.js";
+ export { CoreEngineNotReadyError };
+ import type { CoreEngineOptions } from "./core-engine-options.js";
+ export type * from "./core-engine-options.js";
+@@ -80,6 +82,9 @@ export type FrameSender = (msg: ServerMessage) => void;
+  * 这里禁止出现业务分支——门面里每多一个 `if`，编排就又回到了上帝对象。
+  */
+ export class CoreEngine implements EngineService {
++	private readonly accounting = new ManagedRunAccounting();
++	completedTurns(): number { return this.accounting.completedTurns(); }
++	activeTools(): number { return this.accounting.activeTools(); }
+ 	onQuit?: () => boolean;
+ 	onToolEvent?: ((ev: PluginToolEvent) => void) | undefined;
+ 	onRunEvent?: ((ev: PluginRunEvent) => void) | undefined;
+@@ -108,7 +113,8 @@ export class CoreEngine implements EngineService {
+ 	/** 语言是「每客户端」的（`client-state` 里按 clientId 存 locale），不是进程级。 */
+ 	private readonly langs = new Map<string, ServerLang>();
+ 	private socketCount = 0;
+-	private quiescedSince: number | undefined;
++	private readonly drain = new ManagedDrain();
++	private readonly pendingAttaches = new Set<Promise<unknown>>();
+ 
+ 	private readonly stateStore: SettingsStorePort;
+ 	private readonly projectSource: ReturnType<typeof createProjectSource>;
+@@ -153,7 +159,10 @@ export class CoreEngine implements EngineService {
+ 		return this.modelAdmin;
+ 	}
+ 
+-	async attach(clientId: string, send: FrameSender): Promise<DispatchSession> {
++	attach(clientId: string, send: FrameSender): Promise<DispatchSession> {
++		return trackManagedSetup(this.pendingAttaches, this.attachInternal(clientId, send));
++	}
++	private async attachInternal(clientId: string, send: FrameSender): Promise<DispatchSession> {
+ 		if (!(this.options.attach ?? resolvePiEngineAttach())) throw new CoreEngineNotReadyError("attach");
+ 		this.clearOffline(clientId);
+ 		const existing = this.runtimes.get(clientId);
+@@ -201,16 +210,18 @@ export class CoreEngine implements EngineService {
+ 		// 已持有运行时的客户端照常重连——排空要能观察存量，不该把正在看的页面锁在外面。
+ 		if (this.isQuiesced()) throw new QuiesceRejectedError("新连接被拒绝，请等服务器恢复后重试");
+ 		this.bindSender(clientId, send);
++		const cwd = this.options.initialClientCwd?.(clientId) ?? this.cwd;
+ 		const heldNotice = await checkHeldSessionNotice(
+ 			this.runtimes,
+ 			this.sockets,
+ 			this.options.agentDir ?? this.cwd,
+-			this.cwd,
++			cwd,
+ 			clientId,
+ 		);
+ 		const { runtime, faces, sessions, deliver } = assembleClient({
++			accounting: this.accounting,
+ 			clientId,
+-			cwd: this.cwd,
++			cwd,
+ 			options: this.options,
+ 			stateStore: this.stateStore,
+ 			projectSource: this.projectSource,
+@@ -323,6 +334,13 @@ export class CoreEngine implements EngineService {
+ 	get(clientId: string): DispatchSession | undefined {
+ 		return this.runtimes.get(clientId)?.handlers();
+ 	}
++	openManagedRun(clientId: string, input: ManagedRunInput) {
++		const flight = openManagedRun(this.runtimes.get(clientId), input, this.managedAdmission());
++		return trackManagedSetup(this.pendingAttaches, flight);
++	}
++	managedAdmission(): () => boolean {
++		return this.drain.admission();
++	}
+ 
+ 	async disposeAll(): Promise<void> {
+ 		// 先记账再拆：老实现同口径（`disposeAll()` 里第一件事就是 `recordInterruptedRuns()`），
+@@ -339,7 +357,7 @@ export class CoreEngine implements EngineService {
+ 		this.connectFrames.clear();
+ 		this.projectSource.close();
+ 		this.socketCount = 0;
+-		this.quiescedSince = undefined;
++		this.drain.since = undefined;
+ 	}
+ 
+ 	/** 中断记账：把「此刻还在跑」的对话写进 `client-state.json` 的 `interrupted`（口径见 `interrupted-runs.ts`）。 */
+@@ -354,28 +372,29 @@ export class CoreEngine implements EngineService {
+ 		this.socketCount = Math.max(0, this.socketCount - 1);
+ 	}
+ 	isQuiesced(): boolean {
+-		return this.quiescedSince !== undefined;
++		return this.drain.since !== undefined;
+ 	}
+-	quiesce(): void {
+-		this.quiescedSince ??= Date.now();
++	quiesce(timeoutMs = 5000): Promise<{ ok: boolean; error?: string }> {
++		return this.drain.start(timeoutMs, this.pendingAttaches, this.runtimes.values(),
++			() => this.recordInterruptedRuns(),
++			() => this.activeConversations() === 0 && this.activeTools() === 0 && this.pendingMessages() === 0);
+ 	}
+ 	unquiesce(): void {
+-		this.quiescedSince = undefined;
++		this.drain.resume(this.runtimes.values());
+ 	}
+ 	quiesceInfo(): { quiesced: boolean; quiescedSince?: number } {
+-		const at = this.quiescedSince;
+-		return at === undefined ? { quiesced: false } : { quiesced: true, quiescedSince: at };
++		return this.drain.info();
+ 	}
+ 
+ 	serviceStatus(): ReturnType<EngineService["serviceStatus"]> {
+-		return serviceStatusOf({
++		return { ...serviceStatusOf({
+ 			version: this.options.version,
+ 			cwd: this.cwd,
+ 			quiesce: this.quiesceInfo(),
+ 			connectedClients: this.socketCount,
+ 			runtimes: this.runtimes,
+ 			service: toServiceInfo(launchOrigin()),
+-		});
++		}), activeTools: this.activeTools(), completedTurns: this.completedTurns() };
+ 	}
+ 
+ 	activeConversations(): number {
+diff --git a/packages/keel/src/app/dispatch-handlers.ts b/packages/keel/src/app/dispatch-handlers.ts
+index 1f497df..4dd0c31 100644
+--- a/packages/keel/src/app/dispatch-handlers.ts
++++ b/packages/keel/src/app/dispatch-handlers.ts
+@@ -94,6 +94,7 @@ export interface DispatchRuntime {
+ 	noteConversation(conversationId: string, text: string): Promise<void>;
+ 	/** 推一帧 `conversations`（固化对话后由新转录重算这一帧）。 */
+ 	pushConversations(): void;
++	restoreGoalDisplay(): boolean;
+ 	/** 分发表：私聊入口调用时才取（装配期取会与 `handlers()` 成环）。 */
+ 	handlers(): DispatchSession;
+ 	/** 设置帧（还没 attach 就不发）。 */
+@@ -251,7 +252,10 @@ export function createDispatchHandlers(runtime: DispatchRuntime): DispatchAssemb
+ 		transport: runtime.options.transport,
+ 		cwd: () => runtime.cwd,
+ 		...(runtime.options.viewOf ? { viewOf: runtime.options.viewOf } : {}),
+-		onActivated: (id) => runtime.publisher.switchConversation(id),
++		onActivated: (id) => {
++			runtime.publisher.switchConversation(id);
++			runtime.restoreGoalDisplay();
++		},
+ 		// 跨项目切对话（老 `applyCwdSideEffects`）：只跟工作区，不重绑会话。
+ 		followActiveProject: () => surface.followActiveProject(),
+ 		requestSnapshot: () => runtime.publisher.request(),
+@@ -435,6 +439,7 @@ export function createDispatchHandlers(runtime: DispatchRuntime): DispatchAssemb
+ 	});
+ 
+ 	const handlers: DispatchHandlers = {
++		isQuiesceActive: () => false, // Bound to the engine gate when the connection attaches.
+ 		cwd: runtime.cwd,
+ 		workspaceRoots: runtime.roots,
+ 		activeConversationId: () => runtime.activeConversationId(),
+@@ -476,7 +481,7 @@ export function createDispatchHandlers(runtime: DispatchRuntime): DispatchAssemb
+ 			// 那一轮拖住（SDK 侧一条条来）。等它会把队列后面的 switch_conversation / set_cwd 一起卡死。
+ 			// 会话仍先开（第一轮不必再等），失败只记一笔：真错误在喂轮时会带着回来。
+ 			if (runtime.options.sessions) {
+-				void runtime.options.sessions.ensure(conv).catch((err) => {
++				void runtime.options.sessions.ensure(conv).then(() => runtime.restoreGoalDisplay()).catch((err) => {
+ 					console.error("[newChat session.ensure error]", err);
+ 				});
+ 			}
+diff --git a/packages/keel/src/app/engine-elsewhere.ts b/packages/keel/src/app/engine-elsewhere.ts
+index 4664c40..7914692 100644
+--- a/packages/keel/src/app/engine-elsewhere.ts
++++ b/packages/keel/src/app/engine-elsewhere.ts
+@@ -231,7 +231,7 @@ export function handleClientDetach(
+ 	offlineTimers: Map<string, ReturnType<typeof setTimeout>>,
+ 	onExpire: () => void,
+ ): boolean {
+-	if (clientId.startsWith("canvas:") || clientId.startsWith("canvas-") || clientId.startsWith("device-task-")) {
++	if (clientId === "plugin:mapache-automation" || clientId.startsWith("canvas:") || clientId.startsWith("canvas-") || clientId.startsWith("device-task-")) {
+ 		return true;
+ 	}
+ 	if (!isPseudoClientId(clientId)) {
+diff --git a/packages/keel/src/app/engine-sessions.ts b/packages/keel/src/app/engine-sessions.ts
+index 9d78e87..c0782a8 100644
+--- a/packages/keel/src/app/engine-sessions.ts
++++ b/packages/keel/src/app/engine-sessions.ts
+@@ -38,6 +38,7 @@ import type { PluginRunEvent, PluginToolEvent } from "../contracts/plugin.js";
+ import type { LspPort } from "../contracts/lsp.js";
+ 
+ export interface EngineSessionDeps {
++	accounting?: import("./managed-run-accounting.js").ManagedRunAccounting;
+ 	agentDir: string;
+ 	cwd: string;
+ 	clientId: string;
+@@ -430,6 +431,7 @@ export function createEngineSessionRegistry(deps: EngineSessionDeps): SessionReg
+ 				await deps.mcpProjects?.()?.prepare(conv.meta.cwd);
+ 			},
+ 			onOpened: (conv, opened) => {
++				deps.accounting?.trackOpened(opened);
+ 				const runtime = deps.getRuntime();
+ 				const faces = deps.getFaces();
+ 				runtime.noteSessionFile(opened.sessionFile);
+@@ -456,7 +458,7 @@ export function createEngineSessionRegistry(deps: EngineSessionDeps): SessionReg
+ 				});
+ 				if (jitUnsubscribe) jitUnsubscribers.set(conv.id, jitUnsubscribe);
+ 				// 项目记忆（该项目的 {模型, provider key}）：晚于预设与门禁，失败不影响会话可用。
+-				void restoreProjectMemory(conv, opened);
++				opened.ready = restoreProjectMemory(conv, opened);
+ 				unsubscribers.set(
+ 					conv.id,
+ 					subscribePluginSessionEvents({
+diff --git a/packages/keel/src/app/host-faces.ts b/packages/keel/src/app/host-faces.ts
+index cb8e9b2..a72723c 100644
+--- a/packages/keel/src/app/host-faces.ts
++++ b/packages/keel/src/app/host-faces.ts
+@@ -86,6 +86,7 @@ export interface CorePluginsSinks {
+ 
+ /** 宿主实现 `WorkspaceHostPort` 时要拼的几块：当前工作目录（相对路径的基准）。 */
+ export interface CoreWorkspaceSinks {
++	clientId: string;
+ 	getCwd(): string;
+ }
+ 
+@@ -498,7 +499,7 @@ export function createHostFaces(deps: HostFaceDeps): HostFaces {
+ 		getCwd: () => runtime.registry.activeConv()?.meta.cwd ?? runtime.cwd,
+ 		getLang: () => langOf(),
+ 	});
+-	const workspaceHost = deps.workspaceHost?.({ getCwd: () => runtime.cwd });
++	const workspaceHost = deps.workspaceHost?.({ clientId, getCwd: () => runtime.cwd });
+ 	// 工具信息面：覆盖表来自这个客户端的设置快照（`SettingsService.current.toolPromptOverrides` 同一份）。
+ 	const toolInfo = deps.toolInfo?.({
+ 		toolPromptOverrides: () => stateStore.getSettingsSnapshot(clientId).toolPromptOverrides,
+diff --git a/packages/keel/src/app/host-frames.ts b/packages/keel/src/app/host-frames.ts
+index e516472..9d8ae80 100644
+--- a/packages/keel/src/app/host-frames.ts
++++ b/packages/keel/src/app/host-frames.ts
+@@ -10,7 +10,7 @@ import type { ServerMessage } from "../protocol.js";
+ import type { NativeCliPort } from "../contracts/native-cli.js";
+ import type { MobileNotificationEvent } from "../mobile-notification-events.js";
+ import type { TerminalHost } from "../domains/terminals/index.js";
+-import type { ClientFrames, ClientRuntime } from "./client-runtime.js";
++import type { ClientRuntime } from "./client-runtime.js";
+ 
+ /** Build the `ClientFrames` push surface for a connected `ClientRuntime`. */
+ export function buildClientFrames(opts: {
+@@ -167,3 +167,14 @@ export function buildNativeCliPort(opts: {
+ 			: {}),
+ 	});
+ }
++
++export interface ClientFrames {
++	pushSettings(): void;
++	refreshSessions(): Promise<void>;
++	/** 只重扫当前项目；`targetCwd` 不是当前项目时不动（别的项目的会话目录只有宿主认得）。 */
++	refreshSessionsFor?(targetCwd: string): Promise<void>;
++	pushProjects(): Promise<void>;
++	listModels(): void;
++	/** 全局默认模型帧（`default_model`）：换默认模型后必须显式推一次。 */
++	pushDefaultModel(): void;
++}
+diff --git a/packages/keel/src/contracts/background.ts b/packages/keel/src/contracts/background.ts
+index 85b7503..34ba318 100644
+--- a/packages/keel/src/contracts/background.ts
++++ b/packages/keel/src/contracts/background.ts
+@@ -51,6 +51,8 @@ export interface BackgroundJobWaitResult {
+ }
+ 
+ export interface BackgroundPort {
++	/** Stop owned work and verify termination; missing support must fail drain closed. */
++	quiesce?(): Promise<boolean>;
+ 	/**
+ 	 * 插件常驻任务变了：只重投影一帧 `bg_servers`（**不**重扫端口）。老实现 `refreshBgTasks()` = `bg.push()`。
+ 	 * 与 `listBgServers()` 的区别是真实的：后者要扫监听端口（`snapshotListeningPorts` = 子进程），
+diff --git a/packages/keel/src/contracts/goals.ts b/packages/keel/src/contracts/goals.ts
+index 40c82ef..ad0454b 100644
+--- a/packages/keel/src/contracts/goals.ts
++++ b/packages/keel/src/contracts/goals.ts
+@@ -11,7 +11,10 @@ export type GoalPrefs = NonNullable<ClientState["goalPrefs"]>;
+ /** 协议即契约：`set_goal` / `start_goal_wizard` / `set_goal_prefs` 的可选参数直接取协议形状，不另抄一份。 */
+ type Wire<T extends ClientMessage["type"]> = Omit<Extract<ClientMessage, { type: T }>, "type">;
+ 
+-export type GoalStartOptions = Omit<Wire<"set_goal">, "goal">;
++export type GoalStartOptions = Omit<Wire<"set_goal">, "goal" | "reviewModel" | "execModel"> & {
++	reviewModel?: string | null;
++	execModel?: string | null;
++};
+ export type GoalWizardOptions = Omit<Wire<"start_goal_wizard">, "text">;
+ export type GoalPrefsPatch = Wire<"set_goal_prefs">;
+ 
+@@ -24,6 +27,12 @@ export type GoalPrefsPatch = Wire<"set_goal_prefs">;
+  * 绝不降级成「设了目标但不跑」——那比直接报错更坏。
+  */
+ export interface GoalRunPort {
++	/** Restore display state only; never dispatch execution or review. */
++	restoreGoal?(conversationId: string): void;
++	/** Pause and preserve goal state before draining; absent means unsafe to acknowledge drain. */
++	quiesce?(): Promise<void>;
++	unquiesce?(): void;
++	resumeGoal?(): Promise<void>;
+ 	setGoal(goal: string, opts?: GoalStartOptions): Promise<void>;
+ 	clearGoal(conversationId?: string): Promise<void>;
+ 	startGoalWizard(text: string, opts?: GoalWizardOptions): Promise<void>;
+diff --git a/packages/keel/src/contracts/session.ts b/packages/keel/src/contracts/session.ts
+index f4392d2..68e532e 100644
+--- a/packages/keel/src/contracts/session.ts
++++ b/packages/keel/src/contracts/session.ts
+@@ -20,6 +20,8 @@ export interface TurnCapableSession {
+ 	readonly sessionFile?: string;
+ 	readonly messages?: readonly unknown[];
+ 	readonly isStreaming?: boolean;
++	readonly isIdle?: boolean;
++	clearQueue?(): void;
+ 	readonly thinkingLevel?: string;
+ 	readonly model?: unknown;
+ 	dispose(): void;
+diff --git a/packages/keel/src/domains/background/bash-kills.ts b/packages/keel/src/domains/background/bash-kills.ts
+index e5df9a8..05a8d7e 100644
+--- a/packages/keel/src/domains/background/bash-kills.ts
++++ b/packages/keel/src/domains/background/bash-kills.ts
+@@ -16,6 +16,16 @@ import type { BashAbortHandle, BashAbortRegistry } from "../../contracts/backgro
+ export class BashKills implements BashAbortRegistry {
+ 	private readonly table = new Map<string, Set<AbortController>>();
+ 
++	/** Drain keeps handles until their tool finally blocks acknowledge termination. */
++	requestStopAll(): void {
++		for (const id of [...this.table.keys()]) this.abort(id);
++	}
++	activeCount(): number {
++		let count = 0;
++		for (const bucket of this.table.values()) count += bucket.size;
++		return count;
++	}
++
+ 	/** 开始执行：登记一条句柄。没有对话身份 → 不登记（调用方直接透传上游 signal）。 */
+ 	register(conversationId: string | undefined): BashAbortHandle | undefined {
+ 		const key = conversationId?.trim();
+diff --git a/packages/keel/src/domains/goals/handlers.ts b/packages/keel/src/domains/goals/handlers.ts
+index 676b8bb..c70c40f 100644
+--- a/packages/keel/src/domains/goals/handlers.ts
++++ b/packages/keel/src/domains/goals/handlers.ts
+@@ -72,6 +72,7 @@ export interface GoalHandlersOptions {
+ 
+ /** 目标 / 计划 / 委派的 11 个 handler：签名与 `DispatchSession` 的同名成员一致。 */
+ export interface GoalHandlers {
++	resumeGoal(): Promise<void>;
+ 	setGoal(goal: string, opts?: GoalStartOptions): Promise<void>;
+ 	clearGoal(conversationId?: string): Promise<void>;
+ 	startGoalWizard(text: string, opts?: GoalWizardOptions): Promise<void>;
+@@ -176,6 +177,11 @@ export function createGoalHandlers(options: GoalHandlersOptions): GoalHandlers {
+ 	};
+ 
+ 	return {
++		resumeGoal: () => {
++			const port = enableRun("goals.resumeGoal");
++			if (!port.resumeGoal) throw new CoreEngineNotReadyError("goals.resumeGoal");
++			return port.resumeGoal();
++		},
+ 		// 目标运行归宿主：端口不在就同步抛（`async` 会变成 rejected promise，调用方看不到「未接」）。
+ 		setGoal: (goal: string, opts?: GoalStartOptions) => enableRun("goals.setGoal").setGoal(goal, opts),
+ 		clearGoal: (conversationId?: string) => enableRun("goals.clearGoal").clearGoal(conversationId),
+diff --git a/packages/keel/src/domains/goals/run-sinks.ts b/packages/keel/src/domains/goals/run-sinks.ts
+index a1c428a..405c415 100644
+--- a/packages/keel/src/domains/goals/run-sinks.ts
++++ b/packages/keel/src/domains/goals/run-sinks.ts
+@@ -19,6 +19,7 @@ export interface GoalRunSessionHost {
+ 
+ /** 轮次执行的窄面（`TurnRunner` 结构上满足）：喂一轮；收尾由端口自己的 `onTurnSettled` 接。 */
+ export interface GoalRunTurnHost {
++	whenIdle?(conversationId: string): Promise<void>;
+ 	start(conversation: Conversation, session: TurnCapableSession, text: string): Promise<unknown>;
+ }
+ 
+@@ -50,6 +51,7 @@ export interface GoalRunConversationHost {
+ }
+ 
+ export interface GoalRunSinks {
++	conversationIdentity?(conversationId: string): string | undefined;
+ 	clientId: string;
+ 	/** 一帧发给本客户端（`goal_status` / `notice`）。 */
+ 	emit(msg: ServerMessage): void;
+@@ -100,6 +102,13 @@ export function createGoalRunSinks(input: GoalRunSinksInput): GoalRunSinks {
+ 	const { clientId, registry, turns, publisher } = input.runtime;
+ 	const { sessions } = input;
+ 	const sinks: GoalRunSinks = {
++		conversationIdentity: (id) => {
++			const opened = sessions.get(id);
++			const sessionId = opened?.session.sessionId?.trim();
++			if (sessionId) return `session:${sessionId}`;
++			const file = opened?.session.sessionFile?.trim() ?? registry.get(id)?.meta.sessionFile;
++			return file ? `file:${file}` : undefined;
++		},
+ 		clientId,
+ 		emit: input.emit,
+ 		flushSnapshot: () => publisher.request(),
+@@ -144,7 +153,13 @@ export function createGoalRunSinks(input: GoalRunSinksInput): GoalRunSinks {
+ 			await turns.start(conversation, opened.session, text);
+ 		},
+ 		abortTurn: async (conversationId) => {
+-			await sessions.get(conversationId)?.session.abort?.();
++			const session = sessions.get(conversationId)?.session;
++			await session?.abort?.();
++			if (registry.get(conversationId)?.phase === "running" && !turns.whenIdle) {
++				throw new Error("goal_turn_drain_unavailable");
++			}
++			await turns.whenIdle?.(conversationId);
++			if (session?.isStreaming || session?.isIdle === false) throw new Error("goal_turn_still_active");
+ 		},
+ 		lastAssistantText: (conversationId) => sessions.get(conversationId)?.session.getLastAssistantText?.() ?? "",
+ 		setModel: async (conversationId, provider, modelId) => {
+diff --git a/packages/keel/src/domains/terminals/host.ts b/packages/keel/src/domains/terminals/host.ts
+index c5bd47e..6a36e4f 100644
+--- a/packages/keel/src/domains/terminals/host.ts
++++ b/packages/keel/src/domains/terminals/host.ts
+@@ -22,6 +22,8 @@ export interface TerminalHostInput {
+ }
+ 
+ export interface TerminalHost {
++	requestStopAll(): void;
++	activeCount(): number;
+ 	/** 某个对话的终端管理器（懒建，同一对话复用同一份） */
+ 	managerFor(conversationId: string, cwd: string): TerminalManagerLike;
+ 	disposeConversation(conversationId: string): void;
+@@ -75,6 +77,18 @@ export function createTerminalHost(input: TerminalHostInput): TerminalHost {
+ 	};
+ 
+ 	return {
++		requestStopAll(): void {
++			for (const manager of byConversation.values()) killLive(manager);
++		},
++		activeCount(): number {
++			let count = 0;
++			for (const manager of byConversation.values()) {
++				// Missing inspection is not evidence of successful termination.
++				if (!manager.list) return Number.POSITIVE_INFINITY;
++				count += manager.list().filter((terminal) => terminal.running).length;
++			}
++			return count;
++		},
+ 		managerFor(conversationId: string, cwd: string): TerminalManagerLike {
+ 			const existing = byConversation.get(conversationId);
+ 			if (existing) return existing;
+diff --git a/packages/keel/src/engine-service.ts b/packages/keel/src/engine-service.ts
+index fc8a048..84c6409 100644
+--- a/packages/keel/src/engine-service.ts
++++ b/packages/keel/src/engine-service.ts
+@@ -227,6 +227,8 @@ export interface DispatchSession {
+ 		ownerKind?: "client" | "conversation",
+ 	): TerminalManagerLike | undefined;
+ 	getTerminalCwd(conversationId?: string): string;
++	/** Reject terminal writers during a managed drain. */
++	isQuiesceActive?(): boolean;
+ 	listCommands(): Promise<void>;
+ 	saveCommands(commands: CommandDef[]): Promise<void>;
+ 	setGoal(
+@@ -241,6 +243,7 @@ export interface DispatchSession {
+ 		},
+ 	): Promise<void>;
+ 	clearGoal(): Promise<void>;
++	resumeGoal?(): Promise<void>;
+ 	startGoalWizard(
+ 		text: string,
+ 		opts?: {
+@@ -404,7 +407,7 @@ export interface EngineService {
+ 	noteSocketOpen(): void;
+ 	noteSocketClose(): void;
+ 	isQuiesced(): boolean;
+-	quiesce(): void;
++	quiesce(): void | Promise<{ ok: boolean; error?: string }>;
+ 	unquiesce(): void;
+ 	quiesceInfo(): { quiesced: boolean; quiescedSince?: number };
+ 	serviceStatus(): {
+@@ -415,10 +418,13 @@ export interface EngineService {
+ 		quiescedSince?: number;
+ 		connectedClients: number;
+ 		activeConversations: number;
++		activeTools?: number;
++		completedTurns?: number;
+ 		pendingMessages: number;
+ 		service: UiServiceInfo | null;
+ 	};
+ 	activeConversations(): number;
++	activeTools?(): number;
+ 	pendingMessages(): number;
+ 	applyPluginAgentTools(): void;
+ 	onNotificationEvent?: (event: MobileNotificationEvent) => void | Promise<void>;
+diff --git a/packages/keel/src/projects-schema.ts b/packages/keel/src/projects-schema.ts
+index a6649d5..812aab3 100644
+--- a/packages/keel/src/projects-schema.ts
++++ b/packages/keel/src/projects-schema.ts
+@@ -13,7 +13,24 @@ export interface MarkerSettings {
+ /** 出厂默认关闭的内联标记（单源：客户端状态默认值、MarkerService 均取此处）。 */
+ export const DEFAULT_DISABLED_MARKERS: readonly string[] = ["notify", "action", "suggest"];
+ 
++export interface ConversationGoalState {
++	goal: string;
++	materials?: string[];
++	execModel?: string | null;
++	reviewModel: string | null;
++	maxRounds: number;
++	locked: boolean;
++	round: number;
++	verdict: "pending" | "pass" | "fail" | "blocked";
++	status: string;
++	statusEn?: string;
++	feedback?: string;
++	savedAt: number;
++}
++
+ export interface ClientState {
++	conversationGoals?: Record<string, ConversationGoalState>;
++	projectModelUpdatedAt?: Record<string, number>;
+ 	lastCwd?: string;
+ 	projects: { path: string; lastUsed: number }[];
+ 	goalPrefs?: {
+@@ -24,7 +41,7 @@ export interface ClientState {
+ 	};
+ 	settings?: ClientSettings;
+ 	presets?: SettingsPreset[];
+-	interrupted?: { title: string; cwd: string; at: number; sessionFile?: string }[];
++	interrupted?: { title: string; cwd: string; at: number; sessionFile?: string; workspaceRequest?: boolean }[];
+ 	removedProjects?: string[];
+ 	workspaceRoots?: Record<string, string[]>;
+ 	projectProviderKeys?: Record<string, Record<string, string>>;
+diff --git a/packages/keel/src/protocol.ts b/packages/keel/src/protocol.ts
+index 5d42186..d80cd54 100644
+--- a/packages/keel/src/protocol.ts
++++ b/packages/keel/src/protocol.ts
+@@ -1623,6 +1623,7 @@ export type ClientMessage =
+ 			materialBlobs?: MaterialBlob[];
+ 	  }
+ 	| { type: "clear_goal" }
++	| { type: "resume_goal" }
+ 	| {
+ 			type: "start_goal_wizard";
+ 			text: string;
+@@ -2448,7 +2449,6 @@ export interface GoalHistoryEntry {
+ 	feedback: string;
+ 	finishedAt: number;
+ }
+-
+ export interface GoalStatus {
+ 	conversationId: string | null;
+ 	goal: string | null;
+@@ -2456,6 +2456,7 @@ export interface GoalStatus {
+ 	maxRounds: number;
+ 	locked: boolean;
+ 	reviewing: boolean;
++	paused?: boolean;
+ 	round: number;
+ 	status: string;
+ 	statusEn?: string;
+@@ -2468,7 +2469,6 @@ export interface GoalStatus {
+ 	execModel?: string | null;
+ 	roles?: { executor?: GoalRoleRef };
+ }
+-
+ export interface WizardStatus {
+ 	active: boolean;
+ 	draft: string;
+diff --git a/server/client-state.ts b/server/client-state.ts
+index e2ab6b8..b48b4bd 100644
+--- a/server/client-state.ts
++++ b/server/client-state.ts
+@@ -1,4 +1,5 @@
+ import { renameSync } from "node:fs";
++import { managedWorkspaceRoot, managedCwdAllowed } from "./managed-workspace.js";
+ import * as fsPromises from "node:fs/promises";
+ import { dirname, isAbsolute, resolve } from "node:path";
+ import { readFileSyncRetry, writeJsonAtomicSync } from "./atomic-file.js";
+@@ -55,6 +56,7 @@ import {
+ 	normalizePathKey,
+ 	RECENT_PROJECTS_MAX,
+ 	type ClientState,
++	type ConversationGoalState,
+ 	type MarkerSettings,
+ } from "../packages/keel/src/projects-schema.js";
+ 
+@@ -191,6 +193,29 @@ export function normalizeWorkspaceRoots(v: unknown): string[] {
+ 	return out;
+ }
+ 
++function normalizeConversationGoal(value: unknown): ConversationGoalState | undefined {
++	if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
++	const raw = value as Partial<ConversationGoalState>;
++	if (typeof raw.goal !== "string" || !raw.goal.trim()) return undefined;
++	const maxRounds = Math.round(Number(raw.maxRounds));
++	const round = Math.round(Number(raw.round));
++	const verdict = raw.verdict === "pass" || raw.verdict === "fail" || raw.verdict === "blocked" ? raw.verdict : "pending";
++	return {
++		goal: raw.goal.trim().slice(0, 20_000),
++		...(Array.isArray(raw.materials) && raw.materials.length ? { materials: raw.materials.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim()) } : {}),
++		...(typeof raw.execModel === "string" ? { execModel: raw.execModel.trim().slice(0, 300) } : {}),
++		reviewModel:
++			typeof raw.reviewModel === "string" && raw.reviewModel.trim() ? raw.reviewModel.trim().slice(0, 300) : null,
++		maxRounds: Number.isFinite(maxRounds) && maxRounds > 0 ? Math.min(maxRounds, 50) : 0,
++		locked: raw.locked !== false,
++		round: Number.isFinite(round) && round > 0 ? Math.min(round, 100_000) : 0,
++		verdict,
++		status: typeof raw.status === "string" ? raw.status.slice(0, 2_000) : "",
++		...(typeof raw.statusEn === "string" ? { statusEn: raw.statusEn.slice(0, 2_000) } : {}),
++		...(typeof raw.feedback === "string" ? { feedback: raw.feedback.slice(0, 4_000) } : {}),
++		savedAt: typeof raw.savedAt === "number" && Number.isFinite(raw.savedAt) ? raw.savedAt : Date.now(),
++	};
++}
+ export const CLIENT_STATE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+ 
+ export const MAX_TRACKED_CLIENTS = 50;
+@@ -577,10 +602,16 @@ export class ClientStateStore {
+ 	}
+ 
+ 	getWorkspaceRoots(clientId: string, cwd: string): string[] {
+-		return this.load()[clientId]?.workspaceRoots?.[cwd] ?? [];
++		const roots = this.load()[clientId]?.workspaceRoots?.[cwd] ?? [];
++		const managedRoot = managedWorkspaceRoot();
++		return managedRoot ? roots.filter((root) => managedCwdAllowed(root)) : roots;
+ 	}
+ 
+ 	saveWorkspaceRoots(clientId: string, cwd: string, roots: string[]): void {
++		const managedRoot = managedWorkspaceRoot();
++		if (managedRoot && roots.some((root) => !managedCwdAllowed(root))) {
++			throw new Error("managed_workspace_required");
++		}
+ 		const all = this.load();
+ 		const state = (all[clientId] ??= { projects: [] });
+ 		this.touchClient(all, clientId);
+@@ -621,7 +652,41 @@ export class ClientStateStore {
+ 		this.save();
+ 	}
+ 
+-	saveInterrupted(clientId: string, list: { title: string; cwd: string; at: number; sessionFile?: string }[]): void {
++	/** Read one conversation's native Goal display state. The identity is an
++	 * upstream session id (or the stable session-file fallback supplied by the
++	 * goal service), never the transient browser client id. */
++	getConversationGoal(identity: string): ConversationGoalState | undefined {
++		const key = identity.trim();
++		if (!key) return undefined;
++		const stored = this.load()[ClientStateStore.GLOBAL_SETTINGS_KEY]?.conversationGoals?.[key];
++		return normalizeConversationGoal(stored);
++	}
++
++	/** Persist only serializable native Goal display state. Runtime execution is
++	 * reconstructed as paused and must be resumed explicitly by the user. */
++	saveConversationGoal(identity: string, goal: ConversationGoalState): void {
++		const key = identity.trim();
++		const normalized = normalizeConversationGoal(goal);
++		if (!key || !normalized) return;
++		const all = this.load();
++		const state = (all[ClientStateStore.GLOBAL_SETTINGS_KEY] ??= { projects: [] });
++		(state.conversationGoals ??= {})[key] = normalized;
++		this.save();
++	}
++
++	/** Remove a completed or explicitly cleared native Goal. */
++	deleteConversationGoal(identity: string): void {
++		const key = identity.trim();
++		if (!key) return;
++		const goals = this.load()[ClientStateStore.GLOBAL_SETTINGS_KEY]?.conversationGoals;
++		if (!goals || !(key in goals)) return;
++		delete goals[key];
++		this.save();
++	}
++
++	/** Remember conversations that were still streaming at shutdown (best-
++	 *  effort; called during the graceful-shutdown path). */
++	saveInterrupted(clientId: string, list: { title: string; cwd: string; at: number; sessionFile?: string; workspaceRequest?: boolean }[]): void {
+ 		if (list.length === 0) return;
+ 		const all = this.load();
+ 		const state = (all[clientId] ??= { projects: [] });
+@@ -1129,6 +1194,34 @@ export class ClientStateStore {
+ 		return undefined;
+ 	}
+ 
++	/** Get the model and provider-key choices from the client that most recently
++	 * selected a model for this project. Browserless runs use their own client ID, so they cannot use
++	 * the per-client getter above to inherit the workspace's saved selection. */
++	getMostRecentlySelectedProjectSelection(cwd: string): {
++		modelId: string;
++		providerKeys: Record<string, string>;
++	} | undefined {
++		const candidates = Object.entries(this.load()).flatMap(([clientId, state], index) => {
++			if (clientId === "__settings__") return [];
++			const modelId = state.projectModels?.[cwd]?.trim();
++			if (!modelId) return [];
++			const projectLastUsed = state.projects?.find((project) => project.path === cwd)?.lastUsed;
++			const modelLastSelected = state.projectModelUpdatedAt?.[cwd];
++			const recency = typeof modelLastSelected === "number" && Number.isFinite(modelLastSelected)
++				? modelLastSelected
++				: typeof projectLastUsed === "number" && Number.isFinite(projectLastUsed) ? projectLastUsed : 0;
++			return [{
++				modelId,
++				providerKeys: state.projectProviderKeys?.[cwd] ?? {},
++				lastUsed: recency,
++				index,
++			}];
++		});
++		candidates.sort((left, right) => right.lastUsed - left.lastUsed || right.index - left.index);
++		const selected = candidates[0];
++		return selected ? {modelId: selected.modelId, providerKeys: selected.providerKeys} : undefined;
++	}
++
+ 	saveProjectModel(clientId: string, cwd: string, modelId: string, engine?: string): void {
+ 		const all = this.load();
+ 		const eng = engine?.trim();
+@@ -1145,6 +1238,7 @@ export class ClientStateStore {
+ 			const state = (all[clientId] ??= { projects: [] });
+ 			this.touchClient(all, clientId);
+ 			(state.projectModels ??= {})[cwd] = modelId;
++			(state.projectModelUpdatedAt ??= {})[cwd] = Date.now();
+ 		}
+ 		this.save();
+ 	}
+diff --git a/server/control-socket.ts b/server/control-socket.ts
+index f2860aa..43f2b54 100644
+--- a/server/control-socket.ts
++++ b/server/control-socket.ts
+@@ -1,3 +1,27 @@
++/**
++ * Local control socket for the pi-web-ui server.
++ *
++ * Lets the CLI (and humans) query status and quiesce/unquiesce the server
++ * WITHOUT opening a network port or exposing an unauthenticated HTTP
++ * endpoint. Only the local OS user can reach it:
++ *   - POSIX: a mode-0600 Unix domain socket at <dataDir>/pi-web-ui.sock
++ *   - Windows: a named pipe  \\.\pipe\pi-web-ui-<port>
++ *
++ * Protocol: one JSON object per line.
++ *   → {"cmd":"status"}        ← {"ok":true, ...serviceStatus}
++ *   → {"cmd":"quiesce"}       ← {"ok":true}
++ *   → {"cmd":"unquiesce"}     ← {"ok":true}
++ *   → {"cmd":"startAutomation",...} ← private run admission/status
++ *   → {"cmd":"automationStatus",...} ← private run state
++ *   → {"cmd":"cancelAutomation",...} ← private run cancellation
++	 *   → {"cmd":"startWorkspaceRequest",...} ← durable normal-runtime chat
++	 *   → {"cmd":"workspaceRequestStatus",...} ← durable request state
++	 *   → {"cmd":"cancelWorkspaceRequest",...} ← durable request cancellation
++ *   → anything else           ← {"ok":false,"error":"..."}
++ *
++ * Idle connections are closed after a short timeout so a stuck CLI never
++ * holds the socket.
++ */
+ import { createServer, createConnection, type Server, type Socket } from "node:net";
+ import { chmodSync, existsSync, rmSync } from "node:fs";
+ import { join } from "node:path";
+@@ -23,19 +47,39 @@ function probeControlPath(path: string): Promise<string | null> {
+ 	});
+ }
+ 
+-type ControlService = Pick<EngineService, "serviceStatus" | "quiesce" | "unquiesce">;
++type ControlService = Pick<EngineService, "serviceStatus" | "quiesce" | "unquiesce"> & {
++	startAutomation?: (input: { runId: string; prompt: string; modelRef?: string }) => Promise<ControlStatus>;
++	automationStatus?: (runId: string) => ControlStatus;
++	cancelAutomation?: (runId: string) => Promise<ControlStatus>;
++	startWorkspaceRequest?: (input: { runId: string; ticketId?: string; sourceWorkspaceId?: string; conversationTitle?: string; modelRef?: string; prompt: string }) => Promise<ControlStatus>;
++	workspaceRequestModels?: () => Promise<ControlStatus>;
++	workspaceRequestStatus?: (runId: string) => ControlStatus;
++	cancelWorkspaceRequest?: (runId: string) => Promise<ControlStatus>;
++};
+ 
+-const CONTROL_IDLE_TIMEOUT_MS = 5_000;
++/** How long a control connection may sit idle before the server closes it. */
++const CONTROL_IDLE_TIMEOUT_MS = 330_000;
+ 
++/** How long the CLI waits for a reply before giving up. */
++const CONTROL_CLIENT_TIMEOUT_MS = 10_000;
++
++/** Socket path (POSIX) or pipe name (Windows). */
+ export function controlPath(dataDir: string, port: number): string {
+-	return process.platform === "win32" ? `\\\\.\\pipe\\pi-web-ui-${port}` : join(dataDir, "pi-web-ui.sock");
++	return process.env.PI_WEB_CONTROL_PATH || (process.platform === "win32" ? `\\\\.\\pipe\\pi-web-ui-${port}` : join(dataDir, "pi-web-ui.sock"));
+ }
+ 
+ export interface ControlCommand {
+-	cmd: "status" | "quiesce" | "unquiesce";
++	cmd: "status" | "quiesce" | "unquiesce" | "startAutomation" | "automationStatus" | "cancelAutomation" | "startWorkspaceRequest" | "workspaceRequestModels" | "workspaceRequestStatus" | "cancelWorkspaceRequest";
++	runId?: string;
++	ticketId?: string;
++	sourceWorkspaceId?: string;
++	conversationTitle?: string;
++	prompt?: string;
++	modelRef?: string;
+ }
+ 
+ export interface ControlStatus {
++	[key: string]: unknown;
+ 	ok: boolean;
+ 	error?: string;
+ 	pid?: number;
+@@ -45,6 +89,8 @@ export interface ControlStatus {
+ 	quiescedSince?: number;
+ 	connectedClients?: number;
+ 	activeConversations?: number;
++	activeTools?: number;
++	completedTurns?: number;
+ 	pendingMessages?: number;
+ 	authToken?: string;
+ 	service?: UiServiceInfo | null;
+@@ -94,6 +140,7 @@ export function startControlServer(opts: {
+ 
+ 	function handleConnection(sock: Socket): void {
+ 		let buf = "";
++		let processing = Promise.resolve();
+ 		const timer = setTimeout(() => {
+ 			sock.destroy();
+ 		}, CONTROL_IDLE_TIMEOUT_MS);
+@@ -112,28 +159,85 @@ export function startControlServer(opts: {
+ 					sock.write(JSON.stringify({ ok: false, error: "bad json" }) + "\n");
+ 					continue;
+ 				}
+-				let resp: ControlStatus;
+-				switch (req.cmd) {
+-					case "status":
+-						resp = {
+-							ok: true,
+-							...service.serviceStatus(),
+-							...(authToken ? { authToken: authToken() } : {}),
+-						};
+-						break;
+-					case "quiesce":
+-						service.quiesce();
+-						resp = { ok: true };
+-						break;
+-					case "unquiesce":
+-						service.unquiesce();
+-						resp = { ok: true };
+-						break;
+-					default:
+-						resp = { ok: false, error: `unknown cmd: ${String((req as { cmd?: unknown }).cmd)}` };
+-						break;
+-				}
+-				sock.write(JSON.stringify(resp) + "\n");
++				processing = processing
++					.then(async () => {
++						let resp: ControlStatus;
++						switch (req.cmd) {
++							case "status":
++								resp = { ok: true, ...service.serviceStatus() };
++								break;
++							case "quiesce":
++								{
++									const result = await service.quiesce();
++									resp = { ok: false, ...service.serviceStatus(), ...result };
++								}
++								break;
++							case "unquiesce":
++								service.unquiesce();
++								resp = { ok: true, ...service.serviceStatus() };
++								break;
++							case "startAutomation":
++								if (!service.startAutomation) {
++									resp = { ok: false, error: "automation_unsupported" };
++								} else {
++									resp = await service.startAutomation({ runId: req.runId ?? "", prompt: req.prompt ?? "", modelRef: req.modelRef });
++								}
++								break;
++							case "automationStatus":
++								resp = service.automationStatus
++									? service.automationStatus(req.runId ?? "")
++									: { ok: false, error: "automation_unsupported" };
++								break;
++							case "cancelAutomation":
++								if (!service.cancelAutomation) {
++									resp = { ok: false, error: "automation_unsupported" };
++								} else {
++									resp = await service.cancelAutomation(req.runId ?? "");
++								}
++								break;
++							case "startWorkspaceRequest":
++								if (!service.startWorkspaceRequest) {
++									resp = { ok: false, error: "workspace_request_unsupported" };
++								} else {
++									resp = await service.startWorkspaceRequest({
++										runId: req.runId ?? "",
++										ticketId: req.ticketId,
++										sourceWorkspaceId: req.sourceWorkspaceId,
++										conversationTitle: req.conversationTitle,
++										modelRef: req.modelRef,
++										prompt: req.prompt ?? "",
++									});
++								}
++								break;
++							case "workspaceRequestStatus":
++								resp = service.workspaceRequestStatus
++									? service.workspaceRequestStatus(req.runId ?? "")
++									: { ok: false, error: "workspace_request_unsupported" };
++								break;
++							case "workspaceRequestModels":
++								resp = service.workspaceRequestModels
++									? await service.workspaceRequestModels()
++									: { ok: false, error: "workspace_request_unsupported" };
++								break;
++							case "cancelWorkspaceRequest":
++								if (!service.cancelWorkspaceRequest) {
++									resp = { ok: false, error: "workspace_request_unsupported" };
++								} else {
++									resp = await service.cancelWorkspaceRequest(req.runId ?? "");
++								}
++								break;
++							default:
++								resp = { ok: false, error: `unknown cmd: ${String((req as { cmd?: unknown }).cmd)}` };
++								break;
++						}
++						if (!sock.destroyed) sock.write(JSON.stringify(resp) + "\n");
++					})
++					.catch((error) => {
++						if (!sock.destroyed) {
++							sock.write(JSON.stringify({ ok: false, error: "control_command_failed" }) + "\n");
++						}
++						console.warn(`[control] command failed: ${String((error as Error)?.message ?? error).slice(0, 160)}`);
++					});
+ 			}
+ 		});
+ 		sock.on("error", () => {});
+@@ -147,3 +251,45 @@ export function startControlServer(opts: {
+ 		} catch {}
+ 	};
+ }
++
++/**
++ * CLI-side client: send one command and return the parsed reply (or null if
++ * the server is unreachable / timed out).
++ */
++export function sendControlCommand(
++	dataDir: string,
++	port: number,
++	cmd: ControlCommand["cmd"],
++	payload: Omit<ControlCommand, "cmd"> = {},
++): Promise<ControlStatus | null> {
++	const path = controlPath(dataDir, port);
++	return new Promise((resolve) => {
++		const sock = createConnection(path);
++		let done = false;
++		const finish = (v: ControlStatus | null): void => {
++			if (done) return;
++			done = true;
++			clearTimeout(timer);
++			sock.destroy();
++			resolve(v);
++		};
++		const timer = setTimeout(() => finish(null), CONTROL_CLIENT_TIMEOUT_MS);
++		let buf = "";
++		sock.on("connect", () => {
++			sock.write(JSON.stringify({ cmd, ...payload }) + "\n");
++		});
++		sock.on("data", (chunk) => {
++			buf += chunk.toString("utf8");
++			const nl = buf.indexOf("\n");
++			if (nl >= 0) {
++				try {
++					finish(JSON.parse(buf.slice(0, nl)) as ControlStatus);
++				} catch {
++					finish(null);
++				}
++			}
++		});
++		sock.on("error", () => finish(null));
++		sock.on("close", () => finish(null));
++	});
++}
+diff --git a/server/core-background-adapter.ts b/server/core-background-adapter.ts
+index 8e99d82..452b510 100644
+--- a/server/core-background-adapter.ts
++++ b/server/core-background-adapter.ts
+@@ -4,6 +4,8 @@ import { BG_CLEANUP_FALLBACK_MIN, BgServerTracker } from "./bg-servers.js";
+ import { JOB_TASK_PREFIX, JobRegistry, type JobSnapshot } from "./job-runner.js";
+ import { resolveProjectScripts } from "./project-scripts.js";
+ import type { BgServer, ServerMessage } from "./protocol.js";
++import { pidAlive } from "./process-utils.js";
++import { drainManagedWriters } from "../packages/keel/src/app/managed-drain.js";
+ 
+ /** 宿主实现 `BackgroundPort` 时要拼的几块现成东西：本客户端的帧出口 + 老实现里现取的那几个值。 */
+ export interface CoreBackgroundSinks {
+@@ -89,6 +91,26 @@ export function createCoreBackground(options: { dataDir: string } & CoreBackgrou
+ 	return {
+ 		refreshBgTasks: () => bg.push(),
+ 
++		async quiesce(): Promise<boolean> {
++			// Preserve PIDs before killAll: UI cleanup can remove a row before exit.
++			const rows = bg.list();
++			const pids = rows.flatMap((row) => typeof row.pid === "number" && row.pid > 1 ? [row.pid] : []);
++			const plugins = options.pluginTasks?.() ?? [];
++			return drainManagedWriters({
++				timeoutMs: 4500,
++				stop: [
++					() => bg.killAll(),
++					...plugins.map((task) => () => {
++						if (!task.taskId || !options.stopBgTask?.(task.taskId)) throw new Error("background_plugin_stop_failed");
++						// The upstream plugin API removes rows even when stop throws.
++						// Its boolean cannot prove termination; require runner escalation.
++						throw new Error("background_plugin_stop_unverified");
++					}),
++				],
++				isIdle: () => bg.list().length === 0 && pids.every((pid) => !pidAlive(pid)),
++			});
++		},
++
+ 		listBgServers: () => bg.listAndPush(),
+ 
+ 		async killBackgroundServer(port: number | undefined, taskId?: string): Promise<boolean> {
+diff --git a/server/core-goal-run-adapter.ts b/server/core-goal-run-adapter.ts
+index b1b0936..c448ebe 100644
+--- a/server/core-goal-run-adapter.ts
++++ b/server/core-goal-run-adapter.ts
+@@ -1,4 +1,6 @@
+ import { CoreEngineNotReadyError } from "../packages/keel/src/contracts/core-engine-errors.js";
++import { createManagedGoalState, type GoalDisplayStore } from "./managed-core-goal-state.js";
++import { managedGoalLifecycle } from "./managed-core-goal-lifecycle.js";
+ import type {
+ 	GoalPrefs,
+ 	GoalRunPort,
+@@ -62,7 +64,7 @@ import {
+  */
+ 
+ /** 目标偏好与目标模式开关的唯一读者（宿主 `ClientStateStore`，即 `client-state.json`）。 */
+-export interface GoalRunPrefsStore {
++export interface GoalRunPrefsStore extends GoalDisplayStore {
+ 	getGoalPrefs(clientId: string): GoalPrefs | null | undefined;
+ 	saveGoalPrefs(clientId: string, prefs: GoalPrefs): void;
+ 	getSettingsSnapshot?(clientId: string): { goalModeEnabled?: boolean };
+@@ -84,6 +86,9 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 	const { sinks } = deps;
+ 	const runs = new Map<string, GoalRun>();
+ 	const children = new Map<string, GoalChild>();
++	let quiescing = false;
++	let admissionGeneration = 0;
++	const { persist, forget, restore } = createManagedGoalState(sinks, deps.stateStore);
+ 	const reportMaterials = createGoalMaterialReporter((msg) => sinks.emit(msg));
+ 	const lang = (): ServerLang => resolveServerLang(sinks.getLang());
+ 	const prefs = (): GoalPrefs => ({ ...DEFAULT_GOAL_PREFS, ...deps.stateStore.getGoalPrefs(sinks.clientId) });
+@@ -94,11 +99,13 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 	};
+ 
+ 	/** 这条运行还活着吗：连接没断、没被停、注册表里还是它（不是被替换掉的旧一代）。 */
+-	const alive = (run: GoalRun): boolean => !sinks.isDisposed() && !run.stopped && runs.get(run.parentId) === run;
++	const alive = (run: GoalRun): boolean =>
++		!quiescing && !sinks.isDisposed() && !run.stopped && runs.get(run.parentId) === run;
+ 
+ 	/** 目标帧：在跑就发运行态，没在跑就只发偏好（老实现 `emitGoalStatus()` / `makeGoalStatus()` 两条）。 */
+ 	const publish = (run?: GoalRun): void => {
+ 		if (sinks.isDisposed()) return;
++		if (run) persist(run);
+ 		sinks.emit({ type: "goal_status", status: run ? goalRunStatusOf(run) : goalStatusOfPrefs(prefs()) });
+ 		sinks.flushSnapshot();
+ 	};
+@@ -406,8 +413,11 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 		opts?: GoalStartOptions,
+ 		autoStart = true,
+ 	): Promise<void> {
++		if (quiescing) return;
++		const admission = admissionGeneration;
+ 		const previous = runs.get(parentId);
+ 		if (previous) await stopRun(previous);
++		if (admission !== admissionGeneration || sinks.isDisposed()) return;
+ 		const base = prefs();
+ 		const merged: GoalPrefs = {
+ 			reviewModel: opts?.reviewModel === undefined ? base.reviewModel : opts.reviewModel || null,
+@@ -417,6 +427,7 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 		};
+ 		deps.stateStore.saveGoalPrefs(sinks.clientId, merged);
+ 		const blobs = await applyGoalMaterialBlobs(opts?.materials, opts?.materialBlobs);
++		if (quiescing || admission !== admissionGeneration || sinks.isDisposed()) return;
+ 		if (blobs.dropped.length > 0) {
+ 			const overflow = goalMaterialOverflowText(blobs.dropped);
+ 			notice("warning", overflow.text, overflow.textEn);
+@@ -452,10 +463,14 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 
+ 	/** 调研：开子对话 → 问卷 prompt（标准 `ask_user_question` 工具）→ 收尾即提交目标。 */
+ 	async function startWizard(parentId: string, draft: string, opts?: GoalWizardOptions): Promise<void> {
++		if (quiescing) return;
++		const admission = admissionGeneration;
+ 		const previous = runs.get(parentId);
+ 		if (previous) await stopRun(previous);
++		if (admission !== admissionGeneration || sinks.isDisposed()) return;
+ 		const base = prefs();
+ 		const blobs = await applyGoalMaterialBlobs(opts?.materials, opts?.materialBlobs);
++		if (quiescing || admission !== admissionGeneration || sinks.isDisposed()) return;
+ 		const run = createGoalRun({
+ 			parentId,
+ 			cwd: conversationCwd(parentId),
+@@ -489,8 +504,23 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 	};
+ 
+ 	const port: GoalRunPort = {
++		...managedGoalLifecycle({
++			sinks,
++			runs,
++			persist,
++			restore,
++			publish,
++			closeAll,
++			commitGoal,
++			quiescing: () => quiescing,
++			setQuiescing: (value) => {
++				if (value) admissionGeneration += 1;
++				quiescing = value;
++			},
++			goalModeOn,
++		}),
+ 		setGoal(goal: string, opts?: GoalStartOptions): Promise<void> {
+-			if (sinks.isDisposed()) return Promise.resolve();
++			if (quiescing || sinks.isDisposed()) return Promise.resolve();
+ 			const text = (goal ?? "").trim();
+ 			// 空目标 = 清目标（老实现第一条分支）：没有活动对话时什么都不用做。
+ 			if (!text) {
+@@ -512,6 +542,7 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 		clearGoal(conversationId?: string): Promise<void> {
+ 			const parentId = conversationId ?? sinks.activeConversationId();
+ 			if (!parentId) return Promise.resolve();
++			forget(parentId);
+ 			const run = runs.get(parentId);
+ 			if (!run) {
+ 				publish();
+@@ -522,7 +553,7 @@ export function createCoreGoalRunPort(deps: CoreGoalRunDeps): GoalRunPort {
+ 		},
+ 
+ 		startGoalWizard(text: string, opts?: GoalWizardOptions): Promise<void> {
+-			if (sinks.isDisposed()) return Promise.resolve();
++			if (quiescing || sinks.isDisposed()) return Promise.resolve();
+ 			if (!goalModeOn()) {
+ 				notice(
+ 					"warning",
+diff --git a/server/core-workspace-adapter.ts b/server/core-workspace-adapter.ts
+index 2abaf33..b89153a 100644
+--- a/server/core-workspace-adapter.ts
++++ b/server/core-workspace-adapter.ts
+@@ -3,6 +3,7 @@ import { stat } from "node:fs/promises";
+ import { resolve } from "node:path";
+ import type { WorkspaceHostPort, WorkspaceTarget } from "../packages/keel/src/contracts/workspace.js";
+ import { isRemoteWorkspaceUri, resolveWorkspaceSessionDir } from "../packages/keel/src/remote-workspace.js";
++import { managedWorkspaceRoot, managedCwdAllowed, managedDisplayPath } from "./managed-workspace.js";
+ 
+ export interface CoreWorkspaceOptions {
+ 	/** `client-state.json` 所在目录（远程工作区的 SDK 会话落 `dataDir/sessions-workspace/...`）。 */
+@@ -22,7 +23,7 @@ async function resolveLocalTarget(input: string, from: string): Promise<Workspac
+ 	const base = isRemoteWorkspaceUri(from) ? home : from;
+ 	const expanded =
+ 		trimmed === "~" || trimmed.startsWith("~/") || trimmed.startsWith("~\\")
+-			? resolve(home, trimmed.slice(1))
++			? resolve(home, trimmed.slice(2))
+ 			: trimmed;
+ 	const abs = resolve(base, expanded);
+ 	const info = await stat(abs);
+@@ -40,6 +41,13 @@ export function createCoreWorkspace(options: CoreWorkspaceOptions = {}): Workspa
+ 	return {
+ 		async resolveTarget(input: string, from: string): Promise<WorkspaceTarget> {
+ 			const trimmed = input.trim();
++			const managedRoot = managedWorkspaceRoot();
++			if (managedRoot) {
++				if (isRemoteWorkspaceUri(trimmed)) throw new Error("managed_workspace_required");
++				const target = await resolveLocalTarget(trimmed, from);
++				if (!managedCwdAllowed(target.cwd)) throw new Error("managed_workspace_required");
++				return { ...target, cwd: managedDisplayPath(target.cwd) };
++			}
+ 			if (trimmed === MACHINE_ROOT) {
+ 				throw new Error("请选择一个具体目录作为工作目录（此电脑本身不是目录）");
+ 			}
+diff --git a/server/dispatch-domain-handlers.ts b/server/dispatch-domain-handlers.ts
+index aed4f51..01184be 100644
+--- a/server/dispatch-domain-handlers.ts
++++ b/server/dispatch-domain-handlers.ts
+@@ -422,6 +422,10 @@ export function handleTerminalMessage(
+ 	cs: DispatchSession,
+ 	context?: NativeCliPasteContext,
+ ): boolean {
++	if (cs.isQuiesceActive?.() && ["terminal_create", "terminal_input", "terminal_cli_control", "terminal_cli_paste", "run_command"].includes(msg.type)) {
++		context?.send({ type: "notice", level: "error", text: "server_quiesced", textEn: "Runner is quiescing; new terminal work is blocked." });
++		return true;
++	}
+ 	switch (msg.type) {
+ 		case "terminal_attach": {
+ 			const tm = cs.findTerminalManager
+@@ -815,6 +819,12 @@ export function handlePlanAndGoalMessage(msg: ClientMessage, cs: DispatchSession
+ 				materialBlobs: msg.materialBlobs,
+ 			});
+ 			return true;
++		case "resume_goal":
++			if (!cs.resumeGoal) throw new Error("goal_resume_unsupported");
++			void cs.resumeGoal().catch(() =>
++				cs.emitNotice("error", "目标恢复失败，请重试。", "Goal resume failed. Please retry."),
++			);
++			return true;
+ 		case "clear_goal":
+ 			void cs.clearGoal();
+ 			return true;
+diff --git a/server/dsh/dsh-agent-service.ts b/server/dsh/dsh-agent-service.ts
+index c198712..47a7fe3 100644
+--- a/server/dsh/dsh-agent-service.ts
++++ b/server/dsh/dsh-agent-service.ts
+@@ -1651,6 +1651,16 @@ export class DshClientSession {
+ 		return n;
+ 	}
+ 
++	isQuiesceActive(): boolean {
++		return this.isQuiesced?.() ?? false;
++	}
++
++	activeTools(): number {
++		let n = 0;
++		for (const conv of this.convs.values()) n += conv.toolStartTimes.size;
++		return n;
++	}
++
+ 	pendingMessages(): number {
+ 		return 0;
+ 	}
+@@ -4633,6 +4643,11 @@ export class DshClientSession {
+ 		this.flushSnapshot();
+ 	}
+ 
++	/** Native pi-web-ui goals use this action to resume a paused persisted goal.
++	 * DSH owns a separate runtime goal protocol and never restores native goal
++	 * records, so the shared dispatch surface intentionally treats this as a no-op. */
++	async resumeGoal(): Promise<void> {}
++
+ 	async startGoalWizard(
+ 		text: string,
+ 		opts?: { wizardModel?: string; maxRounds?: number; locked?: boolean },
+@@ -5712,9 +5727,10 @@ export class DshAgentService implements EngineService {
+ 		return this.quiesced;
+ 	}
+ 
+-	quiesce(): void {
++	async quiesce(): Promise<{ ok: boolean; error?: string }> {
+ 		this.quiesced = true;
+ 		this.quiescedAt = Date.now();
++		return { ok: true };
+ 	}
+ 
+ 	unquiesce(): void {
+@@ -5738,6 +5754,12 @@ export class DshAgentService implements EngineService {
+ 		return n;
+ 	}
+ 
++	activeTools(): number {
++		let n = 0;
++		for (const cs of this.clients.values()) n += cs.activeTools();
++		return n;
++	}
++
+ 	noteSocketOpen(): void {
+ 		this.socketCount += 1;
+ 	}
+@@ -5754,6 +5776,7 @@ export class DshAgentService implements EngineService {
+ 		quiescedSince?: number;
+ 		connectedClients: number;
+ 		activeConversations: number;
++		activeTools: number;
+ 		pendingMessages: number;
+ 		service: UiServiceInfo | null;
+ 	} {
+@@ -5764,6 +5787,7 @@ export class DshAgentService implements EngineService {
+ 			...this.quiesceInfo(),
+ 			connectedClients: this.socketCount,
+ 			activeConversations: this.activeConversations(),
++			activeTools: this.activeTools(),
+ 			pendingMessages: this.pendingMessages(),
+ 			service: toServiceInfo(launchOrigin()),
+ 		};
+diff --git a/server/env-registry.ts b/server/env-registry.ts
+index e1bbc43..ba3b8b9 100644
+--- a/server/env-registry.ts
++++ b/server/env-registry.ts
+@@ -106,6 +106,8 @@ export const ENV_SPECS: readonly EnvSpec[] = [
+ 	{ name: "PI_DEVICE_HUB_PACKAGE_ROOT", scope: "internal" },
+ 	{ name: "PI_DEVICE_HUB_SERVICE_CONFIG", scope: "internal" },
+ 	{ name: "PI_WEB_ASSET_AUTO_MIRROR", scope: "internal" },
++	{ name: "PI_WEB_CONTROL_PATH", scope: "internal" },
++	{ name: "PI_WEB_MCP_ADAPTER_PATH", scope: "internal" },
+ 	{ name: "PI_WEB_ASSET_MIRROR", scope: "internal" },
+ 	{ name: "PI_WEB_ASYNC_SESSION_OPEN", scope: "internal" },
+ 	{ name: "PI_WEB_CLAUDE_PERMISSION_MODE", scope: "internal" },
+diff --git a/server/files-service.ts b/server/files-service.ts
+index 167d1ce..5b6d041 100644
+--- a/server/files-service.ts
++++ b/server/files-service.ts
+@@ -3,7 +3,7 @@ import { saveFilePreservingMetadata } from "./file-save.js";
+ import { isUploadDataTooLong, uploadLimitBytes } from "./payload-limits.js";
+ import { writeUploadExclusiveSync, writeRemoteUploadExclusive } from "./uploads.js";
+ import { homedir } from "node:os";
+-import { resolve, relative, sep, isAbsolute, posix } from "node:path";
++import { resolve, relative, sep, dirname, isAbsolute, posix } from "node:path";
+ import type { ServerMessage, FileEntry, FileSearchResult } from "./protocol.js";
+ import { pick, type ServerLang } from "./i18n.js";
+ import { previewKind, looksLikeText, decodeText, hexDump, countLines } from "./text-sniff.js";
+@@ -16,6 +16,7 @@ import {
+ 	resolveRemoteWorkspacePath,
+ } from "./remote-ssh-service.js";
+ import { launchShell, openArgv, revealArgv, type ShellName } from "./shell-activate.js";
++import { managedCwdAllowed, managedProjectRoots, pathWithinRoot } from "./managed-workspace.js";
+ 
+ export const IS_WIN32 = process.platform === "win32";
+ 
+@@ -1019,6 +1020,10 @@ export class FilesService {
+ 				expanded = resolve(this.host.getCwd(), expanded);
+ 			}
+ 			const abs = resolve(expanded);
++			const roots = managedProjectRoots();
++			if (roots.length && (!roots.some(root => pathWithinRoot(root, abs)) || !managedCwdAllowed(dirname(abs)))) {
++				throw new Error("Directory is outside the managed project roots");
++			}
+ 			await fs.mkdir(abs, { recursive: true });
+ 			this.host.emit({
+ 				type: "notice",
+@@ -1353,17 +1358,26 @@ export class FilesService {
+ 			const home = homedir();
+ 			const isWin = IS_WIN32;
+ 			const rawInput = input.trim();
++			const roots = managedProjectRoots();
+ 			if (rawInput === "") {
+ 				empty();
+ 				return;
+ 			}
+ 
+ 			if (rawInput === MACHINE_ROOT || rawInput === MACHINE_ROOT + "/") {
++				if (roots.length) {
++					empty();
++					return;
++				}
+ 				this.host.emit({ type: "path_completions", completions: await this.machineRootEntries() });
+ 				return;
+ 			}
+ 
+ 			if (isWin && /^[A-Za-z]:?$/.test(rawInput)) {
++				if (roots.length) {
++					empty();
++					return;
++				}
+ 				const letter = rawInput[0].toUpperCase();
+ 				const drive = `${letter}:`;
+ 				let st: { isDirectory(): boolean };
+@@ -1416,6 +1430,10 @@ export class FilesService {
+ 			const lastSlash = Math.max(expanded.lastIndexOf("/"), expanded.lastIndexOf("\\"));
+ 			const dirPart = lastSlash >= 0 ? expanded.slice(0, lastSlash + 1) : "";
+ 			const prefix = lastSlash >= 0 ? expanded.slice(lastSlash + 1) : expanded;
++			if (roots.length && (!roots.some(root => pathWithinRoot(root, expanded)) || !managedCwdAllowed(dirPart || expanded))) {
++				empty();
++				return;
++			}
+ 
+ 			const dirents = await fs.readdir(dirPart, { withFileTypes: true }).catch(() => null);
+ 			if (!dirents) {
+diff --git a/server/goal-run-state.ts b/server/goal-run-state.ts
+index 058a4f2..6b292ab 100644
+--- a/server/goal-run-state.ts
++++ b/server/goal-run-state.ts
+@@ -23,6 +23,7 @@ export interface GoalChild {
+ }
+ 
+ export interface GoalRun {
++	paused?: boolean;
+ 	parentId: string;
+ 	cwd: string;
+ 	goal: string;
+@@ -100,6 +101,7 @@ export function createGoalRun(input: {
+ /** 运行态 → `goal_status`（`pass` 时目标字段按老口径清空；`wizard` 段只填问卷面板）。 */
+ export function goalRunStatusOf(run: GoalRun): GoalStatus {
+ 	return {
++		paused: run.paused === true,
+ 		conversationId: run.phase === "pass" ? null : run.parentId,
+ 		goal: run.phase === "pass" ? null : run.goal,
+ 		reviewModel: run.reviewModel,
+diff --git a/server/index.ts b/server/index.ts
+index 0fd3d90..8c5e3f5 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -8,13 +8,17 @@
+  *
+  * Env:
+  *   PI_WEB_PORT     HTTP port (default 8787)
+- *   PI_WEB_CWD      workspace the agent operates in (default: process.cwd())
++ *   PI_WEB_CWD      workspace the agent operates in (default: process.cwd(),
++ *                   forced to /workspace by managed runners)
+  *   PI_WEB_DATA_DIR where per-client UI state is stored (client-state.json,
+  *   default: <home>/.pi-web). Chat sessions are NOT stored here — they live
+- *   in the pi agent's global TUI session dir (~/.pi/agent/sessions/--<cwd>--/)
+- *   via the SDK default, so this web UI, the dev instance, and the pi CLI/TUI
+- *   all share one conversation list per project.
++ *   in the pi agent session directory. Managed instances use the explicit flat
++ *   PI_CODING_AGENT_SESSION_DIR root; ordinary runs retain the SDK's default
++ *   per-project layout, so this web UI, the dev instance, and the pi CLI/TUI
++ *   all share one conversation list for the same history root.
+  *   PI_CODING_AGENT_DIR  pi config dir (auth/models/skills) — passed to the SDK
++ *   PI_CODING_AGENT_SESSION_DIR  explicit flat transcript root; required by
++ *                   managed runners so all browser clients share one history
+  */
+ // 必须排在所有 import 之前：先装上「Windows 不弹控制台」进程级开关，后面求值的模块
+ // （含 module 作用域里的 `promisify(execFile)` 捕获、插件里的 spawn）才都吃到它。
+@@ -99,7 +103,7 @@ import {
+ 	syncThemeCatalog,
+ 	uninstallCommunityTheme,
+ } from "./theme-catalog.js";
+-import { isManaged, managedRefusal } from "./managed.js";
++import { isManaged, managedCredentialRefusal, managedRefusal } from "./managed.js";
+ import { launchOrigin, toServiceInfo } from "./launch-origin.js";
+ import { acquireKernelLock, formatLockDenied, releaseKernelLock } from "../shared/instance-lock.js";
+ import { buildKernelInfo, classifyKernelInstall, describeKernelInstall } from "./kernel-identity.js";
+@@ -115,6 +119,9 @@ import {
+ 	isClientMessageEnvelope,
+ 	isClientMessageWithinByteLimit,
+ } from "./ws-pending-queue.js";
++import { managedCwdAllowed, managedDisplayPath, managedProjectRoots } from "./managed-workspace.js";
++import { createManagedModelCatalog } from "./managed-model-catalog.js";
++import { createManagedRunController } from "./managed-run-controller.js";
+ import {
+ 	installPack,
+ 	isKnownPack,
+@@ -229,7 +236,10 @@ function cliFlag(name: string): string | undefined {
+ 	return undefined;
+ }
+ 
+-const CWD = resolve(cliFlag("--cwd") ?? process.env.PI_WEB_CWD ?? process.cwd());
++// Managed runners expose the Mapache workspace only. Ignore stale client or
++// command-line cwd values here; per-client project changes are checked again
++// against the same canonical root in AgentService.
++const CWD = resolve(managedProjectRoots()[0] ?? cliFlag("--cwd") ?? process.env.PI_WEB_CWD ?? process.cwd());
+ const DATA_DIR = resolve(cliFlag("--data-dir") ?? process.env.PI_WEB_DATA_DIR ?? join(homedir(), ".pi-web"));
+ try {
+ 	mkdirSync(DATA_DIR, { recursive: true });
+@@ -316,7 +326,13 @@ function buildId(): string {
+ 	}
+ 	return buildIdCache;
+ }
+-const SESSION_DIR_ROOT = join(getAgentDir(), "sessions");
++// Explicitly configured transcript root. Managed runners require this flat
++// root so every browser client discovers the same history regardless of its
++// client-local display state; ordinary runs keep the SDK default layout.
++const SESSION_DIR_ROOT = resolve(process.env.PI_CODING_AGENT_SESSION_DIR?.trim() || join(getAgentDir(), "sessions"));
++if (isManaged() && !process.env.PI_CODING_AGENT_SESSION_DIR?.trim()) {
++	throw new Error("managed_session_dir_missing");
++}
+ 
+ const proxyInfo = initHttpProxy(getAgentDir());
+ if (proxyInfo.active) {
+@@ -798,7 +814,8 @@ registerQuickAskRoutes(app, {
+ 	},
+ });
+ 
+-const EXPLICIT_ENGINE_ARG = cliFlag("--engine") ?? process.env.PI_WEB_ENGINE;
++const MANAGED = isManaged();
++const EXPLICIT_ENGINE_ARG = MANAGED ? "pi" : cliFlag("--engine") ?? process.env.PI_WEB_ENGINE;
+ let currentDefaultEngine: EngineId =
+ 	EXPLICIT_ENGINE_ARG === "agy"
+ 		? "agy"
+@@ -816,6 +833,7 @@ let currentDefaultEngine: EngineId =
+ const clientEngines = new Map<string, EngineId>();
+ 
+ function resolveClientEngine(clientId: string): EngineId {
++	if (MANAGED) return "pi";
+ 	const mem = clientEngines.get(clientId);
+ 	if (mem) return mem;
+ 	if (!EXPLICIT_ENGINE_ARG) {
+@@ -830,13 +848,13 @@ function resolveClientEngine(clientId: string): EngineId {
+ }
+ 
+ function setClientEngine(clientId: string, engine: EngineId): void {
++	if (MANAGED) engine = "pi";
+ 	clientEngines.set(clientId, engine);
+ 	currentDefaultEngine = engine;
+ 	sharedStateStore.saveClientEngine(clientId, engine);
+ 	sharedStateStore.saveDefaultEngine(engine);
+ }
+ 
+-const MANAGED = isManaged();
+ const ORIGIN = launchOrigin();
+ const SERVICE_INFO = toServiceInfo(ORIGIN);
+ 
+@@ -911,10 +929,36 @@ registerFileTransferRoutes(
+ 	(clientId) => (sharedStateStore.getSettingsSnapshot(clientId).folderUploadMaxMb ?? 32) * 1024 * 1024,
+ );
+ 
++function safeBuildDescriptor(): {
++	upstreamCommit: string;
++	packageVersion: string;
++	piSdkVersion: string;
++	piMcpAdapterVersion: string;
++} | null {
++	try {
++		const value = JSON.parse(readFileSync(join(resolvePkgRoot(), "build-info.json"), "utf8")) as Record<
++			string,
++			unknown
++		>;
++		const stringValue = (key: string): string => (typeof value[key] === "string" ? (value[key] as string) : "");
++		const descriptor = {
++			upstreamCommit: stringValue("upstreamCommit"),
++			packageVersion: stringValue("packageVersion"),
++			piSdkVersion: stringValue("piSdkVersion"),
++			piMcpAdapterVersion: stringValue("piMcpAdapterVersion"),
++		};
++		return Object.values(descriptor).every(Boolean) ? descriptor : null;
++	} catch {
++		return null;
++	}
++}
++
+ app.get("/api/health", (_req, res) => {
+ 	res.json({
+ 		ok: true,
+ 		piVersion: VERSION,
++		build: safeBuildDescriptor(),
++		activity: service.serviceStatus(),
+ 		piSdkCopies: sdkCopies(),
+ 		engine: currentDefaultEngine,
+ 		instanceName: process.env.PI_WEB_INSTANCE_NAME?.trim() || undefined,
+@@ -1894,13 +1938,21 @@ function ensureEngine(engine: EngineId): EngineService {
+ 					agentDir: getAgentDir(),
+ 					dataDir: DATA_DIR,
+ 					version: VERSION,
+-					mcpProjects: () => mcpProjects,
++					mcpProjects: MANAGED ? undefined : () => mcpProjects,
+ 				}),
+-			mcpProjects: () => mcpProjects,
++			mcpProjects: MANAGED ? undefined : () => mcpProjects,
+ 			// 插件工具「装进已开会话」：SDK 的会话工具表只能创建期组，就地刷新要用宿主那份
+ 			// `syncPluginToolsIntoSession`（`server/plugins.ts` 的单源，不在这里重写一遍）。
+ 			pluginToolSync: () => createCorePluginToolSync(),
+-			workspaceHost: () => createCoreWorkspace({ dataDir: DATA_DIR }),
++			initialClientCwd: MANAGED ? (id) => {
++				const saved = sharedStateStore.get(id).lastCwd;
++				return saved && managedCwdAllowed(saved) && statSync(saved, { throwIfNoEntry: false })?.isDirectory()
++					? managedDisplayPath(saved) : undefined;
++			} : undefined,
++			workspaceHost: ({clientId}) => createCoreWorkspace({
++				dataDir: DATA_DIR,
++				onChanged: MANAGED ? (cwd) => sharedStateStore.remember(clientId, cwd, { promote: false }) : undefined,
++			}),
+ 			sandbox: (sinks) => createCoreSandbox({ dataDir: DATA_DIR, ...sinks }),
+ 			worktree: () => createCoreWorktree(),
+ 			// 原生 CLI：内核只持有账（身份 / 标题 / 归属），PTY / hook / 转录 / 状态 / 标题写回都在
+@@ -1973,7 +2025,23 @@ function ensureEngine(engine: EngineId): EngineService {
+ 
+ ensureEngine(currentDefaultEngine);
+ 
+-const service: EngineService = {
++const managedModels = createManagedModelCatalog({
++	agentDir: process.env.PI_CODING_AGENT_DIR ?? getAgentDir(),
++	savedSelection: () => sharedStateStore.getMostRecentlySelectedProjectSelection(CWD)?.modelId,
++	isQuiesced: () => sharedQuiesced,
++});
++
++const managedRuns = createManagedRunController({
++	engine: () => {
++		const engine = ensureEngine("pi");
++		if (!(engine instanceof CoreEngine)) throw new Error("managed_core_unavailable");
++		return engine;
++	},
++	models: () => managedModels.workspaceRequestModels(),
++});
++const service: EngineService & ReturnType<typeof createManagedRunController> & ReturnType<typeof createManagedModelCatalog> = {
++	...managedRuns,
++	workspaceRequestModels: () => managedModels.workspaceRequestModels(),
+ 	attach(clientId, send, sendShared) {
+ 		return ensureEngine(resolveClientEngine(clientId)).attach(clientId, send, sendShared);
+ 	},
+@@ -2015,9 +2083,10 @@ const service: EngineService = {
+ 	isQuiesced() {
+ 		return sharedQuiesced || activeEngines().some((s) => s.isQuiesced());
+ 	},
+-	quiesce() {
++	async quiesce() {
+ 		sharedQuiesced = true;
+-		for (const s of activeEngines()) s.quiesce();
++		const results = await Promise.all(activeEngines().map(s => s.quiesce()));
++		return results.find(r => r && !r.ok) ?? {ok: true};
+ 	},
+ 	unquiesce() {
+ 		sharedQuiesced = false;
+@@ -2042,6 +2111,8 @@ const service: EngineService = {
+ 		return {
+ 			...base,
+ 			activeConversations: active,
++			activeTools: activeEngines().reduce((sum, s) => sum + (s.activeTools?.() ?? 0), 0),
++			completedTurns: piServiceInstance?.serviceStatus().completedTurns ?? 0,
+ 			pendingMessages: pending,
+ 		};
+ 	},
+@@ -2455,7 +2526,7 @@ const mcpProjects = new McpProjectRuntimeRegistry({
+ 	onNotice: (_cwd, level, text, textEn) => pushNoticeToAll(level, text, textEn),
+ 	log: (...a) => console.log("[mcp]", ...a),
+ });
+-pluginMgr.mcpProjects = mcpProjects;
++pluginMgr.mcpProjects = MANAGED ? undefined : mcpProjects;
+ wireEngineHooks = (svc: EngineService) => {
+ 	svc.onNotificationEvent = async (event) => {
+ 		const results = await Promise.allSettled([
+@@ -2478,7 +2549,7 @@ wireEngineHooks = (svc: EngineService) => {
+ 	svc.onRunEvent = (ev) => pluginMgr.emitRunEvent(ev);
+ 	svc.onConversationChanged = () => pluginMgr.emitConversationChanged();
+ 	svc.onClientModelChanged = (snap) => pluginMgr.emitClientModelChanged(snap);
+-	svc.pluginToolsProvider = (cwd) => [...pluginMgr.getAgentTools(), ...(cwd ? mcpProjects.getTools(cwd) : [])];
++	svc.pluginToolsProvider = (cwd) => [...pluginMgr.getAgentTools(), ...(!MANAGED && cwd ? mcpProjects.getTools(cwd) : [])];
+ 	svc.pluginCommandsProvider = () => pluginMgr.listCommands();
+ 	svc.pluginBgTasksProvider = () => pluginMgr.bgTasks();
+ 	svc.pluginStopBgTask = (taskId) => pluginMgr.stopPluginBgTask(taskId);
+@@ -2856,6 +2927,7 @@ wss.on("connection", (ws) => {
+ 	};
+ 
+ 	const handleSwitchEngine = async (msg: Extract<ClientMessage, { type: "switch_engine" }>): Promise<void> => {
++		if (MANAGED) return;
+ 		const targetEngine: EngineId | null =
+ 			msg.engine === "agy"
+ 				? "agy"
+@@ -3302,7 +3374,7 @@ wss.on("connection", (ws) => {
+ 			}
+ 			return;
+ 		}
+-		const refusal = managedRefusal(msg.type, MANAGED) ?? tabsRefusal(msg.type, TABS);
++		const refusal = managedRefusal(msg.type, MANAGED) ?? managedCredentialRefusal(msg.type, MANAGED, msg) ?? tabsRefusal(msg.type, TABS);
+ 		if (refusal) {
+ 			// 请求型消息必须回它自己的结果包（notice 只是附加提示），否则等待方永久 loading。
+ 			refuse(msg, { text: refusal, textEn: refusal, error: refusal }, send);
+@@ -3964,7 +4036,7 @@ if (!bootThemeCatalogDisabled) {
+ }
+ 
+ const stopControl = startControlServer({
+-	service,
++	service: {...service, serviceStatus: () => ({...service.serviceStatus(), activeTools: service.serviceStatus().activeTools ?? 0, completedTurns: piServiceInstance?.serviceStatus().completedTurns ?? 0}), quiesce: async () => await service.quiesce() ?? {ok: true}},
+ 	dataDir: DATA_DIR,
+ 	port: PORT,
+ 	authToken: () => AUTH_TOKEN,
+diff --git a/server/managed.ts b/server/managed.ts
+index 7cfcd19..b74a512 100644
+--- a/server/managed.ts
++++ b/server/managed.ts
+@@ -1,21 +1,89 @@
+-export const MANAGED_MESSAGES = [
+-	"check_update",
+-	"check_updates_all",
+-	"install_pi_agent",
+-	"update_engine",
+-	"uninstall_engine",
+-	"plugin_catalog_add",
+-	"plugin_job",
+-	"plugin_catalog_sync",
+-] as const;
++import { isManaged } from "../packages/keel/src/adapters/sdk/managed-resources.js";
++export { isManaged, managedMcpAdapterPath } from "../packages/keel/src/adapters/sdk/managed-resources.js";
++/**
++ * managed — instances whose updates come from outside.
++ *
++ * pi-web-ui can update itself: the top bar shows an updates badge and a panel
++ * whose buttons run `npm i -g pi-web-ui@latest` in a visible terminal and
++ * restart the server. The plugin market installs plugins from the network the
++ * same way. On a developer's laptop both are conveniences.
++ *
++ * Behind a deploy pipeline they are not. A Docker image, a distribution
++ * package, or a release script that also checks the reverse proxy, the service
++ * unit and the environment variables a new version needs — for all of those,
++ * an in-app self-update leaves the machine in a state nothing describes, until
++ * the next real deploy silently undoes it. `PI_WEB_MANAGED=1` says "this
++ * instance is managed from outside": the update paths refuse, and the client
++ * stops offering them.
++ *
++ * Two rules kept this small:
++ *
++ * - **The server refuses, the client only hides.** Hiding a button while the
++ *   socket still accepts the message is hiding, not disabling: anything that
++ *   can open the WebSocket can still send it.
++ * - **Nothing else changes.** Chatting, plugins already installed, git,
++ *   terminal, settings are untouched — this switch is about who installs
++ *   software on the machine, not about what the interface can do.
++ */
+ 
+-export function isManaged(env: NodeJS.ProcessEnv = process.env): boolean {
+-	const v = (env.PI_WEB_MANAGED ?? "").trim().toLowerCase();
+-	return v === "1" || v === "true" || v === "yes" || v === "on";
+-}
++/** Requests that remain unavailable in a managed deployment. */
++export const MANAGED_MESSAGES = [] as const;
++
++export type ManagedMessage = (typeof MANAGED_MESSAGES)[number];
++
++/** Commands that would let the upstream app become a second credential owner. */
++export const MANAGED_CREDENTIAL_MESSAGES = [
++	"provider_oauth_start",
++	"provider_oauth_reply",
++	"provider_oauth_logout",
++	"set_provider_api_key",
++	"clear_provider_api_key",
++	"add_provider_key",
++	"activate_provider_key",
++	"remove_provider_key",
++] as const;
+ 
++/**
++ * The reason to send back, or null when the message may proceed.
++ *
++ * Returning the text rather than a boolean keeps the caller a single line and
++ * puts the explanation next to the rule it comes from — the user gets a
++ * sentence, not a silently dropped message.
++ */
+ export function managedRefusal(type: string, managed: boolean): string | null {
+ 	if (!managed) return null;
+ 	if (!(MANAGED_MESSAGES as readonly string[]).includes(type)) return null;
+ 	return "This instance is managed: updates and plugin installs are handled by whoever deploys it (PI_WEB_MANAGED=1).";
+ }
++
++/**
++ * Reject credential-bearing requests while leaving model metadata operations
++ * available. `save_model_config` and `fetch_models` are safe only when the
++ * request contains no new secret; the saved server-side secret/config is
++ * reused by those read/metadata paths.
++ */
++export function managedCredentialRefusal(type: string, managed: boolean, payload?: unknown): string | null {
++	if (!managed) return null;
++	if ((MANAGED_CREDENTIAL_MESSAGES as readonly string[]).includes(type)) return credentialRefusalText();
++
++	const message = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
++	if (type === "fetch_models" && hasNonEmptySecret(message.apiKey)) return credentialRefusalText();
++	if (type === "save_model_config") {
++		const config =
++			message.config && typeof message.config === "object" ? (message.config as Record<string, unknown>) : {};
++		if (hasNonEmptySecret(config.apiKey) || hasNonEmptyHeaders(config.headers)) return credentialRefusalText();
++	}
++	return null;
++}
++
++function hasNonEmptySecret(value: unknown): boolean {
++	return typeof value === "string" ? value.trim().length > 0 : value != null;
++}
++
++function hasNonEmptyHeaders(value: unknown): boolean {
++	return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0);
++}
++
++function credentialRefusalText(): string {
++	return "This instance is managed: provider credentials, OAuth, and secret headers are handled by Mapache. Model selection and non-secret model metadata remain available.";
++}
+diff --git a/server/model-admin.ts b/server/model-admin.ts
+index 987dbc3..ab1aca7 100644
+--- a/server/model-admin.ts
++++ b/server/model-admin.ts
+@@ -15,9 +15,13 @@ import { enrichBatch, type EnrichLang } from "./model-enrich.js";
+ import { resolveModelReasoningSpec } from "./reasoning-registry.js";
+ import { pick, type ServerLang } from "./i18n.js";
+ import { ProviderOAuthFlowManager } from "./provider-oauth-flow.js";
++import { isMapacheCustomProvider, mapacheProviderKey } from "./mapache-provider-auth.js";
++import { managedCredentialRefusal } from "./managed.js";
+ 
+ export interface ModelAdminHost {
+ 	agentDir: string;
++	/** Managed instances receive credentials from Mapache, never from this UI. */
++	managed?: boolean;
+ 	emit: (msg: ServerMessage) => void;
+ 	flushSnapshot: () => void;
+ 	isDisposed: () => boolean;
+@@ -502,6 +506,23 @@ export class ModelAdminService {
+ 		this.listProviderKeys();
+ 		this.host.flushSnapshot();
+ 	}
++	private refuseManagedCredentialMutation(type: string): boolean {
++		const payload = type === "save_model_config" ? { config: { apiKey: "managed" } } : {};
++		const text = managedCredentialRefusal(type, true, payload);
++		if (!this.host.managed || !text) return false;
++		this.host.emit({ type: "notice", level: "error", text, textEn: text });
++		this.host.flushSnapshot();
++		return true;
++	}
++
++	// ---------------------------------------------------------------------------
++	// Built-in provider multiple key store (one provider, several API keys).
++	// Persisted as <agentDir>/provider-keys.json:
++	//   { "<providerId>": { activeKeyName: string|null, keys: [{name,apiKey}] } }
++	// The frontend only ever sees NAMES (no value, no masked fragment). The key
++	// value travels to the server ONCE on add and is stored (like auth.json); the
++	// server resolves + switches the active key by NAME.
++	// ---------------------------------------------------------------------------
+ 
+ 	private providerKeysPath(): string {
+ 		return join(this.host.agentDir, "provider-keys.json");
+@@ -677,6 +698,7 @@ export class ModelAdminService {
+ 	}
+ 
+ 	async setProviderApiKey(provider: string, apiKey: string): Promise<void> {
++		if (this.refuseManagedCredentialMutation("set_provider_api_key")) return;
+ 		const pid = provider.trim();
+ 		const key = apiKey.trim();
+ 		if (!pid) {
+@@ -725,6 +747,7 @@ export class ModelAdminService {
+ 	}
+ 
+ 	async addProviderKey(provider: string, apiKey: string, name?: string): Promise<void> {
++		if (this.refuseManagedCredentialMutation("add_provider_key")) return;
+ 		const pid = provider.trim();
+ 		const key = apiKey.trim();
+ 		if (!pid) {
+@@ -786,6 +809,7 @@ export class ModelAdminService {
+ 	}
+ 
+ 	async activateProviderKey(provider: string, keyName: string, opts?: { silent?: boolean }): Promise<boolean> {
++		if (this.refuseManagedCredentialMutation("activate_provider_key")) return false;
+ 		const pid = provider.trim();
+ 		const targetName = keyName.trim();
+ 		const silent = opts?.silent === true;
+@@ -841,6 +865,7 @@ export class ModelAdminService {
+ 	}
+ 
+ 	async removeProviderKey(provider: string, keyName: string): Promise<void> {
++		if (this.refuseManagedCredentialMutation("remove_provider_key")) return;
+ 		const pid = provider.trim();
+ 		const targetName = keyName.trim();
+ 		try {
+@@ -913,6 +938,7 @@ export class ModelAdminService {
+ 	}
+ 
+ 	async clearProviderApiKey(provider: string): Promise<void> {
++		if (this.refuseManagedCredentialMutation("clear_provider_api_key")) return;
+ 		const pid = provider.trim();
+ 		if (!pid) {
+ 			this.host.emit({ type: "notice", level: "error", text: "请填写服务商 ID", textEn: "Enter a provider ID" });
+@@ -1357,7 +1383,15 @@ export class ModelAdminService {
+ 		providerId?: string,
+ 	): Promise<void> {
+ 		const emitError = (error: string) => this.host.emit({ type: "fetch_models_result", reqId, ok: false, error });
++		if (this.host.managed && hasNonEmptySecret(apiKey)) {
++			emitError("Provider credentials are managed by Mapache");
++			return;
++		}
+ 		try {
++			if (this.host.managed && providerId && isMapacheCustomProvider(providerId)) {
++				apiKey = mapacheProviderKey(this.host.agentDir, providerId, baseUrl, api);
++				authHeader = true;
++			}
+ 			const key = apiKey?.trim() || this.savedProviderApiKey(providerId);
+ 			const models = await ModelAdminService.probeModelsEndpoint(baseUrl, key, authHeader, api, undefined, lang);
+ 			this.host.emit({ type: "fetch_models_result", reqId, ok: true, models });
+@@ -1435,7 +1469,7 @@ export class ModelAdminService {
+ 			const ac = new AbortController();
+ 			const timer = setTimeout(() => ac.abort(), 15000);
+ 			try {
+-				return await fetch(u, { headers, signal: ac.signal });
++				return await fetch(u, { headers, signal: ac.signal, redirect: "error" });
+ 			} catch (err) {
+ 				if ((err as Error).name === "AbortError") {
+ 					throw new Error(pick(l, "请求超时（15 秒）", "Request timed out (15s)", "models.fetch.timeout"));
+@@ -1459,8 +1493,10 @@ export class ModelAdminService {
+ 		if (!res.ok) {
+ 			let detail = "";
+ 			try {
+-				detail = (await res.text()).slice(0, 200);
+-			} catch {}
++				await res.body?.cancel();
++			} catch {
++				// response body already consumed / not text — ignore
++			}
+ 			const detailSuffixZh = detail ? `：${detail}` : "";
+ 			const detailSuffixEn = detail ? `: ${detail}` : "";
+ 			throw new Error(
+@@ -1524,7 +1560,9 @@ export class ModelAdminService {
+ 			}
+ 			const fetched = await ModelAdminService.probeModelsEndpoint(
+ 				baseUrl,
+-				saved.apiKey,
++				this.host.managed && isMapacheCustomProvider(pid)
++					? mapacheProviderKey(this.host.agentDir, pid, baseUrl, saved.api)
++					: saved.apiKey,
+ 				saved.authHeader === true ? true : undefined,
+ 				saved.api,
+ 				saved.headers as Record<string, string> | undefined,
+@@ -1829,7 +1867,35 @@ export class ModelAdminService {
+ 		}
+ 		try {
+ 			const { providers } = this.readModelsConfig();
+-			providers[pid] = mergeProviderConfigEntry(providers[pid], config, models);
++			const previous = providers[pid];
++			const submitted = config as UiProviderConfig & { headers?: unknown };
++			if (this.host.managed && (hasNonEmptySecret(submitted.apiKey) || hasNonEmptyHeaders(submitted.headers))) {
++				this.refuseManagedCredentialMutation("save_model_config");
++				return;
++			}
++			// 合并而不是重建：UI 认识之外的字段（provider 级 headers、模型级 api/
++			// baseUrl/cost/compat/thinkingLevelMap）必须原样保留，见 mergeProviderConfigEntry。
++			const managedConfig = this.host.managed
++				? {
++						...config,
++						...(typeof previous?.apiKey === "string" ? { apiKey: previous.apiKey } : {}),
++						...(previous && Object.prototype.hasOwnProperty.call(previous, "authHeader")
++							? { authHeader: previous.authHeader as boolean | undefined }
++							: {}),
++					}
++				: config;
++			if (this.host.managed && isMapacheCustomProvider(pid)) {
++				mapacheProviderKey(this.host.agentDir, pid, config.baseUrl || "", config.api);
++			}
++			providers[pid] = mergeProviderConfigEntry(previous, managedConfig, models);
++			if (this.host.managed && isMapacheCustomProvider(pid)) {
++				delete providers[pid].apiKey;
++				delete providers[pid].headers;
++				delete providers[pid].modelOverrides;
++				for (const model of providers[pid].models as Record<string, unknown>[]) {
++					for (const key of ["baseUrl", "apiKey", "headers", "api"]) delete model[key];
++				}
++			}
+ 			await this.writeModelsConfigAndReload(providers, pid);
+ 			this.host.emit({
+ 				type: "notice",
+@@ -1883,3 +1949,11 @@ export class ModelAdminService {
+ 		this.host.flushSnapshot();
+ 	}
+ }
++
++function hasNonEmptySecret(value: unknown): boolean {
++	return typeof value === "string" ? value.trim().length > 0 : value != null;
++}
++
++function hasNonEmptyHeaders(value: unknown): boolean {
++	return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0);
++}
+diff --git a/server/virtual-tui.ts b/server/virtual-tui.ts
+index 93a3cce..a86c761 100644
+--- a/server/virtual-tui.ts
++++ b/server/virtual-tui.ts
+@@ -25,7 +25,7 @@ export function extractCursorPosition(lines: string[]): { row: number; col: numb
+ 	return null;
+ }
+ 
+-export function formatAnsiScreen(rawLines: string[], _cols: number, _rows?: number): string {
++export function formatAnsiScreen(rawLines: readonly string[], _cols: number, _rows?: number): string {
+ 	const lines = [...rawLines];
+ 	const cursor = extractCursorPosition(lines);
+ 
+diff --git a/tests/unit/core-adapter-background.test.ts b/tests/unit/core-adapter-background.test.ts
+index bc8a95e..d64187e 100644
+--- a/tests/unit/core-adapter-background.test.ts
++++ b/tests/unit/core-adapter-background.test.ts
+@@ -93,6 +93,7 @@ vi.mock("../../server/process-utils.js", async (importOriginal) => ({
+ 		if (!h.stubborn.has(pid)) h.alive.delete(pid);
+ 	},
+ 	waitForPidGone: async (pid: number) => !h.alive.has(pid),
++	pidAlive: (pid: number) => h.alive.has(pid),
+ }));
+ 
+ const { createCoreBackground } = await import("../../server/core-background-adapter.js");
+@@ -157,6 +158,58 @@ afterEach(() => {
+ });
+ 
+ describe("后台任务适配器：装配", () => {
++	it("drains tracked ports through their existing stop owner", async () => {
++		const { port } = makePort();
++		await track(9010, 23456);
++		expect(await port.quiesce!()).toBe(true);
++		expect(h.killedPids).toContain(23456);
++		port.dispose();
++	});
++	it("does not trust a plugin row disappearing as proof of termination", async () => {
++		let plugins = [{ taskId: "plugin-worker", since: 1, kind: "plugin" as const }];
++		const stop = vi.fn(() => { plugins = []; return true; });
++		const { port } = makePort({ pluginTasks: () => plugins, stopBgTask: stop });
++		expect(await port.quiesce!()).toBe(false);
++		expect(stop).toHaveBeenCalledWith("plugin-worker");
++		port.dispose();
++	});
++
++	it("waits for a job PID to exit even if its UI row has already disappeared", async () => {
++		vi.useFakeTimers();
++		h.listed.push({ id: "worker", pid: 34567, since: 1 });
++		h.alive.add(34567);
++		const { port } = makePort();
++		const settled = vi.fn();
++		const result = port.quiesce!().then((ok) => { settled(ok); return ok; });
++		await vi.advanceTimersByTimeAsync(1);
++		h.listed.length = 0;
++		await vi.advanceTimersByTimeAsync(100);
++		expect(settled).not.toHaveBeenCalled();
++		h.alive.delete(34567);
++		await vi.advanceTimersByTimeAsync(25);
++		expect(await result).toBe(true);
++		port.dispose();
++	});
++
++	it("fails within the deadline if a removed job row still has a live PID", async () => {
++		vi.useFakeTimers();
++		h.listed.push({ id: "worker", pid: 34567, since: 1 });
++		h.alive.add(34567);
++		const { port } = makePort();
++		const result = port.quiesce!();
++		await vi.advanceTimersByTimeAsync(1);
++		h.listed.length = 0;
++		await vi.advanceTimersByTimeAsync(4500);
++		expect(await result).toBe(false);
++		port.dispose();
++	});
++
++	it("fails closed when a plugin refuses to stop", async () => {
++		const { port } = makePort({ pluginTasks: () => [{ taskId: "stuck", since: 1 }], stopBgTask: () => false });
++		expect(await port.quiesce!()).toBe(false);
++		expect(h.killAllCalls).toBe(1);
++		port.dispose();
++	});
+ 	it("job 日志落 <dataDir>/jobs，变更即推 bg_servers（onChange 直接接到真叶子的 push）", () => {
+ 		const { bgFrames } = makePort();
+ 		expect(h.registryOptions.logDir()).toBe(join("/data/pi-web", "jobs"));
+diff --git a/tests/unit/core-app-session-registry.test.ts b/tests/unit/core-app-session-registry.test.ts
+index aff362c..474102c 100644
+--- a/tests/unit/core-app-session-registry.test.ts
++++ b/tests/unit/core-app-session-registry.test.ts
+@@ -1,4 +1,5 @@
+ import { beforeEach, describe, expect, it, vi } from "vitest";
++import { ManagedRunAccounting } from "../../packages/keel/src/app/managed-run-accounting.js";
+ 
+ const openTurnSession = vi.fn();
+ 
+@@ -26,6 +27,36 @@ function fakeOpened(overrides: { sessionFile?: string } = {}) {
+ }
+ 
+ describe("app · SessionRegistry", () => {
++	it("keeps accounting attached across a session transfer and releases it at destination close", async () => {
++		const accounting = new ManagedRunAccounting();
++		const listeners = new Set<(event: unknown) => void>();
++		const emit = (event: unknown) => { for (const listener of listeners) listener(event); };
++		const opened = {
++			session: {
++				dispose() {},
++				subscribe(listener: (event: unknown) => void) {
++					listeners.add(listener);
++					return () => { listeners.delete(listener); };
++				},
++			},
++			dispose() {},
++		};
++		openTurnSession.mockResolvedValue(opened);
++		const source = new SessionRegistry({ agentDir: "/agent", onOpened: (_conv, value) => accounting.trackOpened(value) });
++		const destination = new SessionRegistry({ agentDir: "/agent" });
++		await source.ensure(makeConv());
++		emit({ type: "tool_execution_start", toolCallId: "tool" });
++		destination.transferFrom(source, "c1", "c2");
++		source.closeAll();
++		expect(accounting.activeTools()).toBe(1);
++		emit({ type: "agent_end" });
++		expect(accounting.completedTurns()).toBe(1);
++		destination.closeAll();
++		expect(accounting.activeTools()).toBe(0);
++		expect(listeners.size).toBe(0);
++		emit({ type: "agent_end" });
++		expect(accounting.completedTurns()).toBe(1);
++	});
+ 	beforeEach(() => {
+ 		openTurnSession.mockReset();
+ 	});
+diff --git a/tests/unit/core-domain-engine-extras.test.ts b/tests/unit/core-domain-engine-extras.test.ts
+index 2deec39..22478f4 100644
+--- a/tests/unit/core-domain-engine-extras.test.ts
++++ b/tests/unit/core-domain-engine-extras.test.ts
+@@ -175,7 +175,7 @@ describe("domains/engine-extras · 7 个引擎专属成员的转发", () => {
+ 		expect(permission.modes).toEqual(["plan"]);
+ 	});
+ 
+-	it("185/185：分发表里没有任何成员落到适配器兜底（全是真 handler）", () => {
++	it("187/187：分发表里没有任何成员落到适配器兜底（全是真 handler）", () => {
+ 		const clock: ClockPort = { now: () => 1, after: () => () => {} };
+ 		const runtime = new ClientRuntime({
+ 			clientId: "cl-1",
+@@ -188,6 +188,6 @@ describe("domains/engine-extras · 7 个引擎专属成员的转发", () => {
+ 		const { handlers } = createDispatchHandlers(runtime);
+ 		const missing = DISPATCH_SURFACE.filter((member) => handlers[member] === undefined);
+ 		expect(missing).toEqual([]);
+-		expect(DISPATCH_SURFACE.length).toBe(185);
++		expect(DISPATCH_SURFACE.length).toBe(187);
+ 	});
+ });
+diff --git a/tests/unit/core-domain-terminals.test.ts b/tests/unit/core-domain-terminals.test.ts
+index d52ddac..73e4a3f 100644
+--- a/tests/unit/core-domain-terminals.test.ts
++++ b/tests/unit/core-domain-terminals.test.ts
+@@ -79,6 +79,19 @@ function hostFor(over: { cwdOf?: (conversationId: string) => string; lang?: () =
+ 	};
+ }
+ 
++it("retains failed terminal stops for drain verification and allows a later retry", () => {
++	const { host } = hostFor();
++	const manager = host.managerFor("drain", "/work") as unknown as InstanceType<typeof fixture.MockTerminalManager>;
++	manager.add("stuck");
++	manager.killThrowsFor = "stuck";
++	host.requestStopAll();
++	expect(host.activeCount()).toBe(1);
++	expect(host.managers()).toContain("drain");
++	manager.killThrowsFor = null;
++	host.requestStopAll();
++	expect(host.activeCount()).toBe(0);
++});
++
+ function managerAt(index: number) {
+ 	return fixture.MockTerminalManager.created[index];
+ }
+diff --git a/tests/unit/core-engine-connect.test.ts b/tests/unit/core-engine-connect.test.ts
+index 72e0809..d4d6c1d 100644
+--- a/tests/unit/core-engine-connect.test.ts
++++ b/tests/unit/core-engine-connect.test.ts
+@@ -6,6 +6,10 @@ import type { SettingsFramePort } from "../../packages/keel/src/contracts/settin
+ import type { BackgroundPort } from "../../packages/keel/src/contracts/background.js";
+ import type { ServerMessage } from "../../packages/keel/src/protocol.js";
+ import { createFakeSettingsStore } from "../helpers/fake-settings-store.js";
++import { ClientStateStore } from "../../server/client-state.js";
++import { createCoreGoalRunPort } from "../../server/core-goal-run-adapter.js";
++import { createManagedRunController } from "../../server/managed-run-controller.js";
++import type { GoalRunSinks } from "../../packages/keel/src/domains/goals/index.js";
+ 
+ /**
+  * 连接期三件事（老实现 `AgentService.attach()` + `ClientSession.attachSink()` 的对应物）：
+@@ -33,23 +37,40 @@ let engines: Engine[] = [];
+ let opened: number;
+ /** 每个假会话的 `sendUserMessage`：验「quiesce 期不喂轮」用（喂了就一定经过它）。 */
+ let feeds: ReturnType<typeof vi.fn>[];
++let eventListeners: Set<(event: unknown) => void>[];
++let sdkStreaming: boolean;
++let abortSession: ReturnType<typeof vi.fn<() => Promise<void>>>;
+ 
+ beforeEach(() => {
+ 	root = mkdtempSync(join(tmpdir(), "pi-core-connect-"));
+ 	opened = 0;
+ 	feeds = [];
++	eventListeners = [];
++	sdkStreaming = false;
++	abortSession = vi.fn(async () => {});
+ 	openTurnSession.mockReset();
+ 	openTurnSession.mockImplementation(async () => {
+ 		opened += 1;
+ 		const sendUserMessage = vi.fn(async () => {});
+ 		feeds.push(sendUserMessage);
++		const listeners = new Set<(event: unknown) => void>();
++		eventListeners.push(listeners);
+ 		const session = {
+-			isStreaming: false,
++			sessionId: `s${opened}`,
++			get isStreaming() {
++				return sdkStreaming;
++			},
++			abort: () => abortSession(),
+ 			sessionFile: undefined,
+ 			messages: [] as unknown[],
+ 			model: { provider: "anthropic", id: "claude" },
+ 			sendUserMessage,
+-			subscribe: () => () => {},
++			subscribe: (listener: (event: unknown) => void) => {
++				listeners.add(listener);
++				return () => {
++					listeners.delete(listener);
++				};
++			},
+ 			dispose: () => {},
+ 		};
+ 		return { session, sessionId: `s${opened}`, dispose: () => {} };
+@@ -80,7 +101,264 @@ function collector(): { sent: ServerMessage[]; types(): string[] } {
+ 	return { sent, types: () => sent.map((m) => m.type) };
+ }
+ 
++describe("managed runtime accounting", () => {
++	it("executes a controlled workspace request through the actual core bridge and reconciles SDK completion", async () => {
++		const engine = engineWith();
++		const browser = await engine.attach("control-browser", () => {});
++		const active = browser.activeConversationId?.();
++		const control = createManagedRunController({
++			engine: () => engine,
++			models: async () => ({
++				ok: true,
++				models: [{ providerId: "anthropic", modelId: "claude", name: "Claude", available: true }],
++			}),
++		});
++		const result = await control.startWorkspaceRequest({ runId: "real-core-request", prompt: "run once" });
++		expect(result).toMatchObject({ ok: true, status: "running" });
++		await vi.waitFor(() => expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(1));
++		expect(browser.activeConversationId?.()).toBe(active);
++		for (const listener of eventListeners.at(-1)!)
++			listener({
++				type: "agent_end",
++				messages: [{ role: "assistant", stopReason: "stop", content: [{ type: "text", text: "CONTROL_OK" }] }],
++			});
++		expect(control.workspaceRequestStatus("real-core-request")).toMatchObject({
++			status: "succeeded",
++			state: { finalAnswer: "CONTROL_OK" },
++		});
++		await control.startWorkspaceRequest({ runId: "real-core-request", prompt: "duplicate" });
++		expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(1);
++	});
++	it("opens managed runs without replacing the active chat and observes only their SDK events", async () => {
++		const engine = engineWith();
++		const session = await engine.attach("managed-browser", () => {});
++		const active = session.activeConversationId?.();
++		const events = vi.fn();
++		const run = await engine.openManagedRun("managed-browser", { title: "Workspace request", onEvent: events });
++		expect(session.activeConversationId?.()).toBe(active);
++		expect(run.conversationId).not.toBe(active);
++		expect(openTurnSession.mock.calls[1][0].ephemeral).not.toBe(true);
++		for (const listener of eventListeners[0]) listener({ type: "agent_end" });
++		expect(events).not.toHaveBeenCalled();
++		for (const listener of eventListeners[1]) listener({ type: "tool_execution_start", toolCallId: "managed" });
++		expect(events).toHaveBeenCalledOnce();
++		await run.submit("execute exactly once");
++		expect(feeds[1]).toHaveBeenCalledOnce();
++		expect(feeds[0]).not.toHaveBeenCalled();
++		await expect(run.submit("duplicate")).rejects.toThrow("managed_run_already_submitted");
++		run.release();
++		for (const listener of eventListeners[1]) listener({ type: "agent_end" });
++		expect(events).toHaveBeenCalledOnce();
++	});
++
++	it("cancels a prepared managed run without submitting it or affecting the active conversation", async () => {
++		const engine = engineWith();
++		const session = await engine.attach("cancel-browser", () => {});
++		const active = session.activeConversationId?.();
++		const run = await engine.openManagedRun("cancel-browser", { title: "Canceled request", onEvent: () => {} });
++		await run.cancel();
++		await expect(run.submit("must not run")).rejects.toThrow("managed_run_closed");
++		expect(abortSession).toHaveBeenCalledOnce();
++		expect(session.activeConversationId?.()).toBe(active);
++		expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(0);
++	});
++
++	it("fails unavailable requested models before any prompt and keeps the browser chat active", async () => {
++		const engine = engineWith();
++		const session = await engine.attach("model-browser", () => {});
++		const active = session.activeConversationId?.();
++		await expect(
++			engine.openManagedRun("model-browser", { title: "Bad model", modelRef: "missing/model", onEvent: () => {} }),
++		).rejects.toThrow("automation_model_unavailable");
++		expect(session.activeConversationId?.()).toBe(active);
++		expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(0);
++	});
++
++	it("drains an in-flight managed setup and rejects its late completion", async () => {
++		const engine = engineWith();
++		await engine.attach("pending-managed", () => {});
++		const open = openTurnSession.getMockImplementation()!;
++		let release!: () => void;
++		openTurnSession.mockImplementation(async (...args) => {
++			await new Promise<void>((resolve) => {
++				release = resolve;
++			});
++			return open(...args);
++		});
++		const opening = engine.openManagedRun("pending-managed", { title: "Delayed request", onEvent: () => {} });
++		const rejected = expect(opening).rejects.toThrow("server_quiesced");
++		await vi.waitFor(() => expect(openTurnSession).toHaveBeenCalledTimes(2));
++		const drain = engine.quiesce(200);
++		release();
++		await rejected;
++		expect(await drain).toEqual({ ok: true });
++		engine.unquiesce();
++		expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(0);
++	});
++	it("waits for an attachment already opening its SDK session before draining it", async () => {
++		const open = openTurnSession.getMockImplementation()!;
++		let release!: () => void;
++		openTurnSession.mockImplementation(async (...args) => {
++			await new Promise<void>((resolve) => {
++				release = resolve;
++			});
++			return open(...args);
++		});
++		const engine = engineWith();
++		const attaching = engine.attach("opening", () => {});
++		await vi.waitFor(() => expect(openTurnSession).toHaveBeenCalledOnce());
++		const drain = engine.quiesce(200);
++		expect(() => engine.unquiesce()).toThrow("quiesce_in_progress");
++		release();
++		await attaching;
++		expect(await drain).toEqual({ ok: true });
++		expect(abortSession).toHaveBeenCalledOnce();
++	});
++
++	it("rejects new goal work while draining before invoking the host", async () => {
++		const start = vi.fn(async () => {});
++		const goal = vi.fn(() => ({ setGoal: start, startGoalWizard: start, clearGoal: start, quiesce: async () => {} }));
++		const engine = engineWith({ goalRun: goal });
++		const session = await engine.attach("goal-gate", () => {});
++		await engine.quiesce();
++		await session.setGoal("must not start");
++		await session.startGoalWizard("must not start");
++		expect(start).not.toHaveBeenCalled();
++		expect(session.isQuiesceActive?.()).toBe(true);
++	});
++	it("shares a drain flight and waits for the actual SDK abort and tool end", async () => {
++		const engine = engineWith();
++		await engine.attach("drain", () => {});
++		sdkStreaming = true;
++		for (const listener of eventListeners[0]!) listener({ type: "tool_execution_start", toolCallId: "writer" });
++		let finish!: () => void;
++		abortSession.mockImplementation(
++			() =>
++				new Promise<void>((resolve) => {
++					finish = resolve;
++				}),
++		);
++		const drain = engine.quiesce(200);
++		expect(engine.quiesce()).toBe(drain);
++		expect(() => engine.unquiesce()).toThrow("quiesce_in_progress");
++		await vi.waitFor(() => expect(abortSession).toHaveBeenCalledOnce());
++		expect(engine.activeTools()).toBe(1);
++		sdkStreaming = false;
++		for (const listener of eventListeners[0]!) listener({ type: "tool_execution_end", toolCallId: "writer" });
++		finish();
++		expect(await drain).toEqual({ ok: true });
++		engine.unquiesce();
++		expect(engine.isQuiesced()).toBe(false);
++	});
++
++	it("fails a hung SDK abort within the deadline and requires restart before new work", async () => {
++		const engine = engineWith();
++		await engine.attach("hung", () => {});
++		sdkStreaming = true;
++		abortSession.mockImplementation(() => new Promise<void>(() => {}));
++		expect(await engine.quiesce(30)).toEqual({ ok: false, error: "quiesce_timeout" });
++		expect(engine.isQuiesced()).toBe(true);
++		expect(() => engine.unquiesce()).toThrow("quiesce_failed_restart_required");
++	});
++
++	it("refuses to acknowledge a background host without drain support", async () => {
++		const engine = engineWith({ background: () => ({ refreshBgTasks() {} }) });
++		await engine.attach("unsupported", () => {});
++		expect(await engine.quiesce(100)).toEqual({ ok: false, error: "quiesce_timeout" });
++	});
++	it("counts SDK completions without retries and scopes tool IDs to their sessions", async () => {
++		const engine = engineWith();
++		await engine.attach("accounting-a", () => {});
++		await engine.attach("accounting-b", () => {});
++		const emit = (index: number, event: unknown) => {
++			for (const listener of eventListeners[index]!) listener(event);
++		};
++		emit(0, { type: "agent_end", willRetry: true });
++		expect(engine.completedTurns()).toBe(0);
++		emit(0, { type: "agent_end", willRetry: false });
++		emit(1, { type: "agent_end" });
++		emit(0, { type: "tool_execution_start", toolCallId: "same-id" });
++		emit(0, { type: "tool_execution_start", toolCallId: "same-id" });
++		emit(1, { type: "tool_execution_start", toolCallId: "same-id" });
++		expect(engine.serviceStatus()).toMatchObject({ completedTurns: 2, activeTools: 2 });
++		emit(0, { type: "tool_execution_end", toolCallId: "same-id" });
++		expect(engine.activeTools()).toBe(1);
++		await engine.attach("accounting-a", () => {});
++		emit(0, { type: "agent_end" });
++		expect(engine.completedTurns()).toBe(3);
++		await engine.disposeAll();
++		expect(engine.activeTools()).toBe(0);
++		emit(0, { type: "agent_end" });
++		expect(engine.completedTurns()).toBe(3);
++	});
++});
++
+ describe("core/app · 连接期首条对话（A）", () => {
++	it("keeps native goals paused across core unquiesce until explicit resume", async () => {
++		const store = new ClientStateStore(join(root, "resume-state.json"));
++		store.saveConversationGoal("session:s1", {
++			goal: "resume through core",
++			reviewModel: null,
++			maxRounds: 3,
++			locked: true,
++			round: 2,
++			verdict: "pending",
++			status: "saved",
++			savedAt: 1,
++		});
++		const engine = engineWith({
++			stateStore: store,
++			goalRun: (sinks: GoalRunSinks) => createCoreGoalRunPort({ sinks, stateStore: store }),
++		});
++		const { sent } = collector();
++		const session = await engine.attach("resume-browser", (message) => sent.push(message));
++		expect(await engine.quiesce()).toEqual({ ok: true });
++		await session.resumeGoal!();
++		expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(0);
++		engine.unquiesce();
++		expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(0);
++		await Promise.all([session.resumeGoal!(), session.resumeGoal!()]);
++		await vi.waitFor(() => expect(feeds.flatMap((feed) => feed.mock.calls)).toHaveLength(1));
++		expect(sent.filter((m) => m.type === "goal_status").at(-1)?.status.paused).toBe(false);
++	});
++	it("restores the real native goal port on connect/reconnect and changes display with the active conversation", async () => {
++		const store = new ClientStateStore(join(root, "client-state.json"));
++		store.saveConversationGoal("session:s1", {
++			goal: "persisted goal",
++			reviewModel: null,
++			maxRounds: 3,
++			locked: true,
++			round: 2,
++			verdict: "pending",
++			status: "saved",
++			savedAt: 1,
++		});
++		const factory = vi.fn((sinks: GoalRunSinks) => createCoreGoalRunPort({ sinks, stateStore: store }));
++		const engine = engineWith({
++			stateStore: store,
++			goalRun: factory,
++			retainEvidence: () => ({ hasPendingWake: true }),
++		});
++		const { sent } = collector();
++		const session = await engine.attach("fresh-browser", (message) => sent.push(message));
++		const lastGoal = () => sent.filter((message) => message.type === "goal_status").at(-1)?.status;
++		expect(lastGoal()).toMatchObject({ goal: "persisted goal", paused: true, round: 2 });
++		expect(openTurnSession).toHaveBeenCalledTimes(1);
++		expect(feeds.every((feed) => feed.mock.calls.length === 0)).toBe(true);
++		const reconnect = collector();
++		await engine.attach("fresh-browser", (message) => reconnect.sent.push(message));
++		expect(reconnect.sent.filter((message) => message.type === "goal_status").at(-1)?.status).toMatchObject({
++			goal: "persisted goal",
++			paused: true,
++		});
++		expect(factory).toHaveBeenCalledTimes(1);
++		await session.newChat(undefined, true);
++		await vi.waitFor(() => expect(lastGoal()?.goal).toBeNull());
++		await session.switchConversation("c-1");
++		expect(session.activeConversationId?.()).toBe("c-1");
++		expect(lastGoal()).toMatchObject({ goal: "persisted goal", paused: true });
++		expect(feeds.every((feed) => feed.mock.calls.length === 0)).toBe(true);
++	});
+ 	it("attach 后立刻有一条活动会话，快照 conversationId 非空", async () => {
+ 		const engine = engineWith();
+ 		const { sent } = collector();
+@@ -245,6 +523,7 @@ describe("core/app · 重连与 quiesce（K）", () => {
+ 		expect(flushed).toHaveBeenCalledTimes(1);
+ 		expect(feeds[0]).not.toHaveBeenCalled();
+ 
++		await engine.quiesce();
+ 		engine.unquiesce();
+ 	});
+ 
+diff --git a/tests/unit/core-engine-mode.test.ts b/tests/unit/core-engine-mode.test.ts
+index 949604d..4ec37b3 100644
+--- a/tests/unit/core-engine-mode.test.ts
++++ b/tests/unit/core-engine-mode.test.ts
+@@ -11,7 +11,7 @@ describe("core/app · CoreEngine 生命周期", () => {
+ 	it("quiesce / unquiesce 与 serviceStatus 自洽", async () => {
+ 		const engine = new CoreEngine("/work", options());
+ 		expect(engine.isQuiesced()).toBe(false);
+-		engine.quiesce();
++		await engine.quiesce();
+ 		expect(engine.isQuiesced()).toBe(true);
+ 		expect(engine.quiesceInfo().quiesced).toBe(true);
+ 		const status = engine.serviceStatus();
+diff --git a/tests/unit/goal-run-adapter.test.ts b/tests/unit/goal-run-adapter.test.ts
+index 887acb6..3a49ff4 100644
+--- a/tests/unit/goal-run-adapter.test.ts
++++ b/tests/unit/goal-run-adapter.test.ts
+@@ -1,4 +1,8 @@
+-import { describe, expect, it } from "vitest";
++import { describe, expect, it, vi } from "vitest";
++import { mkdtempSync, readFileSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { ClientStateStore } from "../../server/client-state.js";
+ import type { GoalPrefs } from "../../packages/keel/src/contracts/goals.js";
+ import type { GoalRunSinks } from "../../packages/keel/src/domains/goals/index.js";
+ import { createCoreGoalRunPort, type GoalRunPrefsStore } from "../../server/core-goal-run-adapter.js";
+@@ -27,6 +31,9 @@ interface Harness {
+ }
+ 
+ function makeHarness(opts?: {
++	stateStore?: GoalRunPrefsStore;
++	identity?: string;
++	clientId?: string;
+ 	prefs?: GoalPrefs;
+ 	setPlan?: (id: string, steps: unknown[]) => void;
+ 	modelsOk?: boolean;
+@@ -38,13 +45,14 @@ function makeHarness(opts?: {
+ 	const sent: ServerMessage[] = [];
+ 	const texts = new Map<string, string>();
+ 	let seq = 0;
+-	const stateStore: GoalRunPrefsStore = {
++	const stateStore: GoalRunPrefsStore = opts?.stateStore ?? {
+ 		getGoalPrefs: () => opts?.prefs ?? null,
+ 		saveGoalPrefs: () => {},
+ 		getSettingsSnapshot: () => ({ goalModeEnabled: true }),
+ 	};
+ 	const sinks: GoalRunSinks = {
+-		clientId: "c1",
++		clientId: opts?.clientId ?? "c1",
++		conversationIdentity: () => opts?.identity,
+ 		emit: (msg) => void sent.push(msg),
+ 		flushSnapshot: () => {},
+ 		isDisposed: () => false,
+@@ -101,6 +109,133 @@ function makeHarness(opts?: {
+ const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+ 
+ describe("目标运行宿主适配器（GoalRunPort 的真实现）", () => {
++	it("does not revive a goal command admitted before a drain-and-reopen cycle", async () => {
++		const h = makeHarness();
++		await h.port.setGoal("original");
++		let release!: () => void;
++		let aborts = 0;
++		h.sinks.abortTurn = async () => {
++			if (++aborts === 1)
++				await new Promise<void>((resolve) => {
++					release = resolve;
++				});
++		};
++		const pending = h.port.setGoal("must not start after drain");
++		await h.port.quiesce!();
++		h.port.unquiesce!();
++		release();
++		await pending;
++		expect(h.turns).toHaveLength(1);
++		expect(h.opened).toHaveLength(2);
++		expect(h.statuses().at(-1)).toMatchObject({ goal: "original", paused: true });
++	});
++	it("requires explicit resume after successful drain and accepts one resume at a time", async () => {
++		const h = makeHarness();
++		await h.port.setGoal("resume only explicitly", { maxRounds: 7, locked: true, materials: ["notes.md"] });
++		await h.port.quiesce!();
++		await h.port.resumeGoal!();
++		expect(h.turns).toHaveLength(1);
++		h.port.unquiesce!();
++		expect(h.turns).toHaveLength(1);
++		expect(h.statuses().at(-1)?.paused).toBe(true);
++		await Promise.all([h.port.resumeGoal!(), h.port.resumeGoal!()]);
++		expect(h.turns).toHaveLength(2);
++		expect(h.opened).toHaveLength(4);
++		expect(h.statuses().at(-1)).toMatchObject({ paused: false, maxRounds: 7, locked: true });
++		await h.port.resumeGoal!();
++		expect(h.turns).toHaveLength(2);
++	});
++
++	it("resumes saved settings and materials without inheriting changed model defaults", async () => {
++		const save = vi.fn();
++		const h = makeHarness({
++			identity: "session:saved",
++			stateStore: {
++				saveConversationGoal: save,
++				getGoalPrefs: () => ({ reviewModel: "provider/new", execModel: "provider/new", maxRounds: 1, locked: false }),
++				saveGoalPrefs: () => {},
++				getConversationGoal: () => ({
++					goal: "saved goal",
++					materials: ["notes.md"],
++					reviewModel: null,
++					execModel: null,
++					maxRounds: 9,
++					locked: true,
++					round: 3,
++					verdict: "pending",
++					status: "saved",
++					savedAt: 1,
++				}),
++			},
++		});
++		h.port.restoreGoal!("parent");
++		await Promise.all([h.port.resumeGoal!(), h.port.resumeGoal!()]);
++		expect(h.turns).toHaveLength(1);
++		expect(h.statuses().at(-1)).toMatchObject({
++			goal: "saved goal",
++			reviewModel: null,
++			execModel: null,
++			maxRounds: 9,
++			locked: true,
++			paused: false,
++		});
++		expect(save.mock.calls.at(-1)?.[1].materials).toEqual(["notes.md"]);
++	});
++	it("persists display state to disk and restores paused under a fresh browser identity without opening children", async () => {
++		const directory = mkdtempSync(join(tmpdir(), "keel-goal-restore-"));
++		try {
++			const file = join(directory, "client-state.json");
++			const store = new ClientStateStore(file);
++			const first = makeHarness({ stateStore: store, identity: "session:stable", clientId: "old-browser" });
++			await first.port.setGoal("retain this goal", { maxRounds: 4, locked: true });
++			await first.port.quiesce!();
++			expect(first.aborted).toHaveLength(2);
++			expect(first.closed).toHaveLength(2);
++			const persisted = JSON.parse(readFileSync(file, "utf8")).__settings__.conversationGoals["session:stable"];
++			expect(persisted).toMatchObject({ goal: "retain this goal", maxRounds: 4 });
++			for (const key of ["execId", "reviewId", "wizardId", "phase", "generation", "counters", "queues"])
++				expect(persisted).not.toHaveProperty(key);
++			const restoredStore = new ClientStateStore(file);
++			const restored = makeHarness({ stateStore: restoredStore, identity: "session:stable", clientId: "new-browser" });
++			restored.port.restoreGoal!("parent");
++			expect(restored.statuses().at(-1)).toMatchObject({
++				goal: "retain this goal",
++				paused: true,
++				reviewing: false,
++				wizard: { active: false },
++			});
++			expect(restored.opened).toEqual([]);
++			expect(restored.turns).toEqual([]);
++			restored.port.onTurnSettled!(first.childOf("exec"), "done");
++			await flush();
++			expect(restored.turns).toEqual([]);
++			const unrelated = makeHarness({ stateStore: restoredStore, identity: "session:other" });
++			unrelated.port.restoreGoal!("parent");
++			expect(unrelated.statuses().at(-1)?.goal).toBeNull();
++			await restored.port.clearGoal("parent");
++			expect(new ClientStateStore(file).getConversationGoal("session:stable")).toBeUndefined();
++		} finally {
++			rmSync(directory, { recursive: true, force: true });
++		}
++	});
++
++	it("invalidates late goal callbacks before awaiting abort and fails when abort fails", async () => {
++		const h = makeHarness();
++		await h.port.setGoal("stop safely");
++		const turnsBefore = h.turns.length;
++		h.sinks.abortTurn = async () => {
++			throw new Error("abort failed");
++		};
++		await expect(h.port.quiesce!()).rejects.toThrow("abort failed");
++		expect(() => h.port.unquiesce!()).toThrow("goal_drain_not_complete");
++		await h.port.resumeGoal!();
++		h.port.onTurnSettled!(h.childOf("exec"), "done");
++		await flush();
++		expect(h.turns).toHaveLength(turnsBefore);
++		expect(h.closed).toEqual([]);
++		await h.port.setGoal("must not restart");
++		expect(h.turns).toHaveLength(turnsBefore);
++	});
+ 	it("设目标即建执行 / 审查两条子对话（不换会话就并存），首轮喂的是执行者 prompt", async () => {
+ 		const h = makeHarness();
+ 		await h.port.setGoal("把 README 补全", { maxRounds: 3, locked: true });
+diff --git a/tests/unit/managed.test.ts b/tests/unit/managed.test.ts
+index 011020c..e0487ce 100644
+--- a/tests/unit/managed.test.ts
++++ b/tests/unit/managed.test.ts
+@@ -1,5 +1,12 @@
+ import { describe, expect, it } from "vitest";
+-import { isManaged, managedRefusal, MANAGED_MESSAGES } from "../../server/managed.js";
++import {
++	isManaged,
++	managedMcpAdapterPath,
++	managedCredentialRefusal,
++	managedRefusal,
++	MANAGED_CREDENTIAL_MESSAGES,
++	MANAGED_MESSAGES,
++} from "../../server/managed.js";
+ 
+ describe("managed instances", () => {
+ 	it("is off unless asked for", () => {
+@@ -15,29 +22,12 @@ describe("managed instances", () => {
+ 		}
+ 	});
+ 
+-	it("refuses self-update and network plugin installs, and says why", () => {
+-		for (const type of MANAGED_MESSAGES) {
+-			const why = managedRefusal(type, true);
+-			expect(why, type).toBeTruthy();
+-			expect(why, type).toMatch(/managed/i);
++	it("allows user-initiated updates and plugin catalog management in managed mode", () => {
++		for (const type of ["check_update", "check_updates_all", "install_pi_agent", "plugin_catalog_add"]) {
++			expect(managedRefusal(type, true), type).toBeNull();
+ 		}
+ 	});
+ 
+-	it("covers the whole self-update surface, not just the button", () => {
+-		expect([...MANAGED_MESSAGES].sort()).toEqual(
+-			[
+-				"check_update",
+-				"check_updates_all",
+-				"install_pi_agent",
+-				"update_engine",
+-				"uninstall_engine",
+-				"plugin_catalog_add",
+-				"plugin_job",
+-				"plugin_catalog_sync",
+-			].sort(),
+-		);
+-	});
+-
+ 	it("touches nothing else: chatting, git, terminal and plugins already there", () => {
+ 		for (const type of ["prompt", "scm_status", "terminal_create", "plugins_reload", "plugin_catalog_remove"]) {
+ 			expect(managedRefusal(type, true), type).toBeNull();
+@@ -49,4 +39,38 @@ describe("managed instances", () => {
+ 			expect(managedRefusal(type, false), type).toBeNull();
+ 		}
+ 	});
++
++	it("requires an explicit image-owned MCP adapter path only when managed", () => {
++		expect(managedMcpAdapterPath({})).toBeNull();
++		expect(managedMcpAdapterPath({ PI_WEB_MANAGED: "1" })).toBeNull();
++		expect(
++			managedMcpAdapterPath({
++				PI_WEB_MANAGED: "1",
++				PI_WEB_MCP_ADAPTER_PATH: "  /root/.pi/agent/npm/node_modules/pi-mcp-adapter/index.ts  ",
++			}),
++		).toBe("/root/.pi/agent/npm/node_modules/pi-mcp-adapter/index.ts");
++	});
++
++	it("rejects credential-bearing commands but permits metadata-only probes and saves", () => {
++		for (const type of MANAGED_CREDENTIAL_MESSAGES) {
++			expect(managedCredentialRefusal(type, true, {}), type).toMatch(/credentials.*Mapache/i);
++		}
++		expect(managedCredentialRefusal("fetch_models", true, { apiKey: "fake-secret" })).toMatch(/Mapache/i);
++		expect(
++			managedCredentialRefusal("save_model_config", true, {
++				config: { apiKey: "fake-secret" },
++			}),
++		).toMatch(/Mapache/i);
++		expect(
++			managedCredentialRefusal("save_model_config", true, {
++				config: { headers: { Authorization: "Bearer fake-secret" } },
++			}),
++		).toMatch(/Mapache/i);
++		expect(managedCredentialRefusal("fetch_models", true, { baseUrl: "https://models.example" })).toBeNull();
++		expect(
++			managedCredentialRefusal("save_model_config", true, {
++				config: { providerId: "local", models: [{ id: "model-1" }] },
++			}),
++		).toBeNull();
++	});
+ });
+diff --git a/tests/unit/model-admin-merge.test.ts b/tests/unit/model-admin-merge.test.ts
+index e46784f..df26729 100644
+--- a/tests/unit/model-admin-merge.test.ts
++++ b/tests/unit/model-admin-merge.test.ts
+@@ -188,4 +188,63 @@ describe("ModelAdminService.saveModelConfig", () => {
+ 			rmSync(agentDir, { recursive: true, force: true });
+ 		}
+ 	});
++
++	it("managed saves preserve server-side secrets and never serialize them to the UI", async () => {
++		const agentDir = mkdtempSync(join(tmpdir(), "pi-web-ui-managed-model-admin-"));
++		const configPath = join(agentDir, "models.json");
++		writeFileSync(
++			configPath,
++			JSON.stringify(
++				{
++					providers: {
++						private: {
++							api: "openai-completions",
++							baseUrl: "https://models.example/v1",
++							apiKey: "persisted-secret",
++							authHeader: true,
++							headers: { "X-Provider-Secret": "header-secret" },
++							models: [{ id: "model-1", name: "Model 1" }],
++						},
++					},
++				},
++				null,
++				2,
++			) + "\n",
++		);
++		const notices: ServerMessage[] = [];
++		const host = {
++			agentDir,
++			managed: true,
++			emit: (msg: ServerMessage) => notices.push(msg),
++			flushSnapshot: () => {},
++			isDisposed: () => false,
++			modelRuntime: () => ({ refresh: async () => {} }) as unknown as ModelRuntime,
++			invalidatePiConfig: () => {},
++			pushModels: async () => {},
++		} satisfies ModelAdminHost;
++
++		try {
++			const service = new ModelAdminService(host);
++			await service.listModelsConfig();
++			const listed = notices.find((msg) => msg.type === "models_config");
++			expect(listed?.type).toBe("models_config");
++			if (listed?.type === "models_config") expect(listed.providers[0].apiKey).toBeUndefined();
++
++			await service.saveModelConfig("private", formConfig([formModel("model-1", { name: "Renamed" })]));
++			let written = JSON.parse(readFileSync(configPath, "utf8")) as {
++				providers: Record<string, Record<string, unknown>>;
++			};
++			expect(written.providers.private.apiKey).toBe("persisted-secret");
++			expect(written.providers.private.authHeader).toBe(true);
++			expect(written.providers.private.headers).toEqual({ "X-Provider-Secret": "header-secret" });
++			expect((written.providers.private.models as Record<string, unknown>[])[0].name).toBe("Renamed");
++
++			await service.saveModelConfig("private", formConfig([formModel("model-1")], { apiKey: "forged-secret" }));
++			written = JSON.parse(readFileSync(configPath, "utf8"));
++			expect(written.providers.private.apiKey).toBe("persisted-secret");
++			expect(notices.some((msg) => msg.type === "notice" && /Mapache/.test(msg.textEn || msg.text))).toBe(true);
++		} finally {
++			rmSync(agentDir, { recursive: true, force: true });
++		}
++	});
+ });
+diff --git a/tests/unit/use-chat-socket-close.test.ts b/tests/unit/use-chat-socket-close.test.ts
+index 22115a8..fc2c279 100644
+--- a/tests/unit/use-chat-socket-close.test.ts
++++ b/tests/unit/use-chat-socket-close.test.ts
+@@ -3,12 +3,12 @@ import { runInNewContext } from "node:vm";
+ import { describe, expect, it, vi } from "vitest";
+ 
+ const source = readFileSync(new URL("../../web/src/use-chat.ts", import.meta.url), "utf8");
+-const begin = source.indexOf("ws.onclose = () => {");
++const begin = source.indexOf("ws.onclose = (event) => {");
+ const end = source.indexOf("ws.onerror =", begin);
+ const installClose = source.slice(begin, end);
+ 
+ function fixture(current: "same" | "newer" | "none", alive = true) {
+-	const ws: { onclose?: () => void } = {};
++	const ws: { onclose?: (event: {code: number}) => void } = {};
+ 	const newer = {};
+ 	const context = {
+ 		ws,
+@@ -17,6 +17,7 @@ function fixture(current: "same" | "newer" | "none", alive = true) {
+ 		aliveRef: { current: alive },
+ 		dispatch: vi.fn(),
+ 		retryRef: { current: 0 },
++		reconnectAfterAccessRef: { current: false },
+ 		timerRef: { current: null },
+ 		setTimeout: vi.fn(() => 42),
+ 		connect: vi.fn(),
+@@ -29,7 +30,7 @@ describe("socket close ownership", () => {
+ 	it("a delayed old close leaves the new socket and shared terminal bridge intact", () => {
+ 		const c = fixture("newer");
+ 		const owner = c.wsRef.current;
+-		c.ws.onclose!();
++		c.ws.onclose!({code: 1000});
+ 		expect(c.wsRef.current).toBe(owner);
+ 		expect(c.bridgeRef.current.clear).not.toHaveBeenCalled();
+ 		expect(c.dispatch).not.toHaveBeenCalled();
+@@ -38,8 +39,8 @@ describe("socket close ownership", () => {
+ 
+ 	it("the current socket clears the bridge and schedules one reconnect", () => {
+ 		const c = fixture("same");
+-		c.ws.onclose!();
+-		c.ws.onclose!();
++		c.ws.onclose!({code: 1000});
++		c.ws.onclose!({code: 1000});
+ 		expect(c.wsRef.current).toBeNull();
+ 		expect(c.bridgeRef.current.clear).toHaveBeenCalledTimes(1);
+ 		expect(c.dispatch).toHaveBeenCalledWith({ type: "status", status: "closed" });
+@@ -48,7 +49,7 @@ describe("socket close ownership", () => {
+ 
+ 	it("a disposed socket does not touch shared state or reconnect", () => {
+ 		const c = fixture("none", false);
+-		c.ws.onclose!();
++		c.ws.onclose!({code: 1000});
+ 		expect(c.bridgeRef.current.clear).not.toHaveBeenCalled();
+ 		expect(c.setTimeout).not.toHaveBeenCalled();
+ 	});
+diff --git a/tests/unit/ws-refusal.test.ts b/tests/unit/ws-refusal.test.ts
+index 32487eb..41ee571 100644
+--- a/tests/unit/ws-refusal.test.ts
++++ b/tests/unit/ws-refusal.test.ts
+@@ -70,10 +70,12 @@ describe("策略拒绝：notice + 该请求自己的失败回包（issue #980）
+ 		expect(sent[1]).toEqual({ type: "new_chat_result", requestId: "host-new-chat-8", ok: false });
+ 	});
+ 
+-	it("managed 实例的插件目录同步：plugin_catalog_sync_result 带 error", () => {
+-		const { reply } = reject("plugin_catalog_sync", { requestId: "sync-1", source: "https://example.com/index.json" });
+-		expect(reply).toMatchObject({ type: "plugin_catalog_sync_result", requestId: "sync-1", ok: false });
+-		expect((reply as { error?: string }).error).toBe(refusalOf("plugin_catalog_sync"));
++	it("plugin catalog refusal replies retain correlation without changing Mapache install policy", () => {
++		expect(managedRefusal("plugin_catalog_sync", MANAGED)).toBeNull();
++		const { sent, send } = collect();
++		refuse({ type: "plugin_catalog_sync", requestId: "sync-1", source: "https://example.com/index.json" },
++			{ text: "Catalog unavailable", error: "catalog_unavailable" }, send);
++		expect(sent[1]).toMatchObject({ type: "plugin_catalog_sync_result", requestId: "sync-1", ok: false, error: "catalog_unavailable" });
+ 	});
+ });
+ 
+diff --git a/web/index.html b/web/index.html
+index 2e38b93..226c54a 100644
+--- a/web/index.html
++++ b/web/index.html
+@@ -4,7 +4,7 @@
+ 		<meta charset="UTF-8" />
+ 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+ 		<meta name="color-scheme" content="dark" />
+-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
++		<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+ 		<!-- PWA manifest: relative so nginx sub-path deployments (/pi/) resolve correctly -->
+ 		<link rel="manifest" href="./manifest.webmanifest" crossorigin="use-credentials" />
+ 		<meta name="theme-color" content="#0f172a" />
+diff --git a/web/src/App.tsx b/web/src/App.tsx
+index d720353..bcee27e 100644
+--- a/web/src/App.tsx
++++ b/web/src/App.tsx
+@@ -208,6 +208,7 @@ import { markConversationsUnread, clearConversationUnread, useUnreadConversation
+ import { getNoticeDurationMs } from "./notice-policy";
+ import { useTheme } from "./theme";
+ import { useWallpaperEffect } from "./wallpaper";
++import { installEmbeddedAgentBridge } from "./embedded-agent-bridge";
+ 
+ export interface PendingAttachment {
+ 	path: string;
+@@ -409,6 +410,7 @@ export function App() {
+ 	const { locale } = useI18n();
+ 	const { chat, send, dismissNotice, pushNotice, terminal } = useChat();
+ 	const sharedReadOnly = chat.state?.sharedConversation?.readOnly === true;
++	useEffect(() => installEmbeddedAgentBridge(), []);
+ 	const quickSeedRef = useRef(false);
+ 	// 插件通用 toast：plugin-host 会在无 notifyAction 依赖时 dispatch "pi-web-ui:toast"，接到全局 NoticeToast
+ 	useEffect(() => {
+diff --git a/web/src/components/GoalBar.tsx b/web/src/components/GoalBar.tsx
+index f741826..2beb52b 100644
+--- a/web/src/components/GoalBar.tsx
++++ b/web/src/components/GoalBar.tsx
+@@ -339,6 +339,7 @@ export const GoalBar = memo(function GoalBar({
+ 						</span>
+ 					)}
+ 					<span className="goalbar-detail">{goalDetail}</span>
++					{goal.paused && (<button type="button" className="goalbar-btn" onClick={() => appSend({type: "resume_goal"})}>{t("goalBarResume")}</button>)}
+ 					{execActivity && (
+ 						<span className="goalbar-detail" title={execRole?.convId}>
+ 							· {execActivity}
+diff --git a/web/src/components/ModelConfigModal.tsx b/web/src/components/ModelConfigModal.tsx
+index 3b8dba8..449a1fe 100644
+--- a/web/src/components/ModelConfigModal.tsx
++++ b/web/src/components/ModelConfigModal.tsx
+@@ -25,7 +25,7 @@ import type {
+ 	UiThinkingLevelMap,
+ } from "../types";
+ import { useT, type Translate } from "../i18n";
+-import { appSend } from "../app-globals";
++import { appSend, useIsManaged } from "../app-globals";
+ import { ProviderOAuthControls } from "./ProviderOAuthControls";
+ 
+ interface ModelConfigModalProps {
+@@ -609,6 +609,7 @@ export function ModelConfigModal({
+ 	defaultModel,
+ 	onClose,
+ }: ModelConfigModalProps) {
++	const managed = useIsManaged();
+ 	const t = useT();
+ 
+ 	const [activeNav, setActiveNav] = useState<{ type: "builtin" | "custom"; id: string }>(() => {
+@@ -894,7 +895,7 @@ export function ModelConfigModal({
+ 			type: "test_model_connection",
+ 			reqId,
+ 			baseUrl: base,
+-			apiKey: editing.apiKey.trim() || undefined,
++			apiKey: managed ? undefined : editing.apiKey.trim() || undefined,
+ 			...(editing.apiKey.trim() ? {} : editing.hasApiKey ? { providerId: editing.providerId.trim() } : {}),
+ 			authHeader: editing.authHeader,
+ 			api: editing.api,
+@@ -916,9 +917,10 @@ export function ModelConfigModal({
+ 		pendingFetchReq.current = reqId;
+ 		appSend({
+ 			type: "fetch_models",
++			providerId: editing.providerId.trim(),
+ 			reqId,
+ 			baseUrl: base,
+-			apiKey: editing.apiKey.trim() || undefined,
++			apiKey: managed ? undefined : editing.apiKey.trim() || undefined,
+ 			...(editing.apiKey.trim() ? {} : editing.hasApiKey ? { providerId: editing.providerId.trim() } : {}),
+ 			authHeader: editing.authHeader,
+ 			api: editing.api,
+@@ -1012,7 +1014,7 @@ export function ModelConfigModal({
+ 			name: editing.name.trim() || undefined,
+ 			api: editing.api.trim() || undefined,
+ 			baseUrl: editing.baseUrl.trim() || undefined,
+-			...(editing.apiKey.trim() ? { apiKey: editing.apiKey.trim() } : {}),
++			...(!managed && editing.apiKey.trim() ? { apiKey: editing.apiKey.trim() } : {}),
+ 			authHeader: editing.authHeader || undefined,
+ 			models,
+ 		};
+@@ -1444,7 +1446,7 @@ export function ModelConfigModal({
+ 											placeholder="https://api.deepseek.com/v1"
+ 										/>
+ 									</label>
+-									<label className="field">
++									{!managed && (<label className="field">
+ 										<span className="field-label">{t("apiKey")}</span>
+ 										<input
+ 											type="password"
+@@ -1452,15 +1454,15 @@ export function ModelConfigModal({
+ 											onChange={(e) => setEditing({ ...editing, apiKey: e.target.value })}
+ 											placeholder={editing.hasApiKey ? t("apiKeySavedHint") : t("apiKeyHint")}
+ 										/>
+-									</label>
+-									<label className="field check" style={{ alignSelf: "center", paddingTop: 16 }}>
++									</label>)}
++									{!managed && (<label className="field check" style={{ alignSelf: "center", paddingTop: 16 }}>
+ 										<input
+ 											type="checkbox"
+ 											checked={editing.authHeader}
+ 											onChange={(e) => setEditing({ ...editing, authHeader: e.target.checked })}
+ 										/>
+ 										<span>{t("authHeader")}</span>
+-									</label>
++									</label>)}
+ 								</div>
+ 
+ 								<div style={{ marginTop: 8 }}>
+@@ -1987,7 +1989,7 @@ export function ModelConfigModal({
+ 												>
+ 													<FiPlus /> {t("appendModel")}
+ 												</button>
+-												{p.supportsApiKey && p.source === "stored" && !p.usingOAuth && (
++												{!managed && p.supportsApiKey && p.source === "stored" && !p.usingOAuth && (
+ 													<button
+ 														type="button"
+ 														className="btn sm danger"
+@@ -2009,7 +2011,7 @@ export function ModelConfigModal({
+ 											</div>
+ 										</div>
+ 
+-										{p.supportsOAuth && (
++										{!managed && p.supportsOAuth && (
+ 											<ProviderOAuthControls
+ 												provider={p}
+ 												flow={providerOAuthFlows.find((f) => f.provider === p.id)}
+@@ -2017,7 +2019,7 @@ export function ModelConfigModal({
+ 											/>
+ 										)}
+ 
+-										{p.supportsApiKey && (
++										{!managed && p.supportsApiKey && (
+ 											<div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+ 												<span style={{ fontSize: 12.5, fontWeight: 600 }}>{t("apiKeyManagement")}</span>
+ 												<div className="provider-keys">
+diff --git a/web/src/components/PiSetupModal.tsx b/web/src/components/PiSetupModal.tsx
+index ed4839f..64a2e66 100644
+--- a/web/src/components/PiSetupModal.tsx
++++ b/web/src/components/PiSetupModal.tsx
+@@ -89,7 +89,7 @@ export function PiSetupModal({
+ 				</div>
+ 				<p className="modal-desc">{t("setupDesc")}</p>
+ 
+-				{installFailed ? (
++				{managed ? (<div className="setup-done">{t("credentialsManaged")}</div>) : installFailed ? (
+ 					<div className="setup-failed">
+ 						<div className="setup-done">{t("installFailed")}</div>
+ 						<pre className="setup-detail">{installResult.detail}</pre>
+diff --git a/web/src/components/TopBar.tsx b/web/src/components/TopBar.tsx
+index 6e67712..2704cfb 100644
+--- a/web/src/components/TopBar.tsx
++++ b/web/src/components/TopBar.tsx
+@@ -1,3 +1,4 @@
++import { openEmbeddedSurface } from "../embedded-agent-bridge";
+ import {
+ 	Fragment,
+ 	useEffect,
+@@ -487,7 +488,7 @@ export function TopBar({
+ 		});
+ 	};
+ 	const { appVersion } = useAppGlobals();
+-	const managed = useIsManaged();
++	const managed = useIsManaged() || chat.managed === true;
+ 	const service = useServiceInfo();
+ 	const [restarting, setRestarting] = useState(false);
+ 	useEffect(() => {
+@@ -589,7 +590,7 @@ export function TopBar({
+ 
+ 	const isMobile = useIsMobileTopbar();
+ 	const hostNodes: Record<string, ReactNode> = {
+-		"host:brand": <BrandDeviceMenu />,
++		"host:brand": managed ? null : <BrandDeviceMenu />,
+ 		"host:worktrees": chat.state?.worktree ? (
+ 			<button
+ 				type="button"
+@@ -970,7 +971,7 @@ export function TopBar({
+ 				<span className="chip-sub">{chat.status}</span>
+ 			</span>
+ 		),
+-		"host:engine": <EnginePicker direction="down" align="left" caret={false} bar="top" />,
++		"host:engine": !managed && <EnginePicker direction="down" align="left" caret={false} bar="top" />,
+ 		"host:ctx": (
+ 			<span className="chip" data-tip={t("contextUsage")}>
+ 				<span className="chip-sub">
+@@ -1420,6 +1421,7 @@ export function TopBar({
+ 	const hideTopbarText = chat.settings?.uiLayout?.topbarText === false;
+ 	return (
+ 		<header className={`topbar${hideTopbarText ? " no-labels" : ""}`} data-pi-anchor="topbar">
++			{managed && <button type="button" className="chip" onClick={() => openEmbeddedSurface("chrome")}>Chrome</button>}
+ 			<div
+ 				className={`topbar-flow${draggingId ? " tb-reordering" : ""}`}
+ 				ref={flowRef}
+diff --git a/web/src/i18n/messages/core/en.json b/web/src/i18n/messages/core/en.json
+index e82354f..72fe451 100644
+--- a/web/src/i18n/messages/core/en.json
++++ b/web/src/i18n/messages/core/en.json
+@@ -1481,6 +1481,7 @@
+ 	"enrichModelsNeedIds": "Enter at least one model id",
+ 	"goalBarTitle": "Goal",
+ 	"goalBarPlaceholder": "Enter the goal to achieve… (executor works · this chat reviews · attach materials · “?” for guide)",
++	"goalBarResume": "Resume goal",
+ 	"goalBarClear": "Cancel",
+ 	"goalBarLocked": "Locked: applies to every later turn",
+ 	"goalBarUnlocked": "This turn only (cleared afterwards)",
+@@ -2278,6 +2279,7 @@
+ 	"pluginOfficialMarketHint": "Visit official plugin repository & community marketplace (GitHub)",
+ 	"pluginOfficialLink": "Official Link",
+ 	"pluginOfficialLinkHint": "Visit plugin homepage or source repository",
++	"credentialsManaged": "Provider credentials are managed in Mapache Authentication Center.",
+ 	"updatesManaged": "Managed instance: updates and plugin installs are handled by whoever deploys it",
+ 	"pluginCatalogAdd": "Add plugin",
+ 	"pluginCatalogAddHint": "Drop a third-party plugin into the installable list (owner/repo or full GitHub URL)",
+diff --git a/web/src/i18n/messages/core/zh.json b/web/src/i18n/messages/core/zh.json
+index a0ecac2..c1d3975 100644
+--- a/web/src/i18n/messages/core/zh.json
++++ b/web/src/i18n/messages/core/zh.json
+@@ -1481,6 +1481,7 @@
+ 	"enrichModelsNeedIds": "先填写至少一个模型 ID",
+ 	"goalBarTitle": "目标",
+ 	"goalBarPlaceholder": "输入要达成的目标…（执行开工 · 本对话审查 · 可附材料 · 「?」看用法）",
++	"goalBarResume": "Resume goal",
+ 	"goalBarClear": "取消",
+ 	"goalBarLocked": "锁定：应用到后续所有回合",
+ 	"goalBarUnlocked": "仅本回合（改完自动清除）",
+@@ -2278,6 +2279,7 @@
+ 	"pluginOfficialMarketHint": "访问官方插件仓库与社区市场 (GitHub)",
+ 	"pluginOfficialLink": "官方链接",
+ 	"pluginOfficialLinkHint": "访问插件主页或源码仓库",
++	"credentialsManaged": "Provider credentials are managed in Mapache Authentication Center.",
+ 	"updatesManaged": "本实例由部署方管理：更新与插件安装不在此进行",
+ 	"pluginCatalogAdd": "添加插件",
+ 	"pluginCatalogAddHint": "把第三方插件填进可安装列表（owner/repo 或完整 GitHub 地址）",
+diff --git a/web/src/main.tsx b/web/src/main.tsx
+index 1d80f8e..5cde4aa 100644
+--- a/web/src/main.tsx
++++ b/web/src/main.tsx
+@@ -118,11 +118,24 @@ installScrollbarGutterVar();
+ if (opaquePortalEnvironment) void restorePortalTheme(window).then(renderApp);
+ else renderApp();
+ 
++// Managed embedding deliberately does not register a service worker. An old
++// pi-web-ui worker may still be present after an upgrade, so remove only a
++// registration that belongs to this app's exact subpath. In particular, do
++// not unregister Mapache's parent-scope worker.
+ if (import.meta.env.PROD && !isMobileRuntime() && !opaquePortalEnvironment && "serviceWorker" in navigator) {
+ 	window.addEventListener("load", () => {
+-		const base = appBase();
+-		navigator.serviceWorker.register(`${base}sw.js`, { scope: base }).catch((err) => {
+-			console.warn("Service worker registration failed:", err);
++		const appScope = new URL(appBase(), window.location.href).href;
++		const appWorker = new URL("sw.js", appScope).href;
++		navigator.serviceWorker.getRegistrations().then((registrations) => {
++			const owned = registrations.filter((registration) => {
++				if (registration.scope === appScope) return true;
++				return [registration.active, registration.waiting, registration.installing].some(
++					(worker) => worker?.scriptURL === appWorker,
++				);
++			});
++			return Promise.all(owned.map((registration) => registration.unregister()));
++		}).catch((err) => {
++			console.warn("Managed service worker cleanup failed:", err);
+ 		});
+ 	});
+ }
+diff --git a/web/src/use-chat.ts b/web/src/use-chat.ts
+index 9cd8bd1..b73fcec 100644
+--- a/web/src/use-chat.ts
++++ b/web/src/use-chat.ts
+@@ -17,6 +17,7 @@ import { useT } from "./i18n";
+ import type { MessageKey } from "./i18n/catalog";
+ import { phoneHost } from "./phone-control";
+ import { syncKnownInlineMarkers } from "./components/Message";
++import { AGENT_ACCESS_RENEWED_EVENT, requestEmbeddedAgentAccess } from "./embedded-agent-bridge";
+ import type {
+ 	ClientMessage,
+ 	BgServer,
+@@ -1978,6 +1979,8 @@ export function useChat() {
+ 	const wsRef = useRef<WebSocket | null>(null);
+ 	const bridgeRef = useRef(makeTerminalBridge());
+ 	const retryRef = useRef(0);
++	const reconnectAfterAccessRef = useRef(false);
++	/** Pending reconnect timer. */
+ 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+ 	const aliveRef = useRef(true);
+ 	const lastBeatRef = useRef(0);
+@@ -3203,11 +3206,22 @@ export function useChat() {
+ 			}
+ 		};
+ 
+-		ws.onclose = () => {
++		ws.onclose = (event) => {
+ 			if (wsRef.current !== ws) return;
+ 			wsRef.current = null;
+ 			bridgeRef.current.clear();
+ 			if (!aliveRef.current) return;
++			// A newer socket already took over (e.g. a StrictMode remount raced
++			// this socket's close) — do not spawn a third connection that would
++			// shadow the live one and drop its incoming messages.
++			if (wsRef.current && wsRef.current !== ws) return;
++			if (event.code === 4001) requestEmbeddedAgentAccess("expired");
++			if (reconnectAfterAccessRef.current) {
++				reconnectAfterAccessRef.current = false;
++				retryRef.current = 0;
++				connect();
++				return;
++			}
+ 			dispatch({ type: "status", status: "closed" });
+ 			const delay = Math.min(1000 * 2 ** retryRef.current, 10_000);
+ 			retryRef.current += 1;
+@@ -3220,6 +3234,37 @@ export function useChat() {
+ 		ws.onerror = () => {};
+ 	}, []);
+ 
++	// The embedded parent rotates the signed agent URL and refreshes the scoped
++	// cookie. Reconnect the existing protocol socket after that cookie update;
++	// the iframe and all React conversation state stay mounted.
++	useEffect(() => {
++		const onAccessRenewed = () => {
++			if (timerRef.current) {
++				clearTimeout(timerRef.current);
++				timerRef.current = null;
++			}
++			retryRef.current = 0;
++			reconnectAfterAccessRef.current = true;
++			const ws = wsRef.current;
++			if (!ws || ws.readyState === WebSocket.CLOSED) {
++				reconnectAfterAccessRef.current = false;
++				connect();
++				return;
++			}
++			if (ws.readyState === WebSocket.OPEN) ws.close(1000, "agent_access_renewed");
++			if (ws.readyState === WebSocket.CONNECTING) {
++				ws.addEventListener("open", () => {
++					if (reconnectAfterAccessRef.current && wsRef.current === ws) ws.close(1000, "agent_access_renewed");
++				}, {once: true});
++			}
++		};
++		window.addEventListener(AGENT_ACCESS_RENEWED_EVENT, onAccessRenewed);
++		return () => window.removeEventListener(AGENT_ACCESS_RENEWED_EVENT, onAccessRenewed);
++	}, [connect]);
++
++	// UI language changes (i18n.tsx setLocale) → report to the server so tool
++	// return values / AI prompts follow the UI locale (issue #91). Socket may
++	// be mid-reconnect — hello already carries the fresh code on re-open.
+ 	useEffect(() => {
+ 		const onLocale = (ev: Event) => {
+ 			const locale = (ev as CustomEvent<string>).detail ?? readUiLocale();
+diff --git a/web/vite.config.ts b/web/vite.config.ts
+index fc2dabe..9b3551b 100644
+--- a/web/vite.config.ts
++++ b/web/vite.config.ts
+@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
+ import { existsSync, readFileSync, writeFileSync } from "node:fs";
+ 
+ const __dirname = dirname(fileURLToPath(import.meta.url));
++const webBasePath = process.env.PI_WEB_BASE_PATH?.trim() || "/";
+ 
+ const buildId = process.env.PI_WEB_BUILD_ID ?? new Date().toISOString().replace(/[-:.]/g, "").slice(0, 14);
+ 
+@@ -27,7 +28,7 @@ function swBuildIdPlugin(id: string) {
+ 
+ export default defineConfig({
+ 	root: __dirname,
+-	base: "./",
++	base: webBasePath,
+ 	plugins: [react(), swBuildIdPlugin(buildId), retainBuildAssets(join(__dirname, "dist"))],
+ 	define: {
+ 		__BUILD_ID__: JSON.stringify(buildId),
