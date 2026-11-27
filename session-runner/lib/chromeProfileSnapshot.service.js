@@ -8,7 +8,7 @@ function createChromeProfileSnapshotService({
   clearIntervalImpl = clearInterval,
   logger = console,
 } = {}) {
-  const enabled = Boolean(config.chromeEnabled || config.runnerCapabilities?.chrome);
+  const enabled = !config.remoteGuestMode && Boolean(config.chromeEnabled || config.runnerCapabilities?.chrome);
   const intervalMs = Number(config.archiveSyncIntervalMs || 300000);
   let timer = null;
   let inFlight = null;

@@ -24,7 +24,8 @@ Environment=MAPACHE_PI_WEB_UI_ROOT=/opt/mapache/payload/pi-web-ui
 Environment=PI_WEB_MCP_ADAPTER_PATH=/opt/mapache/payload/pi-mcp-adapter/index.ts
 Environment=RUNNER_BIND_HOST=private-guest-interface
 Environment=PORT=8080
-Environment='RUNNER_CAPABILITIES={"terminal":true,"preview":false,"previewQa":false,"functions":false,"chrome":false}'
+Environment='RUNNER_CAPABILITIES={"terminal":true,"preview":false,"previewQa":false,"functions":false,"chrome":true}'
+Environment=CHROME_PROFILE_DIR=/var/lib/mapache/workspace/browser/profile
 Environment=PREVIEW_ENABLED=false
 EnvironmentFile=-/etc/mapache-vm/guest.env
 ExecStart=/usr/local/libexec/mapache-guest-bootstrap

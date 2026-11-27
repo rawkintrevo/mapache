@@ -92,8 +92,8 @@ def validate_manifest(manifest: dict) -> None:
     if runtime.get("listenPort") != 8080 or runtime.get("upstreamPort") != 8787:
         raise BuildError("guest runtime ports do not match the runner contract")
     capabilities = runtime.get("capabilities") or {}
-    if capabilities.get("terminal") is not True or capabilities.get("chrome") is not False:
-        raise BuildError("guest must retain the native terminal and omit Chrome in v1")
+    if capabilities.get("terminal") is not True or capabilities.get("chrome") is not True:
+        raise BuildError("guest must retain the native terminal and support headed Chrome")
 
     network = manifest.get("network") or {}
     if network.get("cidr") != "192.168.250.0/24" or network.get("publicListener") is not False:
@@ -277,7 +277,7 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
                 "--expand", "/dev/sda1", str(base_image), str(output)], check=True)
         runner([
             "virt-customize", "-a", str(output),
-            "--install", "ca-certificates,curl,git,openssh-client,python3",
+            "--install", "ca-certificates,curl,git,openssh-client,python3,xvfb,x11vnc,x11-utils,openbox,fonts-liberation",
             "--mkdir", "/opt/mapache",
             "--mkdir", "/etc/mapache-vm",
             "--mkdir", "/usr/local/libexec",
@@ -286,6 +286,7 @@ def build_image(base_image: Path, payload: Path, output: Path, manifest: dict, r
             "--copy-in", f"{staged_payload}:/opt/mapache",
             "--upload", f"{bootstrap}:/usr/local/libexec/mapache-guest-bootstrap",
             "--upload", f"{unit}:/etc/systemd/system/mapache-guest.service",
+            "--run", str(ROOT / "install-chrome.sh"),
             "--run-command", "useradd --system --no-create-home --home-dir /home/mapache --shell /usr/sbin/nologin mapache || true",
             "--run-command", "chown -R mapache:mapache /var/lib/mapache",
             "--run-command", "ln -sT /var/lib/mapache/workspace/home /home/mapache",

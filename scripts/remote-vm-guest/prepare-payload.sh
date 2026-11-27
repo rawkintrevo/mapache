@@ -43,6 +43,10 @@ if [[ -L "${output}/runtime/pi" ]]; then
 fi
 [[ -f "${output}/runtime/pi" ]] || { echo "pi launcher target is missing" >&2; exit 65; }
 docker cp "${container}:/root/.pi/agent/npm/node_modules/pi-mcp-adapter" "${output}/pi-mcp-adapter"
+docker cp -L "${container}:/usr/share/novnc" "${output}/novnc"
+# Debian omits the version metadata fetched by the noVNC settings panel.
+docker run --rm --network none --entrypoint dpkg-query "${image}" -W \
+  '-f={"version":"${Version}"}\n' novnc > "${output}/novnc/package.json"
 docker cp "${container}:/app/." "${output}/session-runner/"
 docker cp "${container}:/opt/mapache/pi-web-ui/." "${output}/pi-web-ui/"
 # ssh2 ships private-key fixtures for its own test suite, not runtime use.

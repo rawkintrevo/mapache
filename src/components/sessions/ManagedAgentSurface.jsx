@@ -16,8 +16,8 @@ export function ManagedAgentSurface({
   unavailableMessage,
 }) {
   const handleOpenChrome = useCallback(() => {
-    if (!isRemoteWorkspace) onSelectCanvas?.("chrome");
-  }, [isRemoteWorkspace, onSelectCanvas]);
+    if (!isRemoteWorkspace || hasBrowser) onSelectCanvas?.("chrome");
+  }, [hasBrowser, isRemoteWorkspace, onSelectCanvas]);
 
   return (
     <div className={`canvas-shell canvas-shell--managed-agent${unavailableMessage ? " canvas-shell--status" : ""}`}>
@@ -28,7 +28,7 @@ export function ManagedAgentSurface({
               key={session.id}
               accessError={accessError}
               onAccessRefreshNeeded={onAccessRefreshNeeded}
-              onOpenChrome={isRemoteWorkspace ? undefined : handleOpenChrome}
+              onOpenChrome={handleOpenChrome}
               sessionName={session.name}
               url={accessUrls.agentUrl}
             />
@@ -44,7 +44,7 @@ export function ManagedAgentSurface({
           )
         )
       ) : null}
-      {activeCanvas === "chrome" && capabilities.chrome && !isRemoteWorkspace ? (
+      {activeCanvas === "chrome" && capabilities.chrome && (!isRemoteWorkspace || hasBrowser) ? (
         hasBrowser ? (
           <BrowserCanvas sessionName={session.name} url={accessUrls.browserUrl} />
         ) : (

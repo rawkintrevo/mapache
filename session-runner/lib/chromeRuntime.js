@@ -6,6 +6,7 @@ const {compactErrorMessage} = require("./utils");
 const REQUIRED_PROCESS_NAMES = ["xvfb", "windowManager", "taskbar", "chromium", "vnc"];
 
 function createChromeRuntime(config = {}, deps = {}) {
+  const desktopReadyForConfig = (status) => isDesktopReady(status, config.chromeDesktopMinimal);
   const enabled = Boolean(config.chromeEnabled || config.runnerCapabilities?.chrome);
   const desktop = deps.desktop || {
     start: async () => {},
@@ -48,7 +49,7 @@ function createChromeRuntime(config = {}, deps = {}) {
       await waitForDesktopReady();
       await waitForCdpReady();
       await waitForDesktopReady();
-      if (!isDesktopReady(readDesktopStatus())) throw new Error("Chrome desktop became unavailable during startup");
+      if (!desktopReadyForConfig(readDesktopStatus())) throw new Error("Chrome desktop became unavailable during startup");
       state = "ready";
       return status();
     } catch (cause) {
@@ -74,7 +75,7 @@ function createChromeRuntime(config = {}, deps = {}) {
       if (desktopStatus.state === "failed") {
         throw new Error("Chrome desktop process supervision failed");
       }
-      if (isDesktopReady(desktopStatus)) {
+      if (desktopReadyForConfig(desktopStatus)) {
         try {
           if (await probeVncImpl()) return;
         } catch (cause) {
@@ -120,7 +121,7 @@ function createChromeRuntime(config = {}, deps = {}) {
 
   function handleDesktopStateChange(desktopStatus) {
     if (stopping || !enabled) return;
-    const ready = isDesktopReady(desktopStatus);
+    const ready = desktopReadyForConfig(desktopStatus);
     if (desktopStatus && desktopStatus.state === "failed") {
       cdpReady = false;
       state = "failed";
@@ -141,7 +142,7 @@ function createChromeRuntime(config = {}, deps = {}) {
       try {
         await waitForDesktopReady();
         await waitForCdpReady();
-        if (isDesktopReady(readDesktopStatus())) {
+        if (desktopReadyForConfig(readDesktopStatus())) {
           error = null;
           state = "ready";
         }
@@ -164,7 +165,7 @@ function createChromeRuntime(config = {}, deps = {}) {
 
   function status() {
     const desktopStatus = readDesktopStatus();
-    const desktopReady = isDesktopReady(desktopStatus);
+    const desktopReady = desktopReadyForConfig(desktopStatus);
     if (desktopStatus.state === "failed" && state !== "disabled") {
       state = "failed";
       cdpReady = false;
@@ -216,12 +217,13 @@ function createChromeRuntime(config = {}, deps = {}) {
   }
 }
 
-function isDesktopReady(status) {
+function isDesktopReady(status, minimal = false) {
   if (!status || status.state === "failed") return false;
   if (status.state && status.state !== "running") return false;
   const hasProcessState = REQUIRED_PROCESS_NAMES.some((name) => Object.prototype.hasOwnProperty.call(status, name));
   if (!hasProcessState) return status.ready === true;
-  return REQUIRED_PROCESS_NAMES.every((name) => status[name] === true || status[name] === "running");
+  return REQUIRED_PROCESS_NAMES.every((name) => (minimal && name === "taskbar") ||
+    status[name] === true || status[name] === "running");
 }
 
 function probeTcpPort(netImpl, host, port) {

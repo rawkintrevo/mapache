@@ -1,13 +1,13 @@
 # Versioned remote VM guest image
 
-`manifest.json` is the v2 guest contract for the remote-libvirt provider:
+`manifest.json` is the v4 guest contract for the remote-libvirt provider:
 Ubuntu 24.04 LTS (amd64), 2 vCPU, 8 GiB RAM, and one 40 GiB thin QCOW2 disk.
 The base image is a dated Ubuntu release artifact with a checked-in SHA-256;
 the builder refuses a changed or unverified base image.
 
 The guest payload is extracted from an immutable `gcp-runner` image. It reuses
 the repository's pinned pi-web-ui build (`pi-web-ui-v1`) and the session runner,
-including the native terminal protocol. The extraction command must receive a
+including the native terminal protocol and the patched noVNC client. The image builder installs a checksum-pinned Google Chrome package and its desktop dependencies. The extraction command must receive a
 content-addressed Docker image (`image@sha256:...`); a mutable tag is rejected.
 
 ```bash
@@ -26,7 +26,7 @@ scripts/remote-vm-guest/prepare-repaired-payload.sh \
 scripts/remote-vm-guest/build-image.py \
   --base-image /var/tmp/ubuntu-24.04-server-cloudimg-amd64.img \
   --payload /tmp/mapache-repaired-guest-payload \
-  --output /var/lib/mapache-vm/images/ubuntu-24.04-v2.qcow2
+  --output /var/lib/mapache-vm/images/ubuntu-24.04-v4.qcow2
 ```
 
 The resulting image contains no owner, host, Firebase, model-provider, or SSH
@@ -55,7 +55,7 @@ host usage grows with writes. The builder records the base hash, upstream
 runtime digest, overlay source commit and file hashes, payload hash, output
 image checksum, virtual size, and image version in `<output>.manifest.json` for
 lifecycle and upgrade checks. Changing `imageVersion` affects new workspaces
-only. Existing v1 disks are never silently rebased; install v2 alongside v1
+only. Keep existing backing images in place. Install v4 alongside v1 and v2
 and use an explicit later migration operation if one is ever approved.
 
 Building requires `qemu-img`, `virt-customize`, a libvirt-capable host, and a

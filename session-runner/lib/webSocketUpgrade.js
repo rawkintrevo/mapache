@@ -7,6 +7,7 @@ function createWebSocketUpgradeRouter({
   metricsWss,
   shellWss,
   hasBrowserAccess,
+  hasRemoteChromeAccess,
   hasMetricsAccess,
   hasShellAccess,
 } = {}) {
@@ -25,6 +26,10 @@ function createWebSocketUpgradeRouter({
         rejectUpgrade(socket);
         return;
       }
+      handleUpgrade(browserWss, request, socket, head);
+      return;
+    }
+    if (pathname === "/agent/chrome/vnc" && hasRemoteChromeAccess?.(request)) {
       handleUpgrade(browserWss, request, socket, head);
       return;
     }

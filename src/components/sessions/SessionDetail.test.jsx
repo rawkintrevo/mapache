@@ -1,4 +1,4 @@
-import {render, screen} from "@testing-library/react";
+import {fireEvent, render, screen} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 import {SessionDetail} from "./SessionDetail.jsx";
@@ -105,13 +105,18 @@ describe("SessionDetail Chrome workflow", () => {
     expect(screen.queryByRole("tab", {name: "Chrome"})).not.toBeInTheDocument();
   });
 
-  test("does not expose Chrome for a remote VM workspace", () => {
-    renderDetail({
-      agentUiVersion: "pi-web-ui-v1",
-      capabilities: {terminal: true, preview: true, chrome: true},
-    }, {isRemoteWorkspace: true});
-
-    expect(screen.queryByRole("tab", {name: "Chrome"})).not.toBeInTheDocument();
+  test.each([false, true])("opens shared remote Chrome only with signed viewer access (%s)", async (available) => {
+    const viewer = "https://gateway.example/workspaces/w/agent/chrome/vnc.html?mapache_access=test";
+    renderDetail({agentUiVersion: "pi-web-ui-v1"}, {isRemoteWorkspace: true, accessUrls: {
+      agentUrl: "https://gateway.example/workspaces/w/agent/?mapache_access=test",
+      browserUrl: available ? viewer : null,
+    }});
+    const frame = await screen.findByTitle("Agent Chrome smoke");
+    fireEvent(window, new MessageEvent("message", {source: frame.contentWindow, origin: "https://gateway.example",
+      data: {type: "mapache.agent.navigate", version: 1, surface: "chrome"}}));
+    if (available) expect(screen.getByTitle("Chrome Chrome smoke")).toHaveAttribute("src", viewer);
+    else expect(frame).toBeInTheDocument();
+    expect(screen.queryByRole("tab", {name: "Terminal"})).not.toBeInTheDocument();
   });
 
   test("does not show Chat when capability or signed terminal access is absent", async () => {

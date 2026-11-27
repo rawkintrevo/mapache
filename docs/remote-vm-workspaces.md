@@ -75,7 +75,7 @@ internet-reachable SSH service. The initial host setup targets Ubuntu 22.04;
 that host operating-system choice is independent of the Ubuntu 24.04 LTS guest
 image. Each workspace owns one retained guest and one retained thin-provisioned
 QCOW2 disk sized at 2 vCPU, 8 GiB RAM, and 40 GiB. Sizing changes, disk growth,
-multiple hosts, backups, headed Chrome, and scheduled/idle runtime policies are
+multiple hosts, backups, and scheduled/idle runtime policies are
 follow-up work.
 
 The guest workspace account can use passwordless `sudo` to install packages.
@@ -99,6 +99,36 @@ The guest runs the existing pi-web-ui experience, including its native
 terminal. Mapache does not add a second terminal surface. Guest services have
 no public listener; browser traffic uses the authenticated gateway and the
 host's SSH transport.
+
+### Shared Chrome window
+
+The v4 image starts one sandboxed Chrome desktop alongside pi-web-ui. From
+pi-web-ui, select **Chrome** to watch the agent, type, click, or sign in.
+**Open Chrome** opens the same display in a separate tab. Return to **Agent**
+to use the native terminal. Closing either viewer leaves Chrome running.
+The agent's managed `chrome-devtools` MCP server attaches to the same Chrome
+process over guest loopback. Chrome uses the VM's normal outbound network.
+
+The SSH relay carries viewer assets and VNC WebSocket input under the signed
+workspace agent path. The guest checks the owner, workspace, session, boot,
+generation and current broker admission. The existing relay rechecks authority
+on live sockets. Xvfb uses a Unix socket, and CDP and x11vnc use loopback.
+The profile lives at `/var/lib/mapache/workspace/browser/profile`. The
+retained disk preserves it across a stop/start. The guest runner sends
+`Browser.close` before stopping X so Chrome flushes even newly written
+login cookies. The guest browser runs separately from the system D-Bus
+shutdown notification so logind cannot preempt that flush. The v4 desktop runs inside
+the existing 2-vCPU, 8-GiB guest with Openbox and no taskbar. In the #645
+isolated KVM canary, Chrome, Xvfb, x11vnc and Openbox together used about
+470 MiB of proportional memory with one local form open. This is an idle
+measurement. Browsing workload and tab count affect memory use.
+
+Install v4 beside earlier images and update the managed helper. On start,
+the helper inspects the running domain's actual QCOW2 backing image. Only
+a v4-backed guest receives a viewer URL. Earlier disks can continue using
+pi-web-ui. Deploy the API, provisioning worker and remote operation reconciler
+together, plus Hosting for the viewer control. The SSH gateway needs no update.
+See [host setup](./guides/remote-vm-host-setup.md) for installation.
 
 ## Ownership and records
 
@@ -499,7 +529,7 @@ The v1 work is deliberately split so each ticket has one owner boundary:
 | #642 | Existing `/app` workspace creation, list, lifecycle and capability UI (implemented) |
 | #643 | Rollout gate, real-host QA, deployment, rollback and release evidence |
 
-Deferred policies, headed Chrome, custom resources, disk growth, multiple hosts,
+Deferred policies, custom resources, disk growth, multiple hosts,
 backups/recovery and image slimming are tracked under #633. No child ticket
 may change Blank, GitHub, legacy SSH or Compute Engine behavior as an incidental
 way to implement remote-libvirt.
