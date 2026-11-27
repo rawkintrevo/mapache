@@ -46,13 +46,8 @@ key as the managed account. No private SSH key is installed on the host.
 
 Build the pinned `ubuntu-24.04-v4` image using the instructions in
 [`scripts/remote-vm-guest/README.md`](../../scripts/remote-vm-guest/README.md),
-then copy it to the managed image directory. The credential-free base image
-must be readable by both the managed account and libvirt's QEMU user:
-
-```bash
-sudo install -o root -g root -m 0644 \
-  ubuntu-24.04-v4.qcow2 /var/lib/mapache-vm/images/ubuntu-24.04-v4.qcow2
-```
+then use the install block below. The managed account and libvirt's QEMU
+user both need read access to the credential-free base image.
 
 Install v4 beside the earlier images. Reinstall the matching `install.py`,
 `helper.py`, and `mapache_guest_config.py` from the same release before the
@@ -66,13 +61,16 @@ root-owned helper in place (the forced-command path does not change), installs
 the new base alongside existing versions, and finishes with the read-only readiness check:
 
 ```bash
+set -e
 image="$PWD/ubuntu-24.04-v4.qcow2"
 manifest="$image.manifest.json"
 expected="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["imageSha256"])' "$manifest")"
 observed="$(sha256sum "$image" | awk '{print $1}')"
 test "$expected" = "$observed"
-sudo test ! -e /var/lib/mapache-vm/images/ubuntu-24.04-v4.qcow2 || exit 1
-sudo install -o root -g root -m 0644 "$image" /var/lib/mapache-vm/images/ubuntu-24.04-v4.qcow2
+stage=$(sudo mktemp /var/lib/mapache-vm/images/.chrome-v4-XXXXXX)
+sudo install -o root -g root -m 0644 "$image" "$stage" &&
+  sudo ln "$stage" /var/lib/mapache-vm/images/ubuntu-24.04-v4.qcow2 || exit 1
+sudo rm "$stage"
 sudo install -o root -g root -m 0755 helper.py /usr/local/libexec/mapache-vm-helper
 sudo install -o root -g root -m 0644 mapache_guest_config.py /usr/local/libexec/mapache_guest_config.py
 sudo python3 install.py --check-only --json

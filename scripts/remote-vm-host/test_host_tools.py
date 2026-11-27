@@ -182,11 +182,13 @@ class HostToolTests(unittest.TestCase):
             returncode = 0
             stdout = "State: running\nAutostart: disable\n"
 
+        backing_image = helper.IMAGE_PATH
+
         def runner(command, **kwargs):
             if "dumpxml" in command:
                 xml = helper.guest_xml("mapache-ws-abc123").replace(
                     '<target dev="vda"',
-                    f"<backingStore><source file='{helper.IMAGE_PATH}'/></backingStore><target dev=\"vda\"")
+                    f"<backingStore><source file='{backing_image}'/></backingStore><target dev=\"vda\"")
                 return SimpleNamespace(returncode=0, stdout=xml)
             if "domifaddr" in command:
                 self.assertEqual(command[-2:], ["--source", "lease"])
@@ -200,6 +202,9 @@ class HostToolTests(unittest.TestCase):
         self.assertEqual(observed["state"], "running")
         self.assertFalse(observed["autostart"])
         self.assertEqual(observed["guestIp"], "192.168.250.42")
+        backing_image = helper.IMAGE_DIR / "ubuntu-24.04-v2.qcow2"
+        legacy = helper.handle(["inspect", "mapache-ws-abc123"], runner=runner)
+        self.assertIsNone(legacy["guestImageVersion"])
 
     def test_readiness_reports_missing_host_capabilities_without_mutation(self):
         class Result:
