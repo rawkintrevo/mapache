@@ -34,6 +34,7 @@ overlay_files=(
   "session-runner/lib/webSocketUpgrade.js"
   "session-runner/lib/chromeDesktop.js"
   "session-runner/lib/chromeRuntime.js"
+  "session-runner/lib/remoteChromeShutdown.js"
   "session-runner/lib/runnerLifecycle.js"
   "session-runner/lib/chromeProfileSnapshot.service.js"
   "session-runner/lib/runnerEnvironment.js"

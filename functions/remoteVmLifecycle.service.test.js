@@ -202,7 +202,7 @@ test("provisioning completion publishes the gateway and runtime-ready state", as
   };
   await seed(value);
   const host = fakeHost({start: ({guest, guests}) => {
-    const running = {...guests.get(guest.guestName), state: "running", headedChrome: true, guestIp: "192.168.250.42"};
+    const running = {...guests.get(guest.guestName), state: "running", guestImageVersion: "ubuntu-24.04-v4", guestIp: "192.168.250.42"};
     guests.set(guest.guestName, running);
     return running;
   }});
@@ -226,7 +226,7 @@ test("provisioning completion publishes the gateway and runtime-ready state", as
     const completed = await service.provisionSessionService(value.workspace, ref, value.session);
     assert.equal(completed.status, "running");
     assert.equal(completed.capabilities.chrome, true);
-    assert.equal(completed.runtimeProvider.guestImageVersion, "ubuntu-24.04-v3");
+    assert.equal(completed.runtimeProvider.guestImageVersion, "ubuntu-24.04-v4");
     assert.equal(completed.serviceUrl, "https://gateway.example");
     assert.equal(completed.provisioningState, "completed");
     assert.equal(completed.agentRuntimeState, "running");

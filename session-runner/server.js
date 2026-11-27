@@ -101,7 +101,7 @@ const workspaceAuthority = (config.remoteGuestMode === true ? createRemoteWorksp
   db,
   remoteCredentials,
   onLost: config.remoteGuestMode === true ?
-    createRemoteAuthorityLossHandler({stop: () => piWebUi?.stop?.()}) : () => piWebUi?.stop?.(),
+    createRemoteAuthorityLossHandler({stop: () => Promise.allSettled([piWebUi?.stop?.(), chromeRuntime.stop()])}) : () => piWebUi?.stop?.(),
 });
 const activity = createActivityService({
   admin,

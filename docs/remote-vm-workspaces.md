@@ -102,7 +102,7 @@ host's SSH transport.
 
 ### Shared Chrome window
 
-The v3 image starts one sandboxed Chrome desktop alongside pi-web-ui. From
+The v4 image starts one sandboxed Chrome desktop alongside pi-web-ui. From
 pi-web-ui, select **Chrome** to watch the agent, type, click, or sign in.
 **Open Chrome** opens the same display in a separate tab. Return to **Agent**
 to use the native terminal. Closing either viewer leaves Chrome running.
@@ -114,15 +114,18 @@ workspace agent path. The guest checks the owner, workspace, session, boot,
 generation and current broker admission. The existing relay rechecks authority
 on live sockets. Xvfb uses a Unix socket, and CDP and x11vnc use loopback.
 The profile lives at `/var/lib/mapache/workspace/browser/profile`. The
-retained disk preserves it across a stop/start. The v3 desktop runs inside
+retained disk preserves it across a stop/start. The guest runner sends
+`Browser.close` before stopping X so Chrome flushes even newly written
+login cookies. The guest browser runs separately from the system D-Bus
+shutdown notification so logind cannot preempt that flush. The v4 desktop runs inside
 the existing 2-vCPU, 8-GiB guest with Openbox and no taskbar. In the #645
 isolated KVM canary, Chrome, Xvfb, x11vnc and Openbox together used about
 470 MiB of proportional memory with one local form open. This is an idle
 measurement. Browsing workload and tab count affect memory use.
 
-Install v3 beside earlier images and update the managed helper. On start,
+Install v4 beside earlier images and update the managed helper. On start,
 the helper inspects the running domain's actual QCOW2 backing image. Only
-a v3-backed guest receives a viewer URL. Earlier disks can continue using
+a v4-backed guest receives a viewer URL. Earlier disks can continue using
 pi-web-ui. Deploy the API, provisioning worker and remote operation reconciler
 together, plus Hosting for the viewer control. The SSH gateway needs no update.
 See [host setup](./guides/remote-vm-host-setup.md) for installation.

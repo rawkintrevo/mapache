@@ -1,6 +1,7 @@
 "use strict";
 
 const fs = require("fs");
+const {closeRemoteChrome} = require("./remoteChromeShutdown");
 const {browserProxyArgs} = require("./browserEgress");
 const path = require("path");
 const {execFile, spawn} = require("child_process");
@@ -138,6 +139,9 @@ function createChromeDesktopService(config = {}, deps = {}) {
     startProcess("chromium", "chromium", args, {
       DISPLAY: config.chromeDisplay,
       CHROME_USER_DATA_DIR: config.chromeProfileDir,
+      // logind broadcasts shutdown before systemd stops the guest runner.
+      // Let the runner close Chrome and flush its profile in display order.
+      ...(config.remoteGuestMode ? {DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dev/null"} : {}),
     });
   }
 
@@ -221,6 +225,8 @@ function createChromeDesktopService(config = {}, deps = {}) {
     stopping = true;
     for (const timer of restartTimers.values()) clearTimeoutImpl(timer);
     restartTimers.clear();
+    const browser = processes.get("chromium")?.child;
+    if (config.remoteGuestMode && browser) await closeRemoteChrome(browser, config);
     for (const name of ["vnc", "chromium", "taskbar", "windowManager", "xvfb"]) {
       const entry = processes.get(name);
       if (!entry) continue;

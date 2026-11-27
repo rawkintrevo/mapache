@@ -21,7 +21,7 @@ GUEST_NETWORK_CIDR = "192.168.250.0/24"
 STORAGE_DIR = Path("/var/lib/mapache-vm")
 IMAGE_DIR = STORAGE_DIR / "images"
 DISK_DIR = STORAGE_DIR / "disks"
-IMAGE_VERSION = "ubuntu-24.04-v3"
+IMAGE_VERSION = "ubuntu-24.04-v4"
 IMAGE_PATH = IMAGE_DIR / f"{IMAGE_VERSION}.qcow2"
 DISK_SIZE = "40G"
 VCPUS = 2
@@ -93,7 +93,7 @@ def inspect_guest(guest_id, *, runner=subprocess.run):
                     headed_chrome = backing is not None and backing.get("file") == str(IMAGE_PATH)
                     break
     return {"version": VERSION, "network": NETWORK, "guestName": guest_id,
-            "headedChrome": headed_chrome, "diskName": f"{guest_id}.qcow2", "exists": True, "supportsWorkspaceHostname": True,
+            "guestImageVersion": IMAGE_VERSION if headed_chrome else None, "diskName": f"{guest_id}.qcow2", "exists": True, "supportsWorkspaceHostname": True,
             "state": state,
             "guestIp": ip_match.group(1) if ip_match else None, "autostart": autostart,
             "configurationId": config_id}
