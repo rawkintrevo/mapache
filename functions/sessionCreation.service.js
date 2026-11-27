@@ -47,9 +47,8 @@ const {
   provisioningSessionId,
   resolveCloudRunServiceId,
 } = require("./provisioning.helpers");
+const {guestResources, workspaceResources} = require("./remoteVmResources.helpers");
 const {
-  REMOTE_GUEST_MEMORY_MIB,
-  REMOTE_GUEST_VCPUS,
   isRemoteLibvirtRuntime,
   runtimeDescriptorForWorkspace,
 } = require("./runtimeProvider.helpers");
@@ -102,10 +101,7 @@ async function createSession(uid, workspaceId, payload, dependencies = {}) {
   const now = dependencies.admin.firestore.FieldValue.serverTimestamp();
   const region = cleanName(payload.region || DEFAULT_REGION);
   const remoteWorkspace = isRemoteLibvirtRuntime(workspace);
-  const resources = remoteWorkspace ? {
-    cpu: String(REMOTE_GUEST_VCPUS),
-    memory: `${REMOTE_GUEST_MEMORY_MIB / 1024}Gi`,
-  } : dependencies.normalizeRequestedSessionResources({
+  const resources = remoteWorkspace ? workspaceResources(guestResources(workspace.resources)) : dependencies.normalizeRequestedSessionResources({
     ...payload,
     ...(payload.resources || {}),
   }, {

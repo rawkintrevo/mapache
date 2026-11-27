@@ -97,7 +97,7 @@ export function AppShell(props) {
         onOpenMcpServers={modals.openMcpServersModal}
         onOpenRequestGrants={modals.openRequestGrantsModal}
         onOpenPiAuthManage={modals.openPiAuthManageModal}
-        onOpenWorkspaceEditModal={selectedWorkspaceIsRemote ? null : modals.openWorkspaceEditModal}
+        onOpenWorkspaceEditModal={modals.openWorkspaceEditModal}
         onOpenWorkspaceModal={modals.openWorkspaceModal}
         onRefresh={app.refreshAll}
         onRestartWorkspace={() => selectedSession ? sessions.restartSession(selectedSession.id) : undefined}

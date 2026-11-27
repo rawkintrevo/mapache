@@ -1,7 +1,7 @@
 {
   "id": "remote-vm.workspace-option",
   "title": "Remote VM workspace option shows readiness gate",
-  "description": "Run with REMOTE_VM_ADMISSION_ENABLED=true. Open workspace creation, select VM on remote machine, and verify the fixed guest shape plus the ready-host/setup gate. This case does not create a guest; a separate owner canary is required for live lifecycle evidence.",
+  "description": "Run with REMOTE_VM_ADMISSION_ENABLED=true. Open workspace creation, select VM on remote machine, and verify the CPU and memory controls plus the ready-host/setup gate. This case does not create a guest; a separate owner canary is required for live lifecycle evidence.",
   "baseUrl": "http://127.0.0.1:5173",
   "artifactsDir": "artifacts/qa/remote-vm.workspace-option",
   "steps": [
@@ -9,7 +9,7 @@
     {"useScript": "scripts/open-workspace-modal.json"},
     {"type": "click", "role": "radio", "name": "VM on remote machine"},
     {"assert": "snapshot-text", "expected": "Remote VM resources"},
-    {"assert": "snapshot-text", "expected": "2 vCPU · 8 GiB RAM · 40 GiB disk"},
+    {"assert": "snapshot-text", "expected": "Memory (GiB)"},
     {"assert": "snapshot-text", "expected": "Set up a remote host"},
     {"assert": "network-status", "requestUrlIncludes": "/api/remote-hosts", "method": "GET", "expectedStatus": 200},
     {"capture": "screenshot", "fileName": "remote-vm-option.png"},

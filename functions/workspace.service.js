@@ -27,11 +27,10 @@ const {
 const {AGENT_UI_VERSION} = require("./agentRuntime.helpers");
 const {isMainRuntime} = require("./runtimePaths.helpers");
 const {isRemoteVmAdmissionEnabled} = require("./remoteVmAdmission.helpers");
+const {guestResources, workspaceResources, checkCapacity} = require("./remoteVmResources.helpers");
 const {normalizeSessionResources} = require("./sessionResources.helpers");
 const {
   COMPUTE_ENGINE_BACKEND,
-  REMOTE_GUEST_MEMORY_MIB,
-  REMOTE_GUEST_VCPUS,
   REMOTE_LIBVIRT_BACKEND,
   createRuntimeDescriptor,
 } = require("./runtimeProvider.helpers");
@@ -89,7 +88,15 @@ async function renameWorkspace(uid, workspaceId, payload, dependencies = {}) {
   };
   if (payload && Object.prototype.hasOwnProperty.call(payload, "resources")) {
     if (workspace.runtimeProvider?.backend === REMOTE_LIBVIRT_BACKEND || workspace.source?.type === REMOTE_LIBVIRT_BACKEND) {
-      throw httpError(409, "remote_vm_resources_fixed");
+      const desired = guestResources(payload.resources);
+      await workspaceDb.runTransaction(async (tx) => {
+        const current = (await tx.get(workspaceRef)).data();
+        if (current?.ownerUid !== uid) throw httpError(403, "workspace_forbidden");
+        assertWorkspaceMutable(current);
+        await checkRemoteHostCapacity(tx, workspaceDb, uid, current.runtimeProvider?.hostId || current.source.hostId, desired, workspaceId);
+        tx.update(workspaceRef, {...update, resources: workspaceResources(desired)});
+      });
+      return serializeWorkspaceForClient(toClientDoc(await workspaceRef.get()));
     }
     try {
       update.resources = normalizeSessionResources(payload.resources || {});
@@ -162,10 +169,7 @@ async function createWorkspace(uid, payload, dependencies = {}) {
   const source = await normalizeWorkspaceSourcePayload(uid, payload, dependencies);
   let resources;
   try {
-    resources = source.type === REMOTE_LIBVIRT_BACKEND ? {
-      cpu: String(REMOTE_GUEST_VCPUS),
-      memory: `${REMOTE_GUEST_MEMORY_MIB / 1024}Gi`,
-    } : normalizeSessionResources(payload.resources || payload);
+    resources = source.type === REMOTE_LIBVIRT_BACKEND ? workspaceResources(guestResources(payload.resources)) : normalizeSessionResources(payload.resources || payload);
   } catch (error) {
     if (error && error.code === "invalid_session_resources") {
       throw httpError(400, error.code, error);
@@ -216,19 +220,37 @@ async function createWorkspace(uid, payload, dependencies = {}) {
     doc.runtimeBackend = COMPUTE_ENGINE_BACKEND;
     doc.runtimeProviderVersion = 1;
   }
+  if (source.type === REMOTE_LIBVIRT_BACKEND) {
+    const ref = workspaceDb.collection("workspaces").doc();
+    const desired = guestResources(resources);
+    doc.runtimeProvider = createRuntimeDescriptor({backend: REMOTE_LIBVIRT_BACKEND, workspaceId: ref.id,
+      ownerUid: uid, hostId: source.hostId, guestResources: desired, region: process.env.SESSION_REGION || "us-central1",
+      gateway: runtimeGatewayPayload(dependencies.runtimeGatewayBaseUrl?.())});
+    await workspaceDb.runTransaction(async (tx) => {
+      await checkRemoteHostCapacity(tx, workspaceDb, uid, source.hostId, desired);
+      tx.set(ref, doc);
+    });
+    return toClientDoc(await ref.get());
+  }
   const ref = await workspaceDb.collection("workspaces").add(doc);
-  if (source.type === REMOTE_LIBVIRT_BACKEND || useComputeEngine) {
+  if (useComputeEngine) {
     await ref.update({runtimeProvider: createRuntimeDescriptor({
-      backend: source.type === REMOTE_LIBVIRT_BACKEND ? REMOTE_LIBVIRT_BACKEND : COMPUTE_ENGINE_BACKEND,
+      backend: COMPUTE_ENGINE_BACKEND,
       workspaceId: ref.id,
       ownerUid: uid,
       region: process.env.SESSION_REGION || "us-central1",
       gateway: runtimeGatewayPayload(dependencies.runtimeGatewayBaseUrl?.()),
-      ...(source.type === REMOTE_LIBVIRT_BACKEND ? {hostId: source.hostId} : {}),
     })});
   }
   const snap = await ref.get();
   return toClientDoc(snap);
+}
+
+async function checkRemoteHostCapacity(tx, db, uid, hostId, resources, workspaceId) {
+  const host = (await tx.get(db.collection("remoteHosts").doc(hostId))).data();
+  if (host?.ownerUid !== uid || host.deletedAt) throw httpError(404, "remote_host_not_found");
+  if (!workspaceId && (!host.ready || host.status !== "ready")) throw httpError(409, "remote_host_not_ready");
+  checkCapacity(host, resources, workspaceId);
 }
 
 function runtimeGatewayPayload(value) {

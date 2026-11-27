@@ -19,11 +19,16 @@ const {
 } = require("./runtimeProvider.helpers");
 
 const GIB = 1024 ** 3;
-const HEADROOM = Object.freeze({
-  vcpus: 1,
-  memoryBytes: GIB,
-  diskBytes: 5 * GIB,
-});
+const {HEADROOM, checkCapacity, guestResources, workspaceResources} = require("./remoteVmResources.helpers");
+
+function needsRetry(operation) {
+  return operation.state === "unreachable" && operation.retryable;
+}
+
+function matchesResources(observed, desired) {
+  if (!observed.supportsResize) return desired.vcpus === REMOTE_GUEST_VCPUS && desired.memoryMiB === REMOTE_GUEST_MEMORY_MIB;
+  return observed.vcpus === desired.vcpus && observed.memoryMiB === desired.memoryMiB;
+}
 const RETRYABLE_HOST_CODES = new Set([
   "remote_host_unreachable",
   "remote_host_connection_unavailable",
@@ -89,7 +94,9 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       workspaceId: session.workspaceId || workspace?.id,
       ownerUid: session.ownerUid || workspace?.ownerUid,
     });
+    const applied = result.supportsResize ? {vcpus: result.vcpus, memoryMiB: result.memoryMiB, diskGiB: REMOTE_GUEST_DISK_GIB} : guestResources();
     const update = {
+      resources: workspaceResources(applied),
       ...runtimeSessionStateUpdate(session, "running"),
       runtimeProviderState: "running",
       capabilities: {...session.capabilities, chrome: Boolean(result.guestImageVersion)},
@@ -103,7 +110,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       agentRuntimeBootInstanceId: result.bootId,
       agentRuntimeGeneration: descriptor.generation,
       lastError: null,
-      runtimeProvider: {...descriptor, guestImageVersion: result.guestImageVersion || descriptor.guestImageVersion, state: "running", guestIp: result.guestIp || descriptor.guestIp},
+      runtimeProvider: {...descriptor, guestResources: applied, guestImageVersion: result.guestImageVersion || descriptor.guestImageVersion, state: "running", guestIp: result.guestIp || descriptor.guestIp},
       ...(session.provisioningOperationId ? {
         provisioningState: "completed",
         provisioningAttemptCompletedAt: now(),
@@ -205,7 +212,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
           result = existing;
           return;
         }
-        if (["queued", "running"].includes(existing.state)) {
+        if (["queued", "running", "unreachable", "cancelled"].includes(existing.state)) {
           result = existing;
           return;
         }
@@ -225,7 +232,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
         const activeRef = operationRef(activeOperationId);
         const activeSnap = await transaction.get(activeRef);
         const active = activeSnap.exists ? activeSnap.data() || {} : {};
-        if (["queued", "running"].includes(String(active.state || ""))) {
+        if (["queued", "running"].includes(String(active.state || "")) || (needsRetry(active) && kind !== "delete" && kind !== "stop")) {
           throw lifecycleError("remote_vm_operation_in_progress");
         }
       }
@@ -238,7 +245,14 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       if (host.status !== "ready" || host.ready !== true) throw lifecycleError("remote_host_not_ready");
 
       const needsCapacity = kind === "create" || kind === "start";
-      if (needsCapacity) reserveCapacityInTransaction(transaction, hostRef, host, descriptor, id);
+      descriptor = normalizeRuntimeDescriptor(current.runtimeProvider || descriptor, {workspaceId: descriptor.workspaceId, ownerUid: descriptor.ownerUid});
+      if (needsCapacity) {
+        const desired = guestResources(current.resources);
+        if (descriptor.state === "running" && (descriptor.guestResources.vcpus !== desired.vcpus ||
+            descriptor.guestResources.memoryMiB !== desired.memoryMiB)) throw lifecycleError("remote_vm_stop_before_resize");
+        descriptor.guestResources = desired;
+        reserveCapacityInTransaction(transaction, hostRef, host, descriptor, id);
+      }
       const timestamp = now();
       const targetState = kind === "delete" ? "deleting" : kind === "stop" ? "stopping" : "starting";
       const operationData = {
@@ -252,6 +266,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
         state: "queued",
         attempt: 0,
         capacityReserved: needsCapacity,
+        guestResources: descriptor.guestResources,
         targetState: kind === "stop" ? "stopped" : kind === "delete" ? "deleted" : "running",
         guestName: descriptor.guestName || remoteGuestName(descriptor.workspaceId),
         diskName: descriptor.dataDiskName || remoteDiskName(descriptor.workspaceId),
@@ -292,12 +307,25 @@ function createRemoteVmLifecycleService(dependencies = {}) {
     try {
       let observed;
       if (operation.kind === "create" || operation.kind === "start") {
-        await prepareGuestConfiguration(context);
+        const sessionRef = await prepareGuestConfiguration(context);
         observed = normalizeObserved(await performHostOperation(context, "inspect"), context.descriptor);
+        const desired = context.descriptor.guestResources;
+        if (!observed.supportsResize && !matchesResources(observed, desired)) throw lifecycleError("remote_vm_helper_update_required");
+        if (observed.supportsResize) {
+          const capacity = await performHostOperation(context, "capacity");
+          const host = (await db.collection("remoteHosts").doc(operation.hostId).get()).data();
+          checkCapacity({...host, capacity}, desired, operation.workspaceId);
+        }
+        await sessionRef.update({agentRuntimeBootInstanceId: context.bootId, agentRuntimeGeneration: context.descriptor.generation});
         if (!observed.exists) {
           observed = normalizeObserved(await performHostOperation(context, "create"), context.descriptor);
         }
         if (!observed.exists) throw lifecycleError("remote_vm_create_unverified");
+        if (!matchesResources(observed, desired)) {
+          if (observed.state !== "stopped") throw lifecycleError("remote_vm_stop_before_resize");
+          observed = normalizeObserved(await performHostOperation(context, "resize"), context.descriptor);
+          if (!matchesResources(observed, desired)) throw lifecycleError("remote_vm_resources_unverified");
+        }
         const hostname = observed.supportsWorkspaceHostname && workspaceHostname(context.workspace.name);
         if (hostname) context.configuration.WORKSPACE_HOSTNAME = hostname;
         context.configurationId = guestConfigurationId(context.configuration);
@@ -310,6 +338,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
           if (observed.configurationId !== context.configurationId) throw lifecycleError("remote_vm_configuration_unverified");
         }
         if (observed.state !== "running") observed = normalizeObserved(await performHostOperation(context, "start"), context.descriptor);
+        if (!matchesResources(observed, desired)) throw lifecycleError("remote_vm_resources_unverified");
         if (observed.state !== "running" || !observed.guestIp) throw lifecycleError("remote_vm_start_unverified");
       } else if (operation.kind === "stop") {
         observed = normalizeObserved(await performHostOperation(context, "stop"), context.descriptor);
@@ -353,6 +382,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
         workspace.runtimeProvider || workspace.runtimeProviderDescriptor,
         {workspaceId: operation.workspaceId, ownerUid: operation.ownerUid},
     );
+    if (operation.guestResources) descriptor.guestResources = operation.guestResources;
     if (descriptor.hostId !== operation.hostId || descriptor.generation !== operation.providerGeneration) {
       throw lifecycleError("remote_vm_stale_operation");
     }
@@ -384,7 +414,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
     context.bootId = operation.id;
     context.configuration = guestConfiguration({session, sessionId: operation.sessionId, descriptor,
       bootId: context.bootId, ...(dependencies.remoteVmCredentialsUrl ? {brokerUrl: dependencies.remoteVmCredentialsUrl()} : {})});
-    await sessionRef.update({agentRuntimeBootInstanceId: context.bootId, agentRuntimeGeneration: descriptor.generation});
+    return sessionRef;
   }
 
   async function performHostOperation(context, action) {
@@ -409,7 +439,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       const observed = normalizeObserved(await performHostOperation(context, "inspect"), context.descriptor);
       if (operation.kind === "create" || operation.kind === "start") {
         return observed.exists && observed.state === "running" && observed.guestIp &&
-          observed.configurationId === context.configurationId ? observed : null;
+          matchesResources(observed, context.descriptor.guestResources) && observed.configurationId === context.configurationId ? observed : null;
       }
       if (operation.kind === "stop") return observed.exists && observed.state === "stopped" ? observed : null;
       if (operation.kind === "delete") return !observed.exists ? observed : null;
@@ -506,7 +536,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
         return;
       }
       const hostRef = db.collection("remoteHosts").doc(operation.hostId);
-      if (current.capacityReserved && operation.kind !== "stop") {
+      if (current.capacityReserved && operation.kind !== "stop" && !isHostUnavailable(error)) {
         await releaseCapacityInTransaction(transaction, hostRef, operation.id, operation.workspaceId);
       }
       const state = isHostUnavailable(error) ? "unreachable" : "error";
@@ -543,6 +573,19 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       if (current.state === "cancelled") return;
       const leaseUntil = Date.parse(String(current.leaseUntil || ""));
       if (current.state === "running" && Number.isFinite(leaseUntil) && leaseUntil > Date.now()) return;
+      const workspace = (await transaction.get(db.collection("workspaces").doc(current.workspaceId))).data();
+      if (workspace?.runtimeProviderOperationId && workspace.runtimeProviderOperationId !== ref.id) {
+        txSet(transaction, ref, {state: "cancelled", updatedAt: now()});
+        return;
+      }
+      if (current.state === "unreachable" && current.capacityReserved) {
+        const hostRef = db.collection("remoteHosts").doc(current.hostId);
+        const host = (await transaction.get(hostRef)).data();
+        if (host?.ownerUid !== current.ownerUid || host.deletedAt) throw httpError(404, "remote_host_not_found");
+        reserveCapacityInTransaction(transaction, hostRef, host, {
+          workspaceId: current.workspaceId, guestResources: current.guestResources || guestResources(),
+        }, ref.id);
+      }
       const timestamp = now();
       txSet(transaction, ref, {
         state: "running",
@@ -603,35 +646,23 @@ function createRemoteVmLifecycleService(dependencies = {}) {
   }
 
   function reserveCapacityInTransaction(transaction, hostRef, host, descriptor, operationIdValue) {
-    const capacity = host.capacity || {};
-    const cpuCount = Number(capacity.cpuCount);
-    const memoryBytes = Number(capacity.memoryBytes);
-    const freeDiskBytes = Number(capacity.freeDiskBytes);
-    if (![cpuCount, memoryBytes, freeDiskBytes].every((value) => Number.isFinite(value) && value >= 0)) {
-      throw lifecycleError("remote_host_capacity_unavailable");
-    }
     const reserved = host.remoteVmReservations || {};
     const entries = Array.isArray(reserved.entries) ? reserved.entries.filter(Boolean) : [];
     const current = {
       vcpus: Number(reserved.vcpus || 0),
       memoryBytes: Number(reserved.memoryBytes || 0),
       diskBytes: Number(reserved.diskBytes || 0),
-      operationIds: Array.isArray(reserved.operationIds) ? reserved.operationIds : [],
     };
-    if (current.operationIds.includes(operationIdValue) || entries.some((entry) => entry.operationId === operationIdValue)) {
-      return entries.find((entry) => entry.operationId === operationIdValue) || current;
+    const existing = entries.find((entry) => entry.operationId === operationIdValue);
+    if (existing) return existing;
+    const required = checkCapacity(host, descriptor.guestResources, descriptor.workspaceId);
+    const owned = entries.filter((entry) => entry.workspaceId === descriptor.workspaceId);
+    for (const entry of owned) {
+      current.vcpus -= entry.vcpus;
+      current.memoryBytes -= entry.memoryBytes;
+      current.diskBytes -= entry.diskBytes;
     }
-    const required = {
-      vcpus: REMOTE_GUEST_VCPUS,
-      memoryBytes: REMOTE_GUEST_MEMORY_MIB * 1024 * 1024,
-      diskBytes: REMOTE_GUEST_DISK_GIB * GIB,
-    };
-    if (cpuCount - current.vcpus - required.vcpus < HEADROOM.vcpus ||
-        memoryBytes - current.memoryBytes - required.memoryBytes < HEADROOM.memoryBytes ||
-        freeDiskBytes - current.diskBytes - required.diskBytes < HEADROOM.diskBytes) {
-      throw lifecycleError("remote_vm_capacity_exhausted");
-    }
-    const nextEntries = [...entries, {
+    const nextEntries = [...entries.filter((entry) => entry.workspaceId !== descriptor.workspaceId), {
       operationId: operationIdValue,
       workspaceId: descriptor.workspaceId,
       vcpus: required.vcpus,
@@ -643,8 +674,8 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       vcpus: current.vcpus + required.vcpus,
       memoryBytes: current.memoryBytes + required.memoryBytes,
       diskBytes: current.diskBytes + required.diskBytes,
-      operationIds: [...current.operationIds, operationIdValue].slice(-100),
-      entries: nextEntries.slice(-100),
+      operationIds: nextEntries.map((entry) => entry.operationId),
+      entries: nextEntries,
       updatedAt: now(),
     };
     txSet(transaction, hostRef, {remoteVmReservations: next, updatedAt: now()});
@@ -663,6 +694,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       txSet(transaction, hostRef, {
         remoteVmReservations: {
           entries: matching,
+          operationIds: matching.map((entry) => entry.operationId),
           vcpus: matching.reduce((sum, entry) => sum + Number(entry.vcpus || 0), 0),
           memoryBytes: matching.reduce((sum, entry) => sum + Number(entry.memoryBytes || 0), 0),
           diskBytes: matching.reduce((sum, entry) => sum + Number(entry.diskBytes || 0), 0),
@@ -738,6 +770,9 @@ function normalizeObserved(value, descriptor) {
   return {
     exists: value.exists !== false,
     guestImageVersion: value.guestImageVersion === "ubuntu-24.04-v4" ? value.guestImageVersion : null,
+    supportsResize: value.supportsResize === true,
+    vcpus: value.vcpus ?? null,
+    memoryMiB: value.memoryMiB ?? null,
     supportsWorkspaceHostname: value.supportsWorkspaceHostname === true,
     guestName: descriptor.guestName,
     diskName: descriptor.dataDiskName,
@@ -777,7 +812,8 @@ async function defaultHostOperation({action, host, privateKey, guest, configurat
   if (!host?.address || !host?.hostKeyFingerprint) throw lifecycleError("remote_host_trust_incomplete");
   try {
     const addresses = await resolveAllowedAddresses(host.address);
-    return await runRemoteHostCommand({host, addresses, privateKey, action, guestName: guest?.guestName, configuration});
+    return await runRemoteHostCommand({host, addresses, privateKey, action, guestName: guest?.guestName, configuration,
+      ...(action === "resize" ? {resources: {vcpus: guest.resources.vcpus, memoryMiB: guest.resources.memoryMiB}} : {})});
   } catch (error) {
     throw lifecycleError(error?.publicMessage || "remote_vm_transport_unavailable");
   }

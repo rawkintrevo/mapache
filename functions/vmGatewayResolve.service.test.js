@@ -14,7 +14,7 @@ function fixture() {
   let time = Date.now();
   const host = "mapache-vm-gateway.example.com";
   const runtimeProvider = createRuntimeDescriptor({backend: "remote-libvirt", workspaceId: "workspace-1", ownerUid: "owner-1",
-    hostId: "host-1", guestIp: "192.168.250.12", generation: 3});
+    guestResources: {vcpus: 3, memoryMiB: 4096, diskGiB: 40}, hostId: "host-1", guestIp: "192.168.250.12", generation: 3});
   runtimeProvider.state = "running";
   const workspace = {ownerUid: "owner-1", runtimeProvider};
   const session = {

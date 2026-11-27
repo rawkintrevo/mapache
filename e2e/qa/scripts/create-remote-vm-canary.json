@@ -37,6 +37,6 @@
   ],
   "successSignals": [
     "The workspace source is explicitly remote-libvirt and carries the supplied hostId",
-    "The session request is accepted with the fixed v1 guest resources"
+    "The session request is accepted with the default guest resources"
   ]
 }

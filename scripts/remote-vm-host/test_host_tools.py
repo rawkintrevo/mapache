@@ -31,6 +31,17 @@ installer = load("install")
 
 
 class HostToolTests(unittest.TestCase):
+    def test_resize_validates_input_and_requires_power_off_before_define(self):
+        with patch.object(helper, "virsh") as virsh:
+            for cpu, memory in [(True, 2048), (0, 2048), (3, 2000), (65, 2048), (3, 263168)]:
+                with self.assertRaisesRegex(ValueError, "invalid guest resources"):
+                    helper.resize_guest("mapache-ws-test", {"vcpus": cpu, "memoryMiB": memory})
+            virsh.assert_not_called()
+            virsh.return_value.stdout = "running"
+            with self.assertRaisesRegex(ValueError, "stop the managed guest"):
+                helper.resize_guest("mapache-ws-test", {"vcpus": 3, "memoryMiB": 4096})
+            self.assertEqual(virsh.call_count, 1)
+
     def test_configure_refuses_live_guest_and_bounds_stdin(self):
         from test_guest_config import configuration
         stream = SimpleNamespace(buffer=io.BytesIO(json.dumps(configuration()).encode()))

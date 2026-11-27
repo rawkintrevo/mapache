@@ -26,7 +26,7 @@ IMAGE_PATH = IMAGE_DIR / f"{IMAGE_VERSION}.qcow2"
 DISK_SIZE = "40G"
 VCPUS = 2
 MEMORY_MIB = 8192
-ALLOWED_ACTIONS = {"status", "capacity", "inspect", "create", "configure", "start", "stop", "destroy", "forward"}
+ALLOWED_ACTIONS = {"status", "capacity", "inspect", "create", "configure", "resize", "start", "stop", "destroy", "forward"}
 ID_PATTERN = re.compile(r"^mapache-ws-[a-z0-9][a-z0-9-]{0,62}$")
 
 
@@ -69,7 +69,7 @@ def inspect_guest(guest_id, *, runner=subprocess.run):
     info = virsh_optional("dominfo", guest_id, runner=runner)
     if getattr(info, "returncode", 1) != 0:
         return {"version": VERSION, "network": NETWORK, "guestName": guest_id,
-                "diskName": f"{guest_id}.qcow2", "exists": False, "state": "stopped",
+                "diskName": f"{guest_id}.qcow2", "exists": False, "state": "stopped", "supportsResize": True,
                 "guestIp": None, "autostart": False}
     # The image has no QEMU guest agent; the managed NAT network provides
     # DHCP leases that libvirt can inspect without guest-installed software.
@@ -92,7 +92,11 @@ def inspect_guest(guest_id, *, runner=subprocess.run):
                 if source is not None and source.get("file") == str(DISK_DIR / f"{guest_id}.qcow2"):
                     headed_chrome = backing is not None and backing.get("file") == str(IMAGE_PATH)
                     break
+    cpu = re.search(r"^CPU\(s\):\s+(\d+)", info.stdout, re.MULTILINE)
+    memory = re.search(r"^Max memory:\s+(\d+) KiB", info.stdout, re.MULTILINE)
     return {"version": VERSION, "network": NETWORK, "guestName": guest_id,
+            "supportsResize": True, "vcpus": int(cpu[1]) if cpu else None,
+            "memoryMiB": int(memory[1]) // 1024 if memory else None,
             "guestImageVersion": IMAGE_VERSION if headed_chrome else None, "diskName": f"{guest_id}.qcow2", "exists": True, "supportsWorkspaceHostname": True,
             "state": state,
             "guestIp": ip_match.group(1) if ip_match else None, "autostart": autostart,
@@ -138,6 +142,29 @@ def create_guest(guest_id, *, runner=subprocess.run):
         # Guests are explicitly managed by Mapache; host reboot does not
         # override the persisted stopped/running intent.
         runner(["virsh", "-c", "qemu:///system", "autostart", guest_id, "--disable"], check=True, text=True, capture_output=True)
+    return inspect_guest(guest_id, runner=runner)
+
+
+def resize_guest(guest_id, resources, *, runner=subprocess.run):
+    cpu, memory = resources.get("vcpus"), resources.get("memoryMiB")
+    if (type(cpu) is not int or not 1 <= cpu <= 64 or type(memory) is not int
+            or not 1024 <= memory <= 262144 or memory % 1024):
+        raise ValueError("invalid guest resources")
+    state = virsh("domstate", guest_id, runner=runner).stdout.strip()
+    if state != "shut off":
+        raise ValueError("stop the managed guest before resizing")
+    domain = ET.fromstring(virsh("dumpxml", guest_id, "--inactive", runner=runner).stdout)
+    if domain.findtext("name") != guest_id:
+        raise ValueError("unexpected domain identity")
+    for tag in ("memory", "currentMemory"):
+        node = domain.find(tag)
+        node.set("unit", "MiB")
+        node.text = str(memory)
+    domain.find("vcpu").text = str(cpu)
+    with tempfile.NamedTemporaryFile(suffix=".xml") as definition:
+        definition.write(ET.tostring(domain))
+        definition.flush()
+        virsh("define", definition.name, runner=runner)
     return inspect_guest(guest_id, runner=runner)
 
 
@@ -222,6 +249,14 @@ def handle(arguments, *, runner=subprocess.run):
         return inspect_guest(guest_id, runner=runner)
     if action == "create":
         return create_guest(guest_id, runner=runner)
+    if action == "resize":
+        raw = sys.stdin.buffer.read(257)
+        if len(raw) > 256:
+            raise ValueError("guest resources too large")
+        resources = json.loads(raw)
+        if not isinstance(resources, dict) or set(resources) != {"vcpus", "memoryMiB"}:
+            raise ValueError("invalid guest resources")
+        return resize_guest(guest_id, resources, runner=runner)
     if action == "configure":
         raw = sys.stdin.buffer.read(MAX_CONFIG_BYTES + 1)
         if len(raw) > MAX_CONFIG_BYTES:
