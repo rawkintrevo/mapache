@@ -92,6 +92,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
     const update = {
       ...runtimeSessionStateUpdate(session, "running"),
       runtimeProviderState: "running",
+      capabilities: {...session.capabilities, chrome: result.headedChrome === true},
       runtimeProviderOperationId: result.id || null,
       runtimeInstanceName: descriptor.guestName,
       runtimeDataDiskName: descriptor.dataDiskName,
@@ -102,7 +103,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       agentRuntimeBootInstanceId: result.bootId,
       agentRuntimeGeneration: descriptor.generation,
       lastError: null,
-      runtimeProvider: {...descriptor, state: "running", guestIp: result.guestIp || descriptor.guestIp},
+      runtimeProvider: {...descriptor, ...(result.headedChrome ? {guestImageVersion: "ubuntu-24.04-v3"} : {}), state: "running", guestIp: result.guestIp || descriptor.guestIp},
       ...(session.provisioningOperationId ? {
         provisioningState: "completed",
         provisioningAttemptCompletedAt: now(),
@@ -474,7 +475,7 @@ function createRemoteVmLifecycleService(dependencies = {}) {
       const targetState = operation.kind === "delete" ? "deleted" : operation.kind === "stop" ? "stopped" : "running";
       if (workspaceSnap.exists) {
         txSet(transaction, workspaceRef, {
-          runtimeProvider: {...context.descriptor, state: targetState, guestIp: observed.guestIp || context.descriptor.guestIp},
+          runtimeProvider: {...context.descriptor, ...(observed.headedChrome ? {guestImageVersion: "ubuntu-24.04-v3"} : {}), state: targetState, guestIp: observed.guestIp || context.descriptor.guestIp},
           runtimeProviderState: targetState,
           runtimeProviderOperationId: ref.id,
           lastError: null,
@@ -736,6 +737,7 @@ function normalizeObserved(value, descriptor) {
   const state = String(value.state || "unknown").toLowerCase();
   return {
     exists: value.exists !== false,
+    headedChrome: value.headedChrome === true,
     supportsWorkspaceHostname: value.supportsWorkspaceHostname === true,
     guestName: descriptor.guestName,
     diskName: descriptor.dataDiskName,

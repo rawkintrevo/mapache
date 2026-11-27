@@ -31,7 +31,7 @@ export function SessionDetail({
   const refreshAfterConnectionFailure = access?.refreshAfterConnectionFailure;
   const refreshAccess = access?.refresh;
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
-  const hasBrowser = Boolean(!isRemoteWorkspace && capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
+  const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
   const hasAgent = Boolean(hasRunnerUrl && accessUrls?.agentUrl);
   const shellUrl = deriveShellUrl(accessUrls?.terminalUrl);
   const hasShell = Boolean(hasRunnerUrl && session.status === "running" && shellUrl);

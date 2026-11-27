@@ -36,14 +36,18 @@ async function createSessionAccessUrls(uid, workspaceId, sessionId, dependencies
   if (remoteRuntime) {
     const token = signSessionRemoteGatewayAccessToken(session, workspaceId, uid, expiresAtMs);
     const baseUrl = remoteBaseUrl.replace(/\/+$/, "");
+    const agentPath = `/workspaces/${encodeURIComponent(workspaceId)}/agent/`;
+    const viewer = new URL(`${baseUrl}${agentPath}chrome/vnc.html`);
+    viewer.search = new URLSearchParams({autoconnect: "true", reconnect: "true", resize: "scale",
+      path: `${agentPath.slice(1)}chrome/vnc`, mapache_access: token}).toString();
     return {
       ok: true,
       expiresAt: new Date(expiresAtMs).toISOString(),
       terminalUrl: null,
       previewUrl: null,
-      browserUrl: null,
+      browserUrl: session.capabilities?.chrome === true ? viewer.toString() : null,
       browserStatusUrl: null,
-      agentUrl: appendQuery(`${baseUrl}/workspaces/${encodeURIComponent(workspaceId)}/agent/`, "mapache_access", token),
+      agentUrl: appendQuery(`${baseUrl}${agentPath}`, "mapache_access", token),
     };
   }
   const token = signSessionBrowserAccessToken(session, expiresAtMs);

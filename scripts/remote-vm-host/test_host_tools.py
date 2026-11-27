@@ -183,6 +183,11 @@ class HostToolTests(unittest.TestCase):
             stdout = "State: running\nAutostart: disable\n"
 
         def runner(command, **kwargs):
+            if "dumpxml" in command:
+                xml = helper.guest_xml("mapache-ws-abc123").replace(
+                    '<target dev="vda"',
+                    f"<backingStore><source file='{helper.IMAGE_PATH}'/></backingStore><target dev=\"vda\"")
+                return SimpleNamespace(returncode=0, stdout=xml)
             if "domifaddr" in command:
                 self.assertEqual(command[-2:], ["--source", "lease"])
                 return SimpleNamespace(returncode=0, stdout="vnet0 52:54:00:aa:bb:cc ipv4 192.168.250.42/24\n")
@@ -191,6 +196,7 @@ class HostToolTests(unittest.TestCase):
         observed = helper.handle(["inspect", "mapache-ws-abc123"], runner=runner)
         self.assertTrue(observed["exists"])
         self.assertTrue(observed["supportsWorkspaceHostname"])
+        self.assertTrue(observed["headedChrome"])
         self.assertEqual(observed["state"], "running")
         self.assertFalse(observed["autostart"])
         self.assertEqual(observed["guestIp"], "192.168.250.42")

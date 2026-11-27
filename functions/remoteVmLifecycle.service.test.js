@@ -201,7 +201,11 @@ test("provisioning completion publishes the gateway and runtime-ready state", as
     provisioningOperationId: "provision-1",
   };
   await seed(value);
-  const host = fakeHost();
+  const host = fakeHost({start: ({guest, guests}) => {
+    const running = {...guests.get(guest.guestName), state: "running", headedChrome: true, guestIp: "192.168.250.42"};
+    guests.set(guest.guestName, running);
+    return running;
+  }});
   const originalGatewayHosts = process.env.VM_WORKSPACE_GATEWAY_HOSTS;
   process.env.VM_WORKSPACE_GATEWAY_HOSTS =
     "backup-recovery---gateway.example,gateway.example";
@@ -221,6 +225,8 @@ test("provisioning completion publishes the gateway and runtime-ready state", as
         .collection("sessions").doc("session-1");
     const completed = await service.provisionSessionService(value.workspace, ref, value.session);
     assert.equal(completed.status, "running");
+    assert.equal(completed.capabilities.chrome, true);
+    assert.equal(completed.runtimeProvider.guestImageVersion, "ubuntu-24.04-v3");
     assert.equal(completed.serviceUrl, "https://gateway.example");
     assert.equal(completed.provisioningState, "completed");
     assert.equal(completed.agentRuntimeState, "running");

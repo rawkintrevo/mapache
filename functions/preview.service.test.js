@@ -139,6 +139,13 @@ async function testRemoteGatewayAccess() {
   const result = await service.createSessionAccessUrls("owner-1", "workspace-remote", "session-remote");
   assert.match(result.agentUrl, /^https:\/\/mapache-vm-gateway\.example\.com\/workspaces\/workspace-remote\/agent\/\?mapache_access=/);
   assert.equal(result.terminalUrl, null);
+  assert.equal(result.browserUrl, null);
+  session.capabilities = {chrome: true};
+  const access = await service.createSessionAccessUrls("owner-1", "workspace-remote", "session-remote");
+  const viewer = new URL(access.browserUrl);
+  assert.equal(viewer.pathname, "/workspaces/workspace-remote/agent/chrome/vnc.html");
+  assert.equal(viewer.searchParams.get("path"), "workspaces/workspace-remote/agent/chrome/vnc");
+  assert.equal(viewer.searchParams.get("mapache_access"), new URL(access.agentUrl).searchParams.get("mapache_access"));
   const payload = JSON.parse(Buffer.from(new URL(result.agentUrl).searchParams.get("mapache_access").split(".")[0], "base64url").toString("utf8"));
   assert.deepStrictEqual(payload, {
     aud: "agent",

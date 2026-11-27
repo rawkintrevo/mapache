@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from mapache_guest_config import MAX_CONFIG_BYTES, configuration_id, write_seed
 
 VERSION = "1"
@@ -20,7 +21,7 @@ GUEST_NETWORK_CIDR = "192.168.250.0/24"
 STORAGE_DIR = Path("/var/lib/mapache-vm")
 IMAGE_DIR = STORAGE_DIR / "images"
 DISK_DIR = STORAGE_DIR / "disks"
-IMAGE_VERSION = "ubuntu-24.04-v2"
+IMAGE_VERSION = "ubuntu-24.04-v3"
 IMAGE_PATH = IMAGE_DIR / f"{IMAGE_VERSION}.qcow2"
 DISK_SIZE = "40G"
 VCPUS = 2
@@ -77,9 +78,23 @@ def inspect_guest(guest_id, *, runner=subprocess.run):
     autostart = re.search(r"^Autostart:\s+enable", getattr(info, "stdout", "") or "", re.MULTILINE) is not None
     marker = DISK_DIR / f"{guest_id}.config-id"
     config_id = marker.read_text().strip() if marker.is_file() and (DISK_DIR / f"{guest_id}.seed.iso").is_file() else None
+    state = parse_state(getattr(info, "stdout", ""))
+    headed_chrome = False
+    if state == "running":
+        # The live domain XML identifies the actual backing chain even when
+        # QEMU owns the disk. Retained older overlays keep their original base.
+        xml = virsh_optional("dumpxml", guest_id, runner=runner)
+        if xml.returncode == 0:
+            domain = ET.fromstring(xml.stdout)
+            for disk in domain.findall("./devices/disk"):
+                source = disk.find("source")
+                backing = disk.find("backingStore/source")
+                if source is not None and source.get("file") == str(DISK_DIR / f"{guest_id}.qcow2"):
+                    headed_chrome = backing is not None and backing.get("file") == str(IMAGE_PATH)
+                    break
     return {"version": VERSION, "network": NETWORK, "guestName": guest_id,
-            "diskName": f"{guest_id}.qcow2", "exists": True, "supportsWorkspaceHostname": True,
-            "state": parse_state(getattr(info, "stdout", "")),
+            "headedChrome": headed_chrome, "diskName": f"{guest_id}.qcow2", "exists": True, "supportsWorkspaceHostname": True,
+            "state": state,
             "guestIp": ip_match.group(1) if ip_match else None, "autostart": autostart,
             "configurationId": config_id}
 

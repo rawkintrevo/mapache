@@ -1,0 +1,19 @@
+{
+  "id": "remote-vm.shared-chrome",
+  "title": "Owner and agent share the persistent remote guest Chrome window",
+  "baseUrl": "http://127.0.0.1:5173",
+  "artifactsDir": "artifacts/qa/remote-vm.shared-chrome",
+  "parameters": {"workspaceName": ""},
+  "requires": {"chromeDevtools": true, "workspaceName": "A disposable signed-in owner's v3 workspace with a selected agent connection"},
+  "steps": [
+    {"useCase": "cases/login.json"},
+    {"useScript": "scripts/select-workspace-by-name.json", "parameters": {"workspaceName": "{{workspaceName}}"}},
+    {"assert": "manual", "expected": "Have the agent use chrome-devtools to open a harmless local test form. Select Chrome in pi-web-ui and type a sentinel into that form. Have the agent read that sentinel from the same tab."},
+    {"capture": "screenshot", "fileName": "shared-window.png"},
+    {"assert": "manual", "expected": "Open Chrome in a separate tab and close the first viewer. Reopen it and verify the same page and typed value. Using only test data, set a persistent cookie on the form origin."},
+    {"assert": "manual", "expected": "Use the native terminal to confirm 2 vCPUs, 8 GiB guest allocation and loopback-only CDP and VNC listeners. Record guest memory and desktop RSS at idle. Stop and start the workspace. Navigate Chrome to the test origin and verify the persistent cookie."},
+    {"assert": "manual", "expected": "Verify an old viewer URL and a different owner's session cannot open the viewer or its input socket. Confirm native pi-web-ui terminal input still works."},
+    {"capture": "console"},
+    {"capture": "network"}
+  ]
+}
