@@ -488,7 +488,7 @@ function createPiWebUiProcess(config = {}, deps = {}) {
     delete childEnv.GOOGLE_MCP_TOKEN_SOCKET_PATH;
     return {
       ...childEnv,
-      HOME: config.homeDir || environment.HOME || "/root",
+      HOME: config.workspaceProcessHome || config.homeDir || environment.HOME || "/root",
       PI_CODING_AGENT_DIR: config.piWebUiPiDir,
       PI_CODING_AGENT_SESSION_DIR: config.piWebUiSessionDir,
       PI_WEB_CWD: config.automationOutputDir || config.workspaceDir,

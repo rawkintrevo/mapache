@@ -1,5 +1,6 @@
 "use strict";
 
+const fs = require("node:fs");
 const path = require("node:path");
 
 const DEFAULT_SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
@@ -10,6 +11,17 @@ function isolateRunnerGoogleCredentials(env = process.env) {
   ).trim();
   delete env.GOOGLE_APPLICATION_CREDENTIALS;
   return {workspaceGoogleApplicationCredentials};
+}
+
+// The remote guest already has this link from the image build.
+function configureHomeAlias(config, homeAlias = "/home/mapache") {
+  if (!config.isPrivateRuntime && !config.retainedDiskMode) return;
+  try {
+    fs.symlinkSync(config.homeDir, homeAlias);
+  } catch (error) {
+    if (error.code !== "EEXIST" || fs.readlinkSync(homeAlias) !== config.homeDir) throw error;
+  }
+  config.workspaceProcessHome = homeAlias;
 }
 
 function createWorkspaceProcessEnvironment(config, baseEnv = process.env) {
@@ -27,6 +39,7 @@ function createWorkspaceProcessEnvironment(config, baseEnv = process.env) {
     env.XDG_STATE_HOME = path.join(privateRuntimeRoot, "state");
     env.TMPDIR = path.join(privateRuntimeRoot, "tmp");
   }
+  if (config.workspaceProcessHome) env.HOME = config.workspaceProcessHome;
   if (config?.workspaceStorageMode === "shared-gcsfuse-v1" && config.privateGitDir) {
     env.GIT_DIR = config.privateGitDir;
     env.GIT_WORK_TREE = config.workspaceDir;
@@ -56,6 +69,7 @@ function prependPathEntries(existingPath, entries) {
 
 module.exports = {
   applyMapacheToolPath,
+  configureHomeAlias,
   createWorkspaceProcessEnvironment,
   isolateRunnerGoogleCredentials,
   prependPathEntries,
