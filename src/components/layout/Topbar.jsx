@@ -14,6 +14,7 @@ import {isRemoteVmWorkspace} from "../../utils/workspaceProvider.js";
 
 export function Topbar({
   activeCanvas,
+  browserUrl,
   state,
   selectedSession,
   onDeleteWorkspace,
@@ -124,6 +125,23 @@ export function Topbar({
         />
       ) : null}
       <div className="topbar-actions">
+        {remoteWorkspace && state.activePage === "workspace" && browserUrl ? (
+          <a
+            aria-label="Open remote Chrome in a new tab"
+            className="button button--secondary button--icon"
+            href={browserUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+            title="Open remote Chrome in a new tab"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="9" cy="14" r="7.5" />
+              <circle cx="9" cy="14" r="3" />
+              <path d="M9 11h6.9M6.4 15.5 3 9.5M11.6 15.5l-3.4 5.9" />
+              <path d="M15 9l7-7m-6 0h6v6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+        ) : null}
         <div className="topbar-secondary-actions">
         {showWorkspaceTools ? (
           <>

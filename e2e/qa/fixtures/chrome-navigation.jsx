@@ -1,6 +1,8 @@
 import React, {useState} from "react";
 import {createRoot} from "react-dom/client";
 import {SessionDetail} from "../../../src/components/sessions/SessionDetail.jsx";
+import {Topbar} from "../../../src/components/layout/Topbar.jsx";
+import {createInitialState} from "../../../src/state/initialState.js";
 import "../../../src/styles.css";
 
 const params = new URLSearchParams(location.search);
@@ -17,8 +19,20 @@ function Fixture() {
     agentUrl: new URL("?frame=agent", location.href).href,
     browserUrl: viewerAvailable ? new URL("?frame=viewer", location.href).href : null,
   };
-  return <SessionDetail session={session} workspaceId="qa" isRemoteWorkspace
-    access={{accessUrls, refresh: () => setRefreshed(true)}} />;
+  const workspace = {id: "qa", name: session.name, runtimeBackend: "remote-libvirt"};
+  const state = {...createInitialState(), activePage: "workspace", selectedWorkspaceId: workspace.id,
+    workspaces: [workspace], sessions: [session]};
+  return (
+    <>
+      <Topbar state={state} selectedSession={session} browserUrl={accessUrls.browserUrl} />
+      <SessionDetail
+        session={session}
+        workspaceId="qa"
+        isRemoteWorkspace
+        access={{accessUrls, refresh: () => setRefreshed(true)}}
+      />
+    </>
+  );
 }
 
 const frame = params.get("frame");

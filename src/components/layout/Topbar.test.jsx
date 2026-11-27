@@ -67,6 +67,20 @@ function renderTopbar(session = null, resourceMetrics = null, workspaceOverrides
 }
 
 describe("Topbar workspace lifecycle", () => {
+  test("uses the signed Chrome URL only for remote VM workspaces", () => {
+    const browserUrl = "https://gateway.example/workspaces/w/agent/chrome/vnc.html?mapache_access=test";
+    const workspace = {id: "w", name: "VM", runtimeBackend: "remote-libvirt"};
+    const state = {...createInitialState(), activePage: "workspace", selectedWorkspaceId: "w", workspaces: [workspace]};
+    const {rerender} = render(<Topbar state={state} browserUrl={browserUrl} />);
+    const link = screen.getByRole("link", {name: "Open remote Chrome in a new tab"});
+    expect(link).toHaveAttribute("href", browserUrl);
+    expect(link).toHaveAttribute("target", "_blank");
+    rerender(<Topbar state={state} />);
+    expect(screen.queryByRole("link", {name: link.title})).toBeNull();
+    rerender(<Topbar state={{...state, workspaces: [{...workspace, runtimeBackend: "cloud-run"}]}} browserUrl={browserUrl} />);
+    expect(screen.queryByRole("link", {name: link.title})).toBeNull();
+  });
+
   test("starts an off workspace", async () => {
     const user = userEvent.setup();
     const {onToggleWorkspace} = renderTopbar({id: "session-1", status: "stopped"});
