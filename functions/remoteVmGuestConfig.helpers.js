@@ -23,10 +23,16 @@ function guestConfiguration({session, sessionId, descriptor, bootId, brokerUrl =
   return config;
 }
 
+function workspaceHostname(name) {
+  if (typeof name !== "string") return "";
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-/, "").slice(0, 63).replace(/-$/, "");
+}
+
 function guestConfigurationId(config) {
   return crypto.createHash("sha256").update(JSON.stringify(Object.fromEntries(
     Object.keys(config).sort().map((key) => [key, config[key]]),
   ))).digest("hex");
 }
 
-module.exports = {guestConfiguration, guestConfigurationId};
+module.exports = {guestConfiguration, guestConfigurationId, workspaceHostname};

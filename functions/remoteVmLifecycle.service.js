@@ -3,7 +3,7 @@
 const crypto = require("node:crypto");
 const {resolveAllowedAddresses} = require("./remoteHost.service");
 const {runRemoteHostCommand} = require("./remoteHost.connection");
-const {guestConfiguration, guestConfigurationId} = require("./remoteVmGuestConfig.helpers");
+const {guestConfiguration, guestConfigurationId, workspaceHostname} = require("./remoteVmGuestConfig.helpers");
 const {httpError} = require("./backendUtils.helpers");
 const {sessionStatusUpdate} = require("./sessionLifecycle.helpers");
 const {runtimeSessionStateUpdate} = require("./runtimeReservation.helpers");
@@ -297,6 +297,9 @@ function createRemoteVmLifecycleService(dependencies = {}) {
           observed = normalizeObserved(await performHostOperation(context, "create"), context.descriptor);
         }
         if (!observed.exists) throw lifecycleError("remote_vm_create_unverified");
+        const hostname = observed.supportsWorkspaceHostname && workspaceHostname(context.workspace.name);
+        if (hostname) context.configuration.WORKSPACE_HOSTNAME = hostname;
+        context.configurationId = guestConfigurationId(context.configuration);
         if (observed.configurationId !== context.configurationId) {
           if (observed.state === "running") {
             observed = normalizeObserved(await performHostOperation(context, "stop"), context.descriptor);
@@ -380,7 +383,6 @@ function createRemoteVmLifecycleService(dependencies = {}) {
     context.bootId = operation.id;
     context.configuration = guestConfiguration({session, sessionId: operation.sessionId, descriptor,
       bootId: context.bootId, ...(dependencies.remoteVmCredentialsUrl ? {brokerUrl: dependencies.remoteVmCredentialsUrl()} : {})});
-    context.configurationId = guestConfigurationId(context.configuration);
     await sessionRef.update({agentRuntimeBootInstanceId: context.bootId, agentRuntimeGeneration: descriptor.generation});
   }
 
@@ -734,6 +736,7 @@ function normalizeObserved(value, descriptor) {
   const state = String(value.state || "unknown").toLowerCase();
   return {
     exists: value.exists !== false,
+    supportsWorkspaceHostname: value.supportsWorkspaceHostname === true,
     guestName: descriptor.guestName,
     diskName: descriptor.dataDiskName,
     state: ["running", "stopped", "starting", "stopping", "unknown"].includes(state) ? state : "unknown",

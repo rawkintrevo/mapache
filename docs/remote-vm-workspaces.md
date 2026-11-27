@@ -84,6 +84,17 @@ This grants guest root to both terminal commands and agent processes running as
 `/usr/local/libexec/mapache_guest_config.py`, then stop and start the workspace
 through Mapache so cloud-init applies the new seed to its retained disk.
 
+The terminal hostname comes from the owning workspace name on create or start.
+The lifecycle worker lowercases the name, replaces runs of non-ASCII-label
+characters with a hyphen, trims edge hyphens and limits it to 63 characters.
+An empty result uses the managed guest ID. The host advertises support on
+guest inspection and writes the hostname into NoCloud metadata. Libvirt domain,
+disk and seed paths still use the stable workspace-derived ID. Older helpers
+continue to receive the original configuration. To enable friendly hostnames
+on an existing host, install the updated seed renderer first and then the host
+helper. Stop and start the workspace through Mapache to apply its current name
+to the retained guest. No image rebuild is required.
+
 The guest runs the existing pi-web-ui experience, including its native
 terminal. Mapache does not add a second terminal surface. Guest services have
 no public listener; browser traffic uses the authenticated gateway and the

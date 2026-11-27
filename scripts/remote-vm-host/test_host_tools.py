@@ -190,6 +190,7 @@ class HostToolTests(unittest.TestCase):
 
         observed = helper.handle(["inspect", "mapache-ws-abc123"], runner=runner)
         self.assertTrue(observed["exists"])
+        self.assertTrue(observed["supportsWorkspaceHostname"])
         self.assertEqual(observed["state"], "running")
         self.assertFalse(observed["autostart"])
         self.assertEqual(observed["guestIp"], "192.168.250.42")

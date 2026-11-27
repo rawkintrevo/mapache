@@ -53,13 +53,15 @@ WantedBy=multi-user.target
 
 
 def validate_config(config):
-    if not isinstance(config, dict) or set(config) != FIELDS:
+    if not isinstance(config, dict) or set(config) - {"WORKSPACE_HOSTNAME"} != FIELDS:
         raise ValueError("guest configuration fields are invalid")
     for key, value in config.items():
         if not isinstance(value, str):
             raise ValueError("guest configuration values must be strings")
         if key == "MAPACHE_REMOTE_CREDENTIAL_BROKER_URL":
             valid = value == BROKER_URL
+        elif key == "WORKSPACE_HOSTNAME":
+            valid = bool(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", value))
         elif key in {"SESSION_BROWSER_TOKEN_SECRET", "SESSION_SHUTDOWN_TOKEN"}:
             valid = bool(re.fullmatch(r"[a-f0-9]{48,128}", value))
         elif key == "MAPACHE_AGENT_RUNTIME_GENERATION":
@@ -79,7 +81,7 @@ def configuration_id(config):
 
 def cloud_config(config):
     validate_config(config)
-    environment = "".join(f"{key}={config[key]}\n" for key in sorted(config)) + "PORT=8787\n"
+    environment = "".join(f"{key}={config[key]}\n" for key in sorted(FIELDS)) + "PORT=8787\n"
     def file(path, content, permissions):
         return {"path": path, "content": base64.b64encode(content.encode()).decode(),
                 "encoding": "b64", "owner": "root:root", "permissions": permissions}
@@ -116,7 +118,7 @@ def write_seed(guest_id, config, disk_dir, *, runner=subprocess.run):
         metadata = directory / "meta-data"
         user_data.write_text(cloud_config(config))
         user_data.chmod(0o600)
-        metadata.write_text(json.dumps({"instance-id": f"{guest_id}-{identity}", "local-hostname": guest_id[:63].rstrip("-")}))
+        metadata.write_text(json.dumps({"instance-id": f"{guest_id}-{identity}", "local-hostname": config.get("WORKSPACE_HOSTNAME", guest_id[:63].rstrip("-"))}))
         output = directory / "seed.iso"
         runner(["cloud-localds", str(output), str(user_data), str(metadata)],
                check=True, text=True, capture_output=True)

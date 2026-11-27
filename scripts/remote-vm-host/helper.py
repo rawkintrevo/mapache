@@ -78,7 +78,7 @@ def inspect_guest(guest_id, *, runner=subprocess.run):
     marker = DISK_DIR / f"{guest_id}.config-id"
     config_id = marker.read_text().strip() if marker.is_file() and (DISK_DIR / f"{guest_id}.seed.iso").is_file() else None
     return {"version": VERSION, "network": NETWORK, "guestName": guest_id,
-            "diskName": f"{guest_id}.qcow2", "exists": True,
+            "diskName": f"{guest_id}.qcow2", "exists": True, "supportsWorkspaceHostname": True,
             "state": parse_state(getattr(info, "stdout", "")),
             "guestIp": ip_match.group(1) if ip_match else None, "autostart": autostart,
             "configurationId": config_id}
