@@ -1,6 +1,6 @@
 "use strict";
 
-const {applyMapacheToolPath, isolateRunnerGoogleCredentials} = require("./lib/runnerEnvironment");
+const {applyMapacheToolPath, configureHomeAlias, isolateRunnerGoogleCredentials} = require("./lib/runnerEnvironment");
 const runnerEnvironment = isolateRunnerGoogleCredentials();
 const {takeBrowserEgressConfig, createBrowserEgress} = require("./lib/browserEgress");
 const browserEgressConfig = takeBrowserEgressConfig();
@@ -65,6 +65,7 @@ const {createQaFaultHarness} = require("./lib/qaFaultHarness");
 const {isAutomationRuntime} = require("./lib/runtimePaths");
 
 const config = createConfig(runnerEnvironment);
+configureHomeAlias(config);
 applyMapacheToolPath(config);
 config.browserEgressEnabled = Boolean(browserEgressConfig);
 const browserAccess = createBrowserAccessVerifier({

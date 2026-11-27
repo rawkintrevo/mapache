@@ -600,6 +600,12 @@ output, and Git metadata are namespaced by `sessionId`/`runId` below
 `/var/lib/mapache/runtimes/{identity}`. Private roots reject symlinked
 ancestors before materialization, and private home/session archive targets are
 disabled; the shared `/workspace` mount remains the user worktree only.
+Workspace shells and the Pi process use `/home/mapache` as `$HOME` in private
+and retained-disk runtimes. The runner links it to the current workspace's
+retained home or the private runtime's home. The remote VM image builder
+creates the link during guest provisioning because the guest runner cannot
+write to `/home`. Paths used for storage and restore use the backing directory.
+
 The runner also owns a 0600 `automation-agent.sock` Unix socket in that private
 runtime root for the managed MCP process. Its adapter keeps the five-minute
 automation API token in memory, refreshes it with the runner-only shutdown

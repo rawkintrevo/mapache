@@ -30,6 +30,8 @@ repo_root="$(cd -- "${script_dir}/../.." && pwd)"
 overlay_files=(
   "session-runner/server.js"
   "session-runner/lib/activity.js"
+  "session-runner/lib/runnerEnvironment.js"
+  "session-runner/lib/piWebUiProcess.js"
   "session-runner/lib/piModelScope.service.js"
   "session-runner/lib/remoteCredentials.service.js"
   "session-runner/lib/remoteGuestDisk.js"

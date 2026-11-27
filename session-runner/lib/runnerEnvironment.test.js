@@ -9,6 +9,7 @@ const test = require("node:test");
 const {
   applyMapacheToolPath,
   createWorkspaceProcessEnvironment,
+  configureHomeAlias,
   isolateRunnerGoogleCredentials,
   prependPathEntries,
 } = require("./runnerEnvironment");
@@ -36,6 +37,28 @@ test("workspace child environment receives the preserved credential path", () =>
 
   assert.equal(childEnv.GOOGLE_APPLICATION_CREDENTIALS, "/workspace/.gcloud/account.json");
   assert.equal(baseEnv.GOOGLE_APPLICATION_CREDENTIALS, undefined);
+});
+
+test("private and retained runners keep HOME stable across writes and restarts", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapache-home-"));
+  t.after(() => fs.rm(root, {recursive: true, force: true}));
+  for (const mode of ["isPrivateRuntime", "retainedDiskMode"]) {
+    const homeDir = path.join(root, "workspace", mode);
+    const alias = path.join(root, mode);
+    const config = {[mode]: true, homeDir};
+    await fs.mkdir(homeDir, {recursive: true});
+    await fs.writeFile(path.join(homeDir, ".existing"), "before");
+    configureHomeAlias(config, alias);
+    configureHomeAlias(config, alias);
+    const env = createWorkspaceProcessEnvironment(config);
+    assert.equal(env.HOME, alias);
+    const child = spawnSync("sh", ["-c", "cd ~ && cat .existing && printenv PWD > .updated"], {env});
+    assert.equal(child.status, 0);
+    assert.equal(child.stdout.toString(), "before");
+    assert.equal(await fs.readFile(path.join(homeDir, ".updated"), "utf8"), `${alias}\n`);
+    assert.throws(() => configureHomeAlias({...config, homeDir: root}, alias));
+    assert.equal(await fs.readlink(alias), homeDir);
+  }
 });
 
 test("private runtime child environment moves HOME and XDG state out of the worktree", () => {
