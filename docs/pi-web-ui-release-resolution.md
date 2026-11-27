@@ -204,3 +204,5 @@ GCP runners use the resulting runtime in their container. Remote libvirt VMs
 have a separately versioned guest image. Its payload builder extracts the web
 runtime from a selected runner image digest. Publishing a runner candidate
 does not update retained VM disks or install a new guest on a host.
+
+Release builds run the upstream suite under a child subreaper in the builder stage so detached process tests can verify that terminated child processes disappear.

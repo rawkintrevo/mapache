@@ -35,7 +35,8 @@ RUN echo "Mapache pi-web-ui resolution key: ${MAPACHE_BUILD_RESOLUTION_KEY}" \
       --build-inputs /app/pi-web-ui-build-inputs.json \
       --cache-archive /app/pi-web-ui-cache.tar.gz; \
   else \
-    MAPACHE_REQUIRE_ADAPTER_INSPECTION=1 node /app/upstream/pi-web-ui/build.mjs \
+    apt-get update && apt-get install -y --no-install-recommends tini && \
+    MAPACHE_REQUIRE_ADAPTER_INSPECTION=1 tini -s -- node /app/upstream/pi-web-ui/build.mjs \
       --output-dir /opt/mapache/pi-web-ui \
       --build-inputs /app/pi-web-ui-build-inputs.json \
       --cache-archive /app/pi-web-ui-cache.tar.gz; \
