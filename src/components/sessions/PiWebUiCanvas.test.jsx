@@ -2,6 +2,7 @@ import {act, cleanup, fireEvent, render, screen} from "@testing-library/react";
 import {afterEach, describe, expect, test, vi} from "vitest";
 import {readFileSync} from "node:fs";
 import {AGENT_BOOTSTRAP_TIMEOUT_MS, PiWebUiCanvas, getAgentOrigin, parseBridgeMessage} from "./PiWebUiCanvas.jsx";
+import {deriveRunnerHealthUrl, readRunnerHealth} from "./agentReadiness.js";
 
 const sessionDetailStyles = readFileSync("src/components/sessions/SessionDetail.css", "utf8");
 
@@ -9,6 +10,18 @@ const firstUrl = "https://runner.example/agent/?mapache_access=first";
 
 describe("PiWebUiCanvas", () => {
   afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+  test("derives the authenticated health route for local and remote Agent URLs", () => {
+    expect(deriveRunnerHealthUrl(firstUrl)).toBe("https://runner.example/runner/health?mapache_access=first");
+    expect(deriveRunnerHealthUrl("https://gateway.example/workspaces/ws/agent/?mapache_access=token"))
+        .toBe("https://gateway.example/workspaces/ws/runner/health?mapache_access=token");
+  });
+
+  test("accepts readiness from the authenticated runner health response", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ok: true, json: async () => ({ok: true, agentRuntime: {ready: true}})});
+    await expect(readRunnerHealth("https://runner.example/runner/health?mapache_access=token", fetchImpl)).resolves.toBe(true);
+    expect(fetchImpl).toHaveBeenCalledWith(expect.any(String), {cache: "no-store", credentials: "include"});
+  });
 
   test("recovers a bootstrap that never sends readiness using the latest URL", () => {
     vi.useFakeTimers();
@@ -30,6 +43,14 @@ describe("PiWebUiCanvas", () => {
     expect(screen.getByTitle("Agent Recovery")).toBe(recoveredFrame);
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  test("clears the overlay when runner health reports a ready Agent without a bridge message", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ok: true, json: async () => ({ok: true, agentRuntime: {ready: true}})}));
+    render(<PiWebUiCanvas healthUrl={firstUrl} sessionName="Health ready" url={firstUrl} />);
+    await act(async () => {});
+    expect(screen.queryByText("Loading Agent")).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 
   test("bounds failed bootstrap retries and allows a fresh manual attempt", () => {

@@ -31,9 +31,13 @@ Mapache owns the surrounding workspace/session shell and account connections.
 ## Current behavior
 
 `PiWebUiCanvas` bounds initial Agent iframe bootstrap with a 20-second readiness
-deadline. A document that never emits the authenticated `mapache.agent.ready`
-bridge message (for example a Cloud Run 429 page) is remounted up to twice using
-the latest signed URL, with access refresh requested through the existing hook.
+deadline. It polls the authenticated `/runner/health` response for the signed
+Agent URL and considers the canvas ready only when `agentRuntime.ready` is true.
+The bridge readiness message remains supported for images that provide it, while
+images without managed bridge patches can still report readiness from the runner.
+A document that never becomes ready (for example a Cloud Run 429 page) is
+remounted up to twice using the latest signed URL, with access refresh requested
+through the existing hook.
 After three failed attempts it shows **Retry Agent**, which starts a fresh bounded
 cycle. Readiness cancels the deadline; ordinary token renewal preserves the
 loaded iframe. Timers are removed on unmount. This recovers transient bootstrap

@@ -1,11 +1,13 @@
 import {useCallback, useEffect, useRef, useState} from "react";
+import {deriveRunnerHealthUrl, readRunnerHealth} from "./agentReadiness.js";
 
 const BRIDGE_VERSION = 1;
 const ACCESS_MESSAGE = "mapache.agent.access";
 export const AGENT_BOOTSTRAP_TIMEOUT_MS = 20_000;
 const MAX_BOOTSTRAP_RETRIES = 2;
+const HEALTH_POLL_MS = 1000;
 
-export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefreshNeeded, onOpenChrome}) {
+export function PiWebUiCanvas({accessError = "", sessionName, url, healthUrl, onAccessRefreshNeeded, onOpenChrome}) {
   const frameRef = useRef(null);
   const latestUrlRef = useRef(url);
   const bootstrapTimerRef = useRef(null);
@@ -17,6 +19,7 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
   const [status, setStatus] = useState(origin ? "loading" : "error");
   const [error, setError] = useState(origin ? "" : "agent_access_unavailable");
   const visibleError = accessError || error;
+  const resolvedHealthUrl = healthUrl ? deriveRunnerHealthUrl(healthUrl) : "";
 
   callbacksRef.current = {onAccessRefreshNeeded, onOpenChrome};
   latestUrlRef.current = url;
@@ -46,6 +49,28 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
     }, AGENT_BOOTSTRAP_TIMEOUT_MS);
     return () => window.clearTimeout(bootstrapTimerRef.current);
   }, [bootstrap, origin, retryBootstrap]);
+
+  useEffect(() => {
+    if (!origin || !resolvedHealthUrl || readyRef.current) return undefined;
+    let cancelled = false;
+    let timer = null;
+    const poll = async () => {
+      if (cancelled || readyRef.current) return;
+      if (await readRunnerHealth(resolvedHealthUrl) && !cancelled) {
+        window.clearTimeout(bootstrapTimerRef.current);
+        readyRef.current = true;
+        setError("");
+        setStatus("ready");
+        return;
+      }
+      if (!cancelled) timer = window.setTimeout(poll, HEALTH_POLL_MS);
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [origin, resolvedHealthUrl]);
 
   const sendAccess = useCallback((accessUrl = url) => {
     const frame = frameRef.current;

@@ -184,6 +184,7 @@ export function SessionDetail({
               onOpenChrome={openChrome}
               sessionName={session.name}
               url={accessUrls.agentUrl}
+              healthUrl={accessUrls.healthUrl}
             />
           </div>
         ) : null}

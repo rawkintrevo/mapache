@@ -35,7 +35,7 @@ function createVmGatewayResolveService({db, now = Date.now, allowedGatewayHosts,
     let requestPath = normalizeRequestPath(body.path);
     let pathWorkspaceId = "";
     if (requestPath.startsWith("/workspaces/")) {
-      const match = requestPath.match(/^\/workspaces\/([A-Za-z0-9_-]{1,128})(\/agent(?:\/[^?]*)?)(\?.*)?$/);
+      const match = requestPath.match(/^\/workspaces\/([A-Za-z0-9_-]{1,128})(\/(?:agent(?:\/[^?]*)?|runner\/health\/?))(\?.*)?$/);
       if (!match) throw httpError(404, "not_found");
       pathWorkspaceId = match[1];
       requestPath = match[2] + (match[3] || "");
@@ -76,7 +76,9 @@ function createVmGatewayResolveService({db, now = Date.now, allowedGatewayHosts,
       }
       if (!PATH_PATTERN.test(new URL(requestPath, "https://gateway.invalid").pathname)) throw httpError(404, "not_found");
       if (requestPath === "/runner/health" || requestPath === "/runner/health/") {
-        if (!safeEqual(body.shutdownToken, session.shutdownToken)) throw httpError(404, "not_found");
+        const healthToken = payload.aud === "agent" && String(payload.gen) === String(descriptor.generation) &&
+          verifyBrowserToken(body.token, session.browserAccessTokenSecret, payload, time);
+        if (!healthToken && !safeEqual(body.shutdownToken, session.shutdownToken)) throw httpError(404, "not_found");
       } else if (payload.aud !== "agent" || String(payload.gen) !== String(descriptor.generation)) {
         throw httpError(404, "not_found");
       }
@@ -138,7 +140,10 @@ async function resolveLegacyComputeRoute({db, host, requestPath, body, time}) {
       workspace.state !== "active" || session.state !== "active" ||
       !(workspace.leaseExpiresAt > time) || !(session.leaseExpiresAt > time)) throw httpError(404, "not_found");
   if (requestPath === "/runner/health" || requestPath === "/runner/health/") {
-    if (!safeEqual(body.shutdownToken, credentials.shutdownToken)) throw httpError(404, "not_found");
+    const payload = parseTokenPayload(body.token);
+    const healthToken = payload?.aud === "agent" && String(payload.gen) === String(workspace.generation) &&
+      verifyBrowserToken(body.token, credentials.browserToken, payload, time);
+    if (!healthToken && !safeEqual(body.shutdownToken, credentials.shutdownToken)) throw httpError(404, "not_found");
   } else if (!verifyBrowserToken(body.token, credentials.browserToken, parseTokenPayload(body.token), time)) {
     throw httpError(404, "not_found");
   }
@@ -212,7 +217,7 @@ function gatewayHostAllowed(host, allowed) {
 
 function normalizeRequestPath(value) {
   if (typeof value !== "string" || value.length > 4096 || !value.startsWith("/") || value.startsWith("//") ||
-      value.includes("\\") || /[\x00-\x20\x7f]/.test(value)) throw httpError(400, "invalid_gateway_request");
+      value.includes("\\") || value.includes("..") || /[\x00-\x20\x7f]/.test(value)) throw httpError(400, "invalid_gateway_request");
   let parsed;
   try { parsed = new URL(value, "https://gateway.invalid"); } catch { throw httpError(400, "invalid_gateway_request"); }
   let decodedPath;

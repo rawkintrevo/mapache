@@ -23,6 +23,7 @@ export function ManagedAgentSurface({
               onOpenChrome={onOpenChrome}
               sessionName={session.name}
               url={accessUrls.agentUrl}
+              healthUrl={accessUrls.healthUrl}
             />
           </div>
         ) : (
