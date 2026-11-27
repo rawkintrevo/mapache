@@ -1,6 +1,9 @@
 import {act, cleanup, fireEvent, render, screen} from "@testing-library/react";
 import {afterEach, describe, expect, test, vi} from "vitest";
+import {readFileSync} from "node:fs";
 import {AGENT_BOOTSTRAP_TIMEOUT_MS, PiWebUiCanvas, getAgentOrigin, parseBridgeMessage} from "./PiWebUiCanvas.jsx";
+
+const sessionDetailStyles = readFileSync("src/components/sessions/SessionDetail.css", "utf8");
 
 const firstUrl = "https://runner.example/agent/?mapache_access=first";
 
@@ -46,6 +49,11 @@ describe("PiWebUiCanvas", () => {
     unmount();
     act(() => vi.advanceTimersByTime(5 * AGENT_BOOTSTRAP_TIMEOUT_MS));
     expect(refresh).toHaveBeenCalledTimes(3);
+  });
+
+  test("lets the failed-status overlay pass clicks through except for Retry Agent", () => {
+    expect(sessionDetailStyles).toMatch(/\.pi-web-ui-canvas__status\s*{[\s\S]*?pointer-events:\s*none;/);
+    expect(sessionDetailStyles).toMatch(/\.pi-web-ui-canvas__status button\s*{[\s\S]*?pointer-events:\s*auto;/);
   });
 
   test("sends access once on readiness and once for a new URL", () => {

@@ -282,6 +282,8 @@
   background: color-mix(in srgb, var(--panel) 94%, transparent);
   color: var(--muted);
   font-size: 13px;
+  /* The status card should not block the workspace surface below it. */
+  pointer-events: none;
 }
 
 .pi-web-ui-canvas__status strong {
@@ -290,6 +292,10 @@
 
 .pi-web-ui-canvas__status code {
   color: var(--danger);
+}
+
+.pi-web-ui-canvas__status button {
+  pointer-events: auto;
 }
 
 .terminal-placeholder {
