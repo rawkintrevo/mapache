@@ -123,6 +123,7 @@ def guest_xml(guest_id):
   <vcpu placement="static">{VCPUS}</vcpu>
   <os><type arch="x86_64">hvm</type><boot dev="hd"/></os>
   <features><acpi/><apic/></features>
+  <cpu mode="host-passthrough"/>
   <devices>
     <disk type="file" device="disk"><driver name="qemu" type="qcow2"/><source file="{disk}"/><target dev="vda" bus="virtio"/></disk>
     <disk type="file" device="cdrom"><driver name="qemu" type="raw"/><source file="{DISK_DIR / (guest_id + '.seed.iso')}"/><target dev="sda" bus="sata"/><readonly/></disk>
@@ -154,6 +155,28 @@ def create_guest(guest_id, *, runner=subprocess.run):
     return inspect_guest(guest_id, runner=runner)
 
 
+def ensure_host_cpu_passthrough(guest_id, *, runner=subprocess.run):
+    state = virsh("domstate", guest_id, runner=runner).stdout.strip()
+    if state != "shut off":
+        raise ValueError("stop the managed guest before applying host CPU passthrough")
+    domain = ET.fromstring(virsh("dumpxml", guest_id, "--inactive", runner=runner).stdout)
+    if domain.findtext("name") != guest_id:
+        raise ValueError("unexpected domain identity")
+    cpu = domain.find("cpu")
+    if cpu is not None and cpu.get("mode") == "host-passthrough":
+        return False
+    if cpu is None:
+        cpu = ET.SubElement(domain, "cpu")
+    else:
+        cpu.clear()
+    cpu.set("mode", "host-passthrough")
+    with tempfile.NamedTemporaryFile(suffix=".xml") as definition:
+        definition.write(ET.tostring(domain))
+        definition.flush()
+        virsh("define", definition.name, runner=runner)
+    return True
+
+
 def resize_guest(guest_id, resources, *, runner=subprocess.run):
     cpu, memory = resources.get("vcpus"), resources.get("memoryMiB")
     if (type(cpu) is not int or not 1 <= cpu <= 64 or type(memory) is not int
@@ -183,6 +206,7 @@ def mutate_guest(action, guest_id, *, runner=subprocess.run):
         if not observed["exists"]:
             observed = create_guest(guest_id, runner=runner)
         if observed["state"] != "running":
+            ensure_host_cpu_passthrough(guest_id, runner=runner)
             if not (DISK_DIR / f"{guest_id}.seed.iso").is_file():
                 raise ValueError("managed guest configuration is missing")
             runner(["virsh", "-c", "qemu:///system", "start", guest_id], check=True, text=True, capture_output=True)

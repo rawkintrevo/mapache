@@ -20,7 +20,8 @@ write_files:
     #!/bin/sh
     old=$(cat /root/resize-sentinel 2>/dev/null || echo fresh)
     echo retained >/root/resize-sentinel
-    echo "RESIZE cpu=$(nproc) mem=$(awk '/^MemTotal:/{print $2}' /proc/meminfo) sentinel=$old" >/dev/ttyS0
+    pclmul=$(grep -qm1 pclmulqdq /proc/cpuinfo && echo yes || echo no)
+    echo "RESIZE cpu=$(nproc) mem=$(awk '/^MemTotal:/{print $2}' /proc/meminfo) pclmul=$pclmul sentinel=$old" >/dev/ttyS0
     sync
     shutdown -h now
 """
@@ -44,13 +45,13 @@ def check_boot(guest, log, cpu, memory, marker):
         time.sleep(1)
     else:
         raise RuntimeError("guest boot check timed out")
-    samples = re.findall(r"RESIZE cpu=(\d+) mem=(\d+) sentinel=(\w+)", log.read_text(errors="replace"))
+    samples = re.findall(r"RESIZE cpu=(\d+) mem=(\d+) pclmul=(\w+) sentinel=(\w+)", log.read_text(errors="replace"))
     if not samples:
         raise RuntimeError("guest did not report resources")
-    cores, kib, observed_marker = samples[-1]
-    if int(cores) != cpu or not memory * 0.85 < int(kib) / 1024 <= memory or observed_marker != marker:
+    cores, kib, pclmul, observed_marker = samples[-1]
+    if int(cores) != cpu or not memory * 0.85 < int(kib) / 1024 <= memory or pclmul != "yes" or observed_marker != marker:
         raise RuntimeError(f"unexpected guest observation: {samples[-1]}")
-    print(f"{cores} vCPU, {kib} KiB MemTotal, disk marker {marker}", flush=True)
+    print(f"{cores} vCPU, {kib} KiB MemTotal, pclmulqdq={pclmul}, disk marker {marker}", flush=True)
 
 
 def verify(directory):
