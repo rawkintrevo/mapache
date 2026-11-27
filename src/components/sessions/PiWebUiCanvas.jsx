@@ -63,6 +63,14 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
     }
   }, [origin, url]);
 
+  const handleFrameLoad = useCallback(() => {
+    // The embedded app sends `ready` once during its mount. If that message
+    // races the parent's listener, use the document load as a second chance
+    // to deliver the signed URL; the child will confirm it with
+    // `access-renewed` before the status overlay is cleared.
+    if (!readyRef.current) sendAccess();
+  }, [sendAccess]);
+
   useEffect(() => {
     if (!origin) {
       readyRef.current = false;
@@ -135,6 +143,7 @@ export function PiWebUiCanvas({accessError = "", sessionName, url, onAccessRefre
           ref={frameRef}
           allow="clipboard-read; clipboard-write; fullscreen"
           className="pi-web-ui-canvas__frame"
+          onLoad={handleFrameLoad}
           src={bootstrap.url}
           title={`Agent ${sessionName}`}
         />

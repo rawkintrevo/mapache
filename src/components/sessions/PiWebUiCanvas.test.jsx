@@ -82,6 +82,25 @@ describe("PiWebUiCanvas", () => {
     postMessage.mockRestore();
   });
 
+  test("sends access again on iframe load when the ready message was missed", () => {
+    const {rerender} = render(<PiWebUiCanvas sessionName="Agent smoke" url={firstUrl} />);
+    const frame = screen.getByTitle("Agent Agent smoke");
+    const postMessage = vi.spyOn(frame.contentWindow, "postMessage").mockImplementation(() => {});
+
+    fireEvent.load(frame);
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({agentUrl: firstUrl}), "https://runner.example");
+    fireEvent(window, new MessageEvent("message", {
+      data: {type: "mapache.agent.status", version: 1, status: "access-renewed"},
+      origin: "https://runner.example",
+      source: frame.contentWindow,
+    }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    rerender(<PiWebUiCanvas sessionName="Agent smoke" url={firstUrl} />);
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    postMessage.mockRestore();
+  });
+
   test("does not renew or resend access when parent callbacks change", () => {
     const firstOnOpenChrome = vi.fn();
     const {rerender} = render(
