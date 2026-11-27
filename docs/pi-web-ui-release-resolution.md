@@ -5,26 +5,15 @@
 Issues #591 and #590 upgrade the embedded pi-web-ui and Pi coding-agent SDK while keeping
 the Mapache integration fail-closed on a known-compatible managed target.
 
-The build policy in
-session-runner/upstream/pi-web-ui/manifest.json records the managed targets
-pi-web-ui `0.122.0` and `@earendil-works/pi-coding-agent` `1.6.0`. The
-resolver still uses the GitHub stable-release and npm registry metadata
-endpoints, but it rejects a release or package that differs from those targets.
-build.mjs verifies the source package identity, applies the release-specific
-managed integration patch strictly, installs the exact SDK version, records the
-actual installed pi-ai metadata, and fails before producing a runtime directory
-when a compatibility check fails. There is no fallback to an older release.
-
-The current audit target is GitHub release
-v0.122.0 (https://github.com/xing-shuyin/pi-web-ui/releases/tag/v0.122.0),
-commit 6a3a5e705f8084d2c9afee408b5c3dce9cf1e1c6, with Pi SDK `1.6.0` and
-pi-ai `1.6.0`. A future stable release must either be intentionally selected in
-the manifest and accept the managed patch or fail the candidate image build
-until its integration is ported.
+The builder selects the latest stable GitHub release on each new build.
+The manifest identifies the upstream repository and package. The resolved tag,
+commit, archive digest and package version identify the source in the build
+metadata and cache key. The Pi SDK and managed MCP adapter have separate
+dependency settings.
 
 ## v0.122 compatibility port (#590)
 
-The active manifest applies `managed-v0122.patch`. It includes the retained
+The v0.122 runner used `managed-v0122.patch`. It includes the retained
 v0.121 managed integration and archive-test compatibility changes; the earlier
 patch files remain historical and are not applied twice.
 

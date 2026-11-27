@@ -50,25 +50,11 @@ test("resolves one stable release to its tag, commit, archive, and package versi
 
 test("rejects prereleases even when the release endpoint returns them", async () => {
 	const fetchImpl = fakeFetch({
-		"https://api.example.test/releases/latest": {tag_name: "v0.122.0-rc.1", prerelease: true},
+		"https://api.example.test/releases/latest": {tag_name: "v9.8.7-rc.1", prerelease: true},
 	});
 	await assert.rejects(
 		() => resolveStableRelease({manifest, fetchImpl}),
-		/release v0\.122\.0-rc\.1 is not stable/,
-	);
-});
-
-test("rejects stable-release drift from the manifest target", async () => {
-	const fetchImpl = fakeFetch({
-		"https://api.example.test/releases/latest": {tag_name: "v0.121.4"},
-		"https://api.example.test/commits/v0.121.4": {sha: "future"},
-	});
-	await assert.rejects(
-		() => resolveStableRelease({
-			manifest: {...manifest, upstream: {...manifest.upstream, version: "0.121.3"}},
-			fetchImpl,
-		}),
-		/stable release version mismatch/,
+		/release v9\.8\.7-rc\.1 is not stable/,
 	);
 });
 

@@ -39,9 +39,6 @@ export function readManifest(manifestPath = MANIFEST_PATH) {
 	if (!upstream.packageName || !Array.isArray(upstream.requiredFiles) || upstream.requiredFiles.length === 0) {
 		fail("manifest is missing upstream package identity or required files");
 	}
-	if (upstream.version !== undefined && !/^\d+\.\d+\.\d+$/.test(String(upstream.version))) {
-		fail("manifest has an invalid upstream version");
-	}
 	if (!manifest.piSdk?.package || manifest.piSdk.releaseChannel !== "latest") {
 		fail("manifest must resolve the embedded Pi SDK from the latest npm channel");
 	}
@@ -348,12 +345,9 @@ function parseArgs(argv) {
 	return options;
 }
 
-function resolvedReleaseShape(release, manifest) {
+function resolvedReleaseShape(release) {
 	if (!release?.commit || !release?.tag || !release?.version || !release?.archiveUrl) {
 		fail("release resolver returned incomplete metadata");
-	}
-	if (manifest.upstream.version && release.version !== manifest.upstream.version) {
-		fail(`resolved upstream version mismatch (expected ${manifest.upstream.version}, got ${release.version})`);
 	}
 	return release;
 }
@@ -367,7 +361,7 @@ export async function buildUpstream(options = {}) {
 	const ownsWorkDir = !options.workDir;
 	try {
 		mkdirSync(workDir, {recursive: true});
-		const release = resolvedReleaseShape(options.resolvedRelease || buildInputs?.release || await resolveStableRelease({manifest, fetchImpl}), manifest);
+		const release = resolvedReleaseShape(options.resolvedRelease || buildInputs?.release || await resolveStableRelease({manifest, fetchImpl}));
 		let resolvedSource = release;
 		if (options.sourceDir) {
 			await verifyCommitMarker(sourceDir, release);
@@ -536,7 +530,6 @@ function readBuildInputs(buildInputsPath, manifest) {
 	try {
 		const inputs = JSON.parse(readFileSync(resolve(buildInputsPath), "utf8"));
 		if (inputs?.schemaVersion !== 1 || !inputs.cacheKey || !inputs.identitySha256 || !inputs.release || !inputs.piSdk ||
-			(manifest.upstream.version && inputs.release.version !== manifest.upstream.version) ||
 			(manifest.piSdk.version && inputs.piSdk.version !== manifest.piSdk.version)) {
 			console.log("pi-web-ui build inputs are unavailable or stale; cache disabled for this build");
 			return null;

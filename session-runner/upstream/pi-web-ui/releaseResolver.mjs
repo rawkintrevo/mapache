@@ -56,11 +56,6 @@ export async function resolveStableRelease({manifest, fetchImpl = globalThis.fet
 	const tag = String(release.tag_name || "").trim();
 	const version = stableVersion(tag);
 	if (!version) fail(`stable release has an invalid tag: ${tag || "(empty)"}`);
-	const expectedVersion = upstream.version === undefined ? null : stableVersion(upstream.version);
-	if (upstream.version !== undefined && !expectedVersion) fail(`manifest has an invalid upstream version: ${upstream.version}`);
-	if (expectedVersion && version !== expectedVersion) {
-		fail(`stable release version mismatch (expected ${expectedVersion}, got ${version})`);
-	}
 	const commitUrl = String(upstream.commitApiUrl || "").replace("{tag}", encodeURIComponent(tag));
 	if (!commitUrl || commitUrl === upstream.commitApiUrl) fail("manifest is missing commitApiUrl/{tag}");
 	const commit = await readJson(fetchImpl, commitUrl, `commit for ${tag}`);
