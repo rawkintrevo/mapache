@@ -48,6 +48,7 @@ async function createSessionAccessUrls(uid, workspaceId, sessionId, dependencies
       browserUrl: session.capabilities?.chrome === true ? viewer.toString() : null,
       browserStatusUrl: null,
       agentUrl: appendQuery(`${baseUrl}${agentPath}`, "mapache_access", token),
+      healthUrl: appendQuery(`${baseUrl}/workspaces/${encodeURIComponent(workspaceId)}/runner/health`, "mapache_access", token),
     };
   }
   const token = signSessionBrowserAccessToken(session, expiresAtMs);
@@ -67,6 +68,7 @@ async function createSessionAccessUrls(uid, workspaceId, sessionId, dependencies
     previewUrl,
     browserUrl,
     browserStatusUrl,
+    healthUrl: appendQuery(`${baseUrl}/runner/health`, "mapache_access", token),
     ...(agentUrl ? {agentUrl} : {}),
   };
 }

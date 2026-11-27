@@ -52,6 +52,7 @@ console.log("preview service tests passed");
   });
   const result = await service.createSessionAccessUrls("owner-1", "workspace-1", "session-1");
   assert.match(result.agentUrl, /^https:\/\/runner\.example\/agent\/\?mapache_access=/);
+  assert.match(result.healthUrl, /^https:\/\/runner\.example\/runner\/health\?mapache_access=/);
   assert.match(result.terminalUrl, /^https:\/\/runner\.example\/\?mapache_access=/);
   const agentToken = new URL(result.agentUrl).searchParams.get("mapache_access");
   const agentPayload = JSON.parse(Buffer.from(agentToken.split(".")[0], "base64url").toString("utf8"));
@@ -138,6 +139,7 @@ async function testRemoteGatewayAccess() {
   });
   const result = await service.createSessionAccessUrls("owner-1", "workspace-remote", "session-remote");
   assert.match(result.agentUrl, /^https:\/\/mapache-vm-gateway\.example\.com\/workspaces\/workspace-remote\/agent\/\?mapache_access=/);
+  assert.match(result.healthUrl, /^https:\/\/mapache-vm-gateway\.example\.com\/workspaces\/workspace-remote\/runner\/health\?mapache_access=/);
   assert.equal(result.terminalUrl, null);
   assert.equal(result.browserUrl, null);
   session.capabilities = {chrome: true};

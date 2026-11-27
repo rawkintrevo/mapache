@@ -144,7 +144,7 @@ test("remote resolution is owner and generation fenced and returns only the SSH 
     {token: f.token({}, "foreign-secret")},
     {host: "foreign.example.com"},
     {path: "/agent/../runner/health"},
-    {path: "/runner/health", shutdownToken: "wrong"},
+    {path: "/runner/health", token: f.token({}, "foreign-secret"), shutdownToken: "wrong"},
   ]) {
     await assert.rejects(f.call(body));
   }
@@ -156,10 +156,10 @@ test("workspace URL namespace must match the signed remote token", async () => {
     assert.equal((await f.call({path: `/workspaces/workspace-1/agent${suffix}`})).transport, "ssh");
     await assert.rejects(f.call({path: `/workspaces/workspace-2/agent${suffix}`}), /not_found/);
   }
-  for (const path of ["/workspaces/workspace-1/runner/health", "/workspaces/workspace%2D1/agent/",
-    "/workspaces/workspace-1/other", "/workspaces//agent/"]) {
+  for (const path of ["/workspaces/workspace%2D1/agent/", "/workspaces/workspace-1/other", "/workspaces//agent/"]) {
     await assert.rejects(f.call({path}));
   }
+  assert.equal((await f.call({path: "/workspaces/workspace-1/runner/health"})).transport, "ssh");
   await assert.rejects(f.call({path: "/workspaces/workspace-1/agent/", token: f.token({wid: undefined})}), /not_found/);
 });
 
