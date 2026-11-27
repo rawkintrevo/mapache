@@ -20,7 +20,7 @@ async function fixture(t) {
     client.on("authentication", (context) => { authentications++; context.accept(); });
     client.on("ready", () => client.on("tcpip", (accept, reject, info) => {
       assert.equal(info.destIP, "192.168.250.12");
-      assert.equal(info.destPort, 8787);
+      assert.equal(info.destPort, 8080);
       const stream = accept();
       stream.on("error", () => {});
       stream.on("data", (data) => stream.write(data));
@@ -31,7 +31,7 @@ async function fixture(t) {
   t.after(() => { for (const c of clients) c.end(); server.close(); });
   return {connections: () => connections, authentications: () => authentications, target: {
     sshAddress: "127.0.0.1", sshPort: server.address().port, sshUsername: "mapache-vm",
-    privateKey: key, guestAddress: "192.168.250.12", guestPort: 8787,
+    privateKey: key, guestAddress: "192.168.250.12", guestPort: 8080,
     hostKeyFingerprint: "SHA256/" + crypto.createHash("sha256").update(utils.parseKey(key).getPublicSSH()).digest("base64").replace(/=+$/, ""),
   }};
 }

@@ -42,7 +42,7 @@ test("real SSH gateway authenticates a converted registered key and relays only 
   const transport = await createSshTransport({sshAddress: "127.0.0.1", sshPort: server.address().port,
     sshUsername: "mapache-vm", privateKey: sshPrivateKey(material.privateKey),
     hostKeyFingerprint: `SHA256/${crypto.createHash("sha256").update(hostBlob).digest("base64").replace(/=+$/, "")}`,
-    guestAddress: "192.168.250.42", guestPort: 8787});
+    guestAddress: "192.168.250.42", guestPort: 8080});
   t.after(() => transport.close());
   const reply = await new Promise((resolve, reject) => {
     const socket = net.connect(transport.port, transport.hostname);
@@ -54,5 +54,5 @@ test("real SSH gateway authenticates a converted registered key and relays only 
     socket.on("close", () => resolve(output));
   });
   assert.equal(reply, "relayed:probe");
-  assert.deepEqual(forwarded, {host: "192.168.250.42", port: 8787});
+  assert.deepEqual(forwarded, {host: "192.168.250.42", port: 8080});
 });

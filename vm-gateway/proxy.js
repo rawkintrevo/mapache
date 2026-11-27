@@ -234,7 +234,7 @@ function validateTarget(target) {
   if (target.transport !== "ssh" || !isPublicHost(target.sshAddress) || !Number.isInteger(Number(target.sshPort)) ||
       Number(target.sshPort) < 1 || Number(target.sshPort) > 65535 ||
       !/^[a-z_][a-z0-9_-]{0,31}$/i.test(String(target.sshUsername || "")) ||
-      !isGuestAddress(target.guestAddress) || Number(target.guestPort) !== 8787 ||
+      !isGuestAddress(target.guestAddress) || Number(target.guestPort) !== 8080 ||
       typeof target.privateKey !== "string" || target.privateKey.length < 64 || target.privateKey.length > 16 * 1024 ||
       !/^SHA256\/[A-Za-z0-9+/=_-]{8,}$/.test(String(target.hostKeyFingerprint || ""))) throw new Error("invalid_target");
 }

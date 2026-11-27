@@ -50,7 +50,7 @@ class GuestConfigTests(unittest.TestCase):
                          [b"[Service]", b"PrivateDevices=false", b"RestrictAddressFamilies=", b"NoNewPrivileges=false"])
         environment = files["/etc/mapache-vm/guest.env"]
         text = base64.b64decode(environment["content"]).decode()
-        self.assertIn("PORT=8787\n", text)
+        self.assertIn("PORT=8080\n", text)
         self.assertIn("SESSION_ID=session-1\n", text)
         self.assertEqual(environment["permissions"], "0600")
         script = base64.b64decode(files["/usr/local/libexec/mapache-guest-network"]["content"]).decode()

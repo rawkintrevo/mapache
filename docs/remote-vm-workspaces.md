@@ -273,7 +273,7 @@ and its child asset/API/WebSocket paths on the gateway origin.
 `functions/vmGatewayResolve.service.js` is an IAM-only
 `vmGatewayResolve_v2` resolver; it verifies the signed token, owner/workspace
 binding, running runtime generation, ready host, pinned host fingerprint, and
-the fixed `192.168.250.x:8787` guest endpoint. It returns a bounded relay
+the fixed `192.168.250.x:8080` guest runner endpoint. It returns a bounded relay
 authority to the gateway, never to the browser. The private host key is used
 only inside the server-to-server resolver/relay path and is never logged or
 forwarded to the guest.
@@ -416,7 +416,7 @@ guest first stops it; the retained filesystem is preserved.
 
 Cloud-init installs a root-only `guest.env` and a network setup unit that
 selects the private DHCP address on each boot before starting the runner on
-port 8787. A new configuration changes cloud-init's instance ID. Host startup
+port 8080. A new configuration changes cloud-init's instance ID. Host startup
 waits for a DHCP lease, and the worker verifies the configured identity before
 marking the guest running. The broker continues to require the session's
 running state, generation, and boot identity. Host deletion removes seed,
@@ -445,7 +445,8 @@ while existing descriptors and retained disks are never silently rebased.
 The payload reuses the pinned `pi-web-ui-v1` runtime and session runner, so the
 guest has the existing pi-web-ui experience and native terminal protocol. The
 guest systemd unit binds the runner to the lifecycle-assigned
-`192.168.250.x` address, keeps pi-web-ui's upstream child on `127.0.0.1:8787`,
+`192.168.250.x:8080` address, keeps pi-web-ui's upstream child on
+`127.0.0.1:8787`,
 and starts one connected Chrome desktop. The bootstrap fails closed for a public/loopback
 listener, an unexpected retained-disk root, an unsupported runtime version, or
 missing payload files. `/etc/mapache-vm/guest.env` is written only after guest
