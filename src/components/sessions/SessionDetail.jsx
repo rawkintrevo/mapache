@@ -31,7 +31,7 @@ export function SessionDetail({
   const refreshAfterConnectionFailure = access?.refreshAfterConnectionFailure;
   const refreshAccess = access?.refresh;
   const hasTerminal = Boolean(hasRunnerUrl && accessUrls?.terminalUrl);
-  const hasBrowser = Boolean(capabilities.chrome && hasRunnerUrl && accessUrls?.browserUrl);
+  const showChromeTab = Boolean(isRemoteWorkspace ? accessUrls?.browserUrl : capabilities.chrome);
   const hasAgent = Boolean(hasRunnerUrl && accessUrls?.agentUrl);
   const shellUrl = deriveShellUrl(accessUrls?.terminalUrl);
   const hasShell = Boolean(hasRunnerUrl && session.status === "running" && shellUrl);
@@ -54,6 +54,20 @@ export function SessionDetail({
     setShowShell(false);
   }, [workspaceId, session.id]);
 
+  function openChrome() {
+    setActiveCanvas("chrome");
+    if (!accessUrls?.browserUrl) void refreshAccess?.();
+  }
+
+  const chromeCanvas = activeCanvas === "chrome" ? (
+    <BrowserCanvas
+      accessError={accessError}
+      loading={access?.loading}
+      sessionName={session.name}
+      url={accessUrls?.browserUrl}
+    />
+  ) : null;
+
   return (
     <div className="session-detail">
       {isManagedAgentSurface && isSessionResizePending(session) ? (
@@ -70,7 +84,7 @@ export function SessionDetail({
         />
       ) : null}
       {!isManagedAgentSurface ? <div className="canvas-header">
-        {(hasAgent || (capabilities.chrome && !isRemoteWorkspace)) ? (
+        {(hasAgent || showChromeTab) ? (
           <div className="canvas-tabs" role="tablist" aria-label="Session canvases">
           <Button
             aria-selected={activeCanvas === "terminal"}
@@ -90,13 +104,13 @@ export function SessionDetail({
               Agent
             </Button>
           ) : null}
-          {capabilities.chrome && !isRemoteWorkspace ? (
+          {showChromeTab ? (
             <Button
               aria-selected={activeCanvas === "chrome"}
               disabled={!hasRunnerUrl}
               role="tab"
               variant={activeCanvas === "chrome" ? "primary" : "secondary"}
-              onClick={() => setActiveCanvas("chrome")}
+              onClick={openChrome}
             >
               Chrome
             </Button>
@@ -127,15 +141,14 @@ export function SessionDetail({
           accessError={accessError}
           accessUrls={accessUrls}
           activeCanvas={activeCanvas}
-          capabilities={capabilities}
           hasAgent={hasAgent}
-          hasBrowser={hasBrowser}
-          isRemoteWorkspace={isRemoteWorkspace}
           onAccessRefreshNeeded={refreshAfterConnectionFailure}
-          onSelectCanvas={setActiveCanvas}
+          onOpenChrome={openChrome}
           session={session}
           unavailableMessage={unavailableMessage}
-        />
+        >
+          {chromeCanvas}
+        </ManagedAgentSurface>
       ) : <>
       {isInactiveRuntime ? (
         <div className="canvas-shell runtime-status-shell">
@@ -168,24 +181,13 @@ export function SessionDetail({
               key={session.id}
               accessError={accessError}
               onAccessRefreshNeeded={refreshAfterConnectionFailure}
+              onOpenChrome={openChrome}
               sessionName={session.name}
               url={accessUrls.agentUrl}
             />
           </div>
         ) : null}
-        {activeCanvas === "chrome" && capabilities.chrome && !isRemoteWorkspace ? (
-          hasBrowser ? (
-            <BrowserCanvas sessionName={session.name} url={accessUrls.browserUrl} />
-          ) : (
-            <div className="terminal-placeholder">
-              <p>
-                Chrome access is not ready.
-                <br />
-                <code>{accessError || session.lastError || session.status}</code>
-              </p>
-            </div>
-          )
-        ) : null}
+        {chromeCanvas}
       </div>}
       <div className="toolbar">
         <div className="session-actions">

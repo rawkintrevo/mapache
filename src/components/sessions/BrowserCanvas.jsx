@@ -1,14 +1,13 @@
 import {ExternalLink} from "lucide-react";
 import {Button} from "../common/Button.jsx";
 
-export function BrowserCanvas({sessionName, url}) {
+export function BrowserCanvas({sessionName, url, accessError, loading}) {
   if (!url) {
     return (
-      <div className="terminal-placeholder">
+      <div className="terminal-placeholder" role="status">
         <p>
-          Chrome access is not ready.
-          <br />
-          <code>browser_access_unavailable</code>
+          {loading ? "Checking Chrome access…" : "Chrome access is unavailable for this session."}
+          {accessError ? <><br /><code>{accessError}</code></> : null}
         </p>
       </div>
     );

@@ -1,24 +1,16 @@
-import {useCallback} from "react";
-import {BrowserCanvas} from "./BrowserCanvas.jsx";
 import {PiWebUiCanvas} from "./PiWebUiCanvas.jsx";
 
 export function ManagedAgentSurface({
   accessError,
   accessUrls,
   activeCanvas,
-  capabilities,
+  children,
   hasAgent,
-  hasBrowser,
-  isRemoteWorkspace = false,
   onAccessRefreshNeeded,
-  onSelectCanvas,
+  onOpenChrome,
   session,
   unavailableMessage,
 }) {
-  const handleOpenChrome = useCallback(() => {
-    if (!isRemoteWorkspace || hasBrowser) onSelectCanvas?.("chrome");
-  }, [hasBrowser, isRemoteWorkspace, onSelectCanvas]);
-
   return (
     <div className={`canvas-shell canvas-shell--managed-agent${unavailableMessage ? " canvas-shell--status" : ""}`}>
       {activeCanvas === "agent" ? (
@@ -28,7 +20,7 @@ export function ManagedAgentSurface({
               key={session.id}
               accessError={accessError}
               onAccessRefreshNeeded={onAccessRefreshNeeded}
-              onOpenChrome={handleOpenChrome}
+              onOpenChrome={onOpenChrome}
               sessionName={session.name}
               url={accessUrls.agentUrl}
             />
@@ -44,19 +36,7 @@ export function ManagedAgentSurface({
           )
         )
       ) : null}
-      {activeCanvas === "chrome" && capabilities.chrome && (!isRemoteWorkspace || hasBrowser) ? (
-        hasBrowser ? (
-          <BrowserCanvas sessionName={session.name} url={accessUrls.browserUrl} />
-        ) : (
-          <div className="terminal-placeholder">
-            <p>
-              Chrome access is not ready.
-              <br />
-              <code>{accessError || session.lastError || session.status}</code>
-            </p>
-          </div>
-        )
-      ) : null}
+      {children}
     </div>
   );
 }

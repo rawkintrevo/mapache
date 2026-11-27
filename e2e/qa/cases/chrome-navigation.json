@@ -1,0 +1,15 @@
+{
+  "id": "chrome-navigation",
+  "title": "Embedded Chrome button opens the viewer or reports unavailable access",
+  "baseUrl": "http://127.0.0.1:5173",
+  "fixture": "/e2e/qa/fixtures/chrome-navigation.html",
+  "artifactsDir": "artifacts/qa/chrome-navigation",
+  "steps": [
+    {"assert": "Open the fixture with ?available and click Chrome in the Agent frame. Verify Shared Chrome viewer fixture is visible in the Chrome frame."},
+    {"capture": "screenshot", "fileName": "viewer.png"},
+    {"assert": "Open with ?legacy&recover, select the Agent tab and click Chrome in the frame. Verify the viewer appears after the access refresh."},
+    {"assert": "Open with no query and click Chrome. Verify Chrome access is unavailable for this session. is visible and the Chrome viewer frame is absent."},
+    {"capture": "screenshot", "fileName": "unavailable.png"},
+    {"capture": "console and network"}
+  ]
+}

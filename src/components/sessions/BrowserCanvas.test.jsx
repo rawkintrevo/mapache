@@ -29,6 +29,6 @@ describe("BrowserCanvas", () => {
 
   test("explains when browser access is not ready", () => {
     render(<BrowserCanvas sessionName="Chrome smoke" url="" />);
-    expect(screen.getByText("browser_access_unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Chrome access is unavailable for this session.")).toBeInTheDocument();
   });
 });
