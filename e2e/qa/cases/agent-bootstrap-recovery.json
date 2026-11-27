@@ -8,7 +8,7 @@
   "steps": [
     {"assert": "Intercept the first fixture iframe document with HTTP 429 and body Temporarily unavailable; continue subsequent requests. Navigate to the fixture. Within 25 seconds the iframe shows Agent connected and the parent Loading Agent overlay is absent."},
     {"capture": "screenshot"},
-    {"assert": "Intercept all fixture iframe documents with HTTP 429 and reload the fixture. After 65 seconds there have been exactly three iframe attempts and Agent did not load plus Retry Agent are visible. Wait another 25 seconds and verify there is no fourth attempt."},
+    {"assert": "Intercept all fixture iframe documents with HTTP 429 and reload the fixture. After 65 seconds there have been exactly three iframe attempts and Agent did not load plus Retry Agent are visible. Verify the status overlay has computed pointer-events none and Retry Agent has computed pointer-events auto. Wait another 25 seconds and verify there is no fourth attempt."},
     {"capture": "screenshot"},
     {"assert": "Disable the injected failures and click Retry Agent. Within 5 seconds Agent connected appears and the parent status overlay disappears. Verify no unexpected console or network errors."},
     {"capture": "screenshot"},
