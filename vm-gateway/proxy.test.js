@@ -159,12 +159,32 @@ test("namespaced bootstrap, HTML, redirects, assets and WebSocket preserve the w
 
 test("malformed namespaces never open a transport or establish cookies", async (t) => {
   const f = await fixture(t);
-  for (const path of ["/workspaces//agent/", "/workspaces/a/runner/health", "/workspaces/a%2Fb/agent/"]) {
+  for (const path of ["/workspaces//agent/", "/workspaces/a/runner/health/other", "/workspaces/a%2Fb/agent/"]) {
     const result = await request(f, `${path}?mapache_access=valid`);
     assert.equal(result.status, 404);
     assert.equal(result.headers["set-cookie"], undefined);
   }
   assert.equal(f.count(), 0);
+});
+
+test("signed health GET from Hosting reaches the guest directly with readable CORS headers", async (t) => {
+  const origin = "https://pi-agents-cloud.web.app";
+  const path = "/workspaces/a/runner/health?mapache_access=valid";
+  const f = await fixture(t, (input, target) => {
+    assert.equal(input.path, "/workspaces/a/runner/health");
+    assert.equal(input.origin, "");
+    return target;
+  });
+  const response = await request(f, path, {headers: {origin, cookie: ""}});
+  assert.equal(response.status, 200);
+  assert.equal(response.headers["access-control-allow-origin"], origin);
+  assert.equal(response.headers["access-control-allow-credentials"], "true");
+  assert.equal(JSON.parse(response.body).url, "/runner/health");
+  assert.equal(JSON.parse(response.body).cookie, "mapache_access=valid");
+  for (const options of [{method: "POST"}, {headers: {origin: "https://foreign.example"}}]) {
+    assert.equal((await request(f, path, options)).status, 404);
+  }
+  assert.equal(f.count(), 1);
 });
 
 test("a private WebSocket rejection promptly denies the public handshake", async (t) => {

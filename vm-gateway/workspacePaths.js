@@ -4,7 +4,7 @@
 // Only the gateway strips this prefix; the resolver sees and authorizes it.
 function workspacePath(pathname) {
   if (!pathname.startsWith("/workspaces/")) return {prefix: "", privatePath: pathname};
-  const match = pathname.match(/^\/workspaces\/([A-Za-z0-9_-]{1,128})(\/agent(?:\/.*)?)$/);
+  const match = pathname.match(/^\/workspaces\/([A-Za-z0-9_-]{1,128})(\/agent(?:\/.*)?|\/runner\/health)$/);
   if (!match) throw new Error("not_found");
   return {prefix: `/workspaces/${match[1]}`, privatePath: match[2]};
 }

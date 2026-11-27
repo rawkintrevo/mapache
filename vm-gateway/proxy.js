@@ -32,13 +32,21 @@ function createGateway({resolve, request = http.request, transportFactory = crea
   async function forward(req, downstream, head) {
     const websocket = head !== undefined;
     const input = authorizationInput(req);
-    const target = await resolve(input);
+    const health = Boolean(input.prefix && input.privatePath === "/runner/health");
+    if (health && (req.method !== "GET" || websocket || !input.bootstrap)) throw new Error("not_found");
+    const parentOrigin = health && input.origin;
+    if (parentOrigin && !["https://pi-agents-cloud.web.app", "https://pi-agents-cloud.firebaseapp.com",
+      `https://${input.host}`].includes(parentOrigin)) throw new Error("not_found");
+    // The resolver checks gateway-origin browser requests. For a health read,
+    // the proxy has already checked the parent origin; all token checks still apply.
+    const resolverInput = health ? {...input, origin: ""} : input;
+    const target = await resolve(resolverInput);
     validateTarget(target);
     if (input.prefix && target.transport !== "ssh") throw new Error("not_found");
     if (downstream.destroyed) return;
     // The gateway consumes the URL token before forwarding. Establish browser
     // authority here so subsequent assets and WebSockets carry it as a cookie.
-    if (!websocket && req.method === "GET" && target.transport === "ssh" && input.bootstrap) {
+    if (!health && !websocket && req.method === "GET" && target.transport === "ssh" && input.bootstrap) {
       downstream.writeHead(303, {
         location: input.publicPath,
         "set-cookie": `mapache_access=${encodeURIComponent(input.token)}; Path=${input.prefix}/agent; HttpOnly; Secure; SameSite=None`,
@@ -84,7 +92,7 @@ function createGateway({resolve, request = http.request, transportFactory = crea
       expiryTimer.unref?.();
       renewTimer = setTimeout(async () => {
         try {
-          const next = await resolve(input);
+          const next = await resolve(resolverInput);
           validateTarget(next);
           if (!sameAuthority(target, next)) throw new Error("authority_changed");
           if (!stopped) guard(next);
@@ -131,6 +139,11 @@ function createGateway({resolve, request = http.request, transportFactory = crea
       const responseHeaders = {...cleanHeaders(response.headers), "cache-control": "no-store"};
       if (responseHeaders.location) responseHeaders.location = publicLocation(responseHeaders.location, input.prefix);
       if (input.prefix) delete responseHeaders["set-cookie"];
+      if (parentOrigin) {
+        responseHeaders["access-control-allow-origin"] = parentOrigin;
+        responseHeaders["access-control-allow-credentials"] = "true";
+        responseHeaders.vary = "Origin";
+      }
       response.on("error", close);
       const rewriteHtml = entryHtml(input) && /^text\/html\b/i.test(responseHeaders["content-type"] || "");
       const rewriteModule = assetModule(input) && /^(?:text|application)\/(?:javascript|ecmascript)\b/i.test(responseHeaders["content-type"] || "");
